@@ -25,7 +25,7 @@ services:
     runtime: node
     plan: free
     branch: claude/vocab-learning-app-ww31qa
-    buildCommand: npm install && npm run build
+    buildCommand: npm ci && npm run build
     # `prisma db push` re-syncs the schema on every restart — safe to run
     # repeatedly, and keeps the DB schema current after future deploys
     # without a separate manual step.

@@ -24,7 +24,3 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
-
-# lockfile intentionally not committed in this deployment — run `npm install`
-# to generate it locally (see README)
-package-lock.json
