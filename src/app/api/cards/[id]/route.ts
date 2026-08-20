@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { cardInputSchema } from '@/lib/validation';
 import { findWordSpans, serializeSpans } from '@/lib/highlight';
+import { requireSession } from '@/lib/requireSession';
 
 const cardInclude = {
   examples: { orderBy: { order: 'asc' as const } },
@@ -11,13 +12,22 @@ const cardInclude = {
 type RouteContext = { params: Promise<{ id: string }> };
 
 export async function GET(_req: NextRequest, { params }: RouteContext) {
+  const auth = await requireSession();
+  if ('response' in auth) return auth.response;
+
   const { id } = await params;
   const card = await prisma.card.findUnique({ where: { id }, include: cardInclude });
-  if (!card) return NextResponse.json({ error: 'Card not found' }, { status: 404 });
+  if (!card || card.userId !== auth.session.userId) {
+    return NextResponse.json({ error: 'Card not found' }, { status: 404 });
+  }
   return NextResponse.json({ card });
 }
 
 export async function PUT(req: NextRequest, { params }: RouteContext) {
+  const auth = await requireSession();
+  if ('response' in auth) return auth.response;
+  const { userId } = auth.session;
+
   const { id } = await params;
   const body = await req.json().catch(() => null);
   const parsed = cardInputSchema.safeParse(body);
@@ -27,14 +37,16 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
   const data = parsed.data;
 
   const existing = await prisma.card.findUnique({ where: { id } });
-  if (!existing) return NextResponse.json({ error: 'Card not found' }, { status: 404 });
+  if (!existing || existing.userId !== userId) {
+    return NextResponse.json({ error: 'Card not found' }, { status: 404 });
+  }
 
   const tagIds = await Promise.all(
     data.tags.map(async (name) => {
       const tag = await prisma.tag.upsert({
-        where: { name: name.toLowerCase() },
+        where: { userId_name: { userId, name: name.toLowerCase() } },
         update: {},
-        create: { name: name.toLowerCase() },
+        create: { userId, name: name.toLowerCase() },
       });
       return tag.id;
     }),
@@ -74,9 +86,14 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
 }
 
 export async function DELETE(_req: NextRequest, { params }: RouteContext) {
+  const auth = await requireSession();
+  if ('response' in auth) return auth.response;
+
   const { id } = await params;
   const existing = await prisma.card.findUnique({ where: { id } });
-  if (!existing) return NextResponse.json({ error: 'Card not found' }, { status: 404 });
+  if (!existing || existing.userId !== auth.session.userId) {
+    return NextResponse.json({ error: 'Card not found' }, { status: 404 });
+  }
   await prisma.card.delete({ where: { id } });
   return NextResponse.json({ ok: true });
 }

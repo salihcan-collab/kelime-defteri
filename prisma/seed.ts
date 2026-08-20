@@ -59,28 +59,50 @@ const SAMPLE_CARDS = [
   },
 ];
 
+/**
+ * Seeds sample cards for a real user, since cards now always belong to
+ * someone (see the User model). There's no anonymous/global seed anymore
+ * — sign up (or log in) first, then run `npm run db:seed`.
+ *
+ * By default it seeds the first account it finds. Pass an email to target
+ * a specific one: `npm run db:seed -- you@example.com`.
+ */
 async function main() {
-  console.log('Seeding Kelime Defteri…');
+  const targetEmail = process.argv[2];
 
-  await prisma.settings.upsert({
-    where: { id: 'singleton' },
-    update: {},
-    create: { id: 'singleton' },
-  });
+  const user = targetEmail
+    ? await prisma.user.findUnique({ where: { email: targetEmail.toLowerCase() } })
+    : await prisma.user.findFirst({ orderBy: { createdAt: 'asc' } });
+
+  if (!user) {
+    console.log(
+      targetEmail
+        ? `No account found for ${targetEmail}. Sign up in the app first, then re-run this.`
+        : 'No accounts exist yet. Sign up in the app first (at /signup), then re-run `npm run db:seed`.',
+    );
+    return;
+  }
+
+  console.log(`Seeding sample cards for ${user.email}…`);
 
   for (const sample of SAMPLE_CARDS) {
-    const existing = await prisma.card.findFirst({ where: { vocabulary: sample.vocabulary } });
+    const existing = await prisma.card.findFirst({ where: { userId: user.id, vocabulary: sample.vocabulary } });
     if (existing) continue;
 
     const tagIds = await Promise.all(
       sample.tags.map(async (name) => {
-        const tag = await prisma.tag.upsert({ where: { name }, update: {}, create: { name } });
+        const tag = await prisma.tag.upsert({
+          where: { userId_name: { userId: user.id, name } },
+          update: {},
+          create: { userId: user.id, name },
+        });
         return tag.id;
       }),
     );
 
     await prisma.card.create({
       data: {
+        userId: user.id,
         vocabulary: sample.vocabulary,
         ipa: sample.ipa,
         definitionEn: sample.definitionEn,

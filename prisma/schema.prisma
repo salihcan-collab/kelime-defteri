@@ -1,7 +1,7 @@
 // Kelime Defteri — Prisma schema
 // Default datasource is SQLite (zero-config, file-based, perfect for a
-// single-user notebook app or local-first deployment). Swapping to
-// Postgres/Supabase later only requires changing `provider` + `url` here.
+// small self-hosted deployment). Swapping to Postgres/Supabase later only
+// requires changing `provider` + `url` here.
 //
 // Note: SQLite has no native enum type, so fields that are conceptually
 // enums (PartOfSpeech, CardStatus, ReviewRating, HighlightStyle) are
@@ -19,8 +19,26 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// Deliberately minimal accounts model — see src/lib/auth.ts. Signup is
+// capped at MAX_USERS (2) at the application layer so this stays a small
+// shared notebook for you and one other person, not an open app.
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String?
+  createdAt    DateTime @default(now())
+
+  cards     Card[]
+  tags      Tag[]
+  reviews   ReviewLog[]
+  settings  Settings?
+}
+
 model Card {
   id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   vocabulary     String
   ipa            String?
   audioUrl       String?
@@ -46,8 +64,8 @@ model Card {
   tags           TagsOnCards[]
   reviews        ReviewLog[]
 
-  @@index([dueAt])
-  @@index([vocabulary])
+  @@index([userId, dueAt])
+  @@index([userId, vocabulary])
 }
 
 model ExampleSentence {
@@ -65,12 +83,18 @@ model ExampleSentence {
   @@index([cardId])
 }
 
+// Tags are personal to each notebook (not shared between the two
+// accounts), so uniqueness is scoped to (userId, name) rather than global.
 model Tag {
   id        String        @id @default(cuid())
-  name      String        @unique
+  userId    String
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
   color     String        @default("accent")
   createdAt DateTime      @default(now())
   cards     TagsOnCards[]
+
+  @@unique([userId, name])
 }
 
 model TagsOnCards {
@@ -84,6 +108,8 @@ model TagsOnCards {
 
 model ReviewLog {
   id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   cardId         String
   card           Card     @relation(fields: [cardId], references: [id], onDelete: Cascade)
   rating         String // AGAIN | HARD | GOOD | EASY
@@ -93,16 +119,14 @@ model ReviewLog {
   easeAfter      Float
   reviewedAt     DateTime @default(now())
 
+  @@index([userId, reviewedAt])
   @@index([cardId])
-  @@index([reviewedAt])
 }
 
-// Singleton row (id always "singleton") holding user preferences and
-// streak/progress counters. Modeled as a table (not a JSON file) so it
-// persists the same way everything else does and is trivial to extend to
-// multi-user later by adding a userId column.
+// One row per user, holding preferences and streak/progress counters.
 model Settings {
-  id             String    @id @default("singleton")
+  userId         String    @id
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   theme          String    @default("sakura")
   fontStyle      String    @default("sans")
   highlightStyle String    @default("BOLD_UNDERLINE") // BOLD | UNDERLINE | COLOR | BOLD_UNDERLINE
@@ -116,7 +140,10 @@ model Settings {
 }
 
 // Cache of AI + dictionary-API responses so the same word/field is never
-// paid for twice. Keyed by a deterministic hash of (kind, input).
+// paid for twice. Deliberately NOT scoped per-user — a word's definition
+// or IPA is the same regardless of who asked, so both accounts benefit
+// from a single shared cache entry. Keyed by a deterministic hash of
+// (kind, input).
 model AICache {
   id        String   @id @default(cuid())
   cacheKey  String   @unique

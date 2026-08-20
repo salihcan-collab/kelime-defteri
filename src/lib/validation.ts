@@ -60,3 +60,17 @@ export const quizRequestSchema = z.object({
   cardIds: z.array(z.string()).min(1).max(30),
   includeAiQuestions: z.boolean().default(true),
 });
+
+const emailSchema = z.string().trim().toLowerCase().email('Enter a valid email address').max(200);
+const passwordSchema = z.string().min(8, 'Password must be at least 8 characters').max(200);
+
+export const signupSchema = z.object({
+  email: emailSchema,
+  password: passwordSchema,
+  name: z.string().trim().max(100).optional(),
+});
+
+export const loginSchema = z.object({
+  email: emailSchema,
+  password: z.string().min(1, 'Password is required').max(200),
+});

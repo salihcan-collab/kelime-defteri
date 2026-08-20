@@ -1,6 +1,8 @@
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import { getOrCreateSettings } from '@/lib/settings';
+import { getSession } from '@/lib/auth';
 import { Panel } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { VocabCardListItem } from '@/components/vocab/VocabCardListItem';
@@ -8,24 +10,25 @@ import type { CardWithRelations } from '@/types';
 
 export const dynamic = 'force-dynamic';
 
-async function getDashboardData() {
+async function getDashboardData(userId: string) {
   const now = new Date();
   const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
   const [total, due, mastered, learning, reviewedToday, settings, recentCards, dueCards] = await Promise.all([
-    prisma.card.count(),
-    prisma.card.count({ where: { dueAt: { lte: now } } }),
-    prisma.card.count({ where: { status: 'MASTERED' } }),
-    prisma.card.count({ where: { status: 'LEARNING' } }),
-    prisma.reviewLog.count({ where: { reviewedAt: { gte: startOfDay } } }),
-    getOrCreateSettings(),
+    prisma.card.count({ where: { userId } }),
+    prisma.card.count({ where: { userId, dueAt: { lte: now } } }),
+    prisma.card.count({ where: { userId, status: 'MASTERED' } }),
+    prisma.card.count({ where: { userId, status: 'LEARNING' } }),
+    prisma.reviewLog.count({ where: { userId, reviewedAt: { gte: startOfDay } } }),
+    getOrCreateSettings(userId),
     prisma.card.findMany({
+      where: { userId },
       orderBy: { createdAt: 'desc' },
       take: 5,
       include: { examples: true, tags: { include: { tag: true } } },
     }),
     prisma.card.findMany({
-      where: { dueAt: { lte: now } },
+      where: { userId, dueAt: { lte: now } },
       orderBy: { dueAt: 'asc' },
       take: 5,
       include: { examples: true, tags: { include: { tag: true } } },
@@ -36,7 +39,10 @@ async function getDashboardData() {
 }
 
 export default async function DashboardPage() {
-  const { total, due, mastered, learning, reviewedToday, settings, recentCards, dueCards } = await getDashboardData();
+  const session = await getSession();
+  if (!session) redirect('/login');
+
+  const { total, due, mastered, learning, reviewedToday, settings, recentCards, dueCards } = await getDashboardData(session.userId);
   const goalPct = Math.min(100, Math.round((reviewedToday / Math.max(1, settings.dailyGoal)) * 100));
 
   return (

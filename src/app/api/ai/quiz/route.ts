@@ -4,6 +4,7 @@ import { quizRequestSchema } from '@/lib/validation';
 import { generateContextualQuiz } from '@/lib/ai';
 import { isAiConfigured } from '@/lib/openai';
 import { buildAlgorithmicQuestions } from '@/lib/quiz';
+import { requireSession } from '@/lib/requireSession';
 import type { QuizQuestion, CardWithRelations } from '@/types';
 
 function shuffle<T>(items: T[]): T[] {
@@ -16,6 +17,9 @@ function shuffle<T>(items: T[]): T[] {
 }
 
 export async function POST(req: NextRequest) {
+  const auth = await requireSession();
+  if ('response' in auth) return auth.response;
+
   const body = await req.json().catch(() => null);
   const parsed = quizRequestSchema.safeParse(body);
   if (!parsed.success) {
@@ -23,6 +27,7 @@ export async function POST(req: NextRequest) {
   }
 
   const pool = (await prisma.card.findMany({
+    where: { userId: auth.session.userId },
     include: { examples: true, tags: { include: { tag: true } } },
   })) as unknown as CardWithRelations[];
 

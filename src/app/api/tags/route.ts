@@ -1,9 +1,14 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { requireSession } from '@/lib/requireSession';
 
-/** Returns every saved tag, most-used first, so the tag input can offer them as autocomplete options. */
+/** Returns the current user's saved tags, most-used first, for tag-input autocomplete. */
 export async function GET() {
+  const auth = await requireSession();
+  if ('response' in auth) return auth.response;
+
   const tags = await prisma.tag.findMany({
+    where: { userId: auth.session.userId },
     include: { _count: { select: { cards: true } } },
     orderBy: { cards: { _count: 'desc' } },
   });

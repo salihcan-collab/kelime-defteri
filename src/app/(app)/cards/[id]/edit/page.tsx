@@ -1,5 +1,6 @@
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
+import { getSession } from '@/lib/auth';
 import { VocabForm } from '@/components/vocab/VocabForm';
 import { isAiConfigured } from '@/lib/openai';
 import type { CardWithRelations } from '@/types';
@@ -7,11 +8,14 @@ import type { CardWithRelations } from '@/types';
 export const dynamic = 'force-dynamic';
 
 export default async function EditCardPage({ params }: { params: Promise<{ id: string }> }) {
+  const session = await getSession();
+  if (!session) redirect('/login');
+
   const { id } = await params;
   const card = await prisma.card.findUnique({
     where: { id },
     include: { examples: { orderBy: { order: 'asc' } }, tags: { include: { tag: true } } },
   });
-  if (!card) notFound();
+  if (!card || card.userId !== session.userId) notFound();
   return <VocabForm card={card as unknown as CardWithRelations} aiConfigured={isAiConfigured()} />;
 }

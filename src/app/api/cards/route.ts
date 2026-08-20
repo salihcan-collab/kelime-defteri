@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { cardInputSchema } from '@/lib/validation';
 import { findWordSpans, serializeSpans } from '@/lib/highlight';
+import { requireSession } from '@/lib/requireSession';
 import type { Prisma } from '@prisma/client';
 import type { CardStatus } from '@/types';
 
@@ -11,13 +12,16 @@ const cardInclude = {
 };
 
 export async function GET(req: NextRequest) {
+  const auth = await requireSession();
+  if ('response' in auth) return auth.response;
+
   const { searchParams } = new URL(req.url);
   const search = searchParams.get('q')?.trim();
   const tag = searchParams.get('tag');
   const status = searchParams.get('status');
   const due = searchParams.get('due'); // "true" -> only due-now cards
 
-  const where: Prisma.CardWhereInput = {};
+  const where: Prisma.CardWhereInput = { userId: auth.session.userId };
   if (search) {
     where.OR = [
       { vocabulary: { contains: search } },
@@ -39,6 +43,10 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const auth = await requireSession();
+  if ('response' in auth) return auth.response;
+  const { userId } = auth.session;
+
   const body = await req.json().catch(() => null);
   const parsed = cardInputSchema.safeParse(body);
   if (!parsed.success) {
@@ -49,9 +57,9 @@ export async function POST(req: NextRequest) {
   const tagConnections = await Promise.all(
     data.tags.map(async (name) => {
       const tag = await prisma.tag.upsert({
-        where: { name: name.toLowerCase() },
+        where: { userId_name: { userId, name: name.toLowerCase() } },
         update: {},
-        create: { name: name.toLowerCase() },
+        create: { userId, name: name.toLowerCase() },
       });
       return tag.id;
     }),
@@ -59,6 +67,7 @@ export async function POST(req: NextRequest) {
 
   const card = await prisma.card.create({
     data: {
+      userId,
       vocabulary: data.vocabulary,
       ipa: data.ipa || null,
       audioUrl: data.audioUrl || null,

@@ -4,9 +4,14 @@ import { reviewSubmitSchema } from '@/lib/validation';
 import { nextSrsState } from '@/lib/srs';
 import { updateStreak } from '@/lib/streak';
 import { getOrCreateSettings } from '@/lib/settings';
+import { requireSession } from '@/lib/requireSession';
 import type { CardStatus } from '@/types';
 
 export async function POST(req: NextRequest) {
+  const auth = await requireSession();
+  if ('response' in auth) return auth.response;
+  const { userId } = auth.session;
+
   const body = await req.json().catch(() => null);
   const parsed = reviewSubmitSchema.safeParse(body);
   if (!parsed.success) {
@@ -15,7 +20,7 @@ export async function POST(req: NextRequest) {
   const { cardId, rating } = parsed.data;
 
   const card = await prisma.card.findUnique({ where: { id: cardId } });
-  if (!card) return NextResponse.json({ error: 'Card not found' }, { status: 404 });
+  if (!card || card.userId !== userId) return NextResponse.json({ error: 'Card not found' }, { status: 404 });
 
   const now = new Date();
   const next = nextSrsState(
@@ -38,6 +43,7 @@ export async function POST(req: NextRequest) {
     }),
     prisma.reviewLog.create({
       data: {
+        userId,
         cardId,
         rating,
         intervalBefore: card.intervalDays,
@@ -49,10 +55,10 @@ export async function POST(req: NextRequest) {
     }),
   ]);
 
-  const settings = await getOrCreateSettings();
+  const settings = await getOrCreateSettings(userId);
   const streak = updateStreak(settings.lastStudyDate, settings.currentStreak, settings.longestStreak, now);
   await prisma.settings.update({
-    where: { id: 'singleton' },
+    where: { userId },
     data: {
       currentStreak: streak.currentStreak,
       longestStreak: streak.longestStreak,

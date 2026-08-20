@@ -1,11 +1,11 @@
 import { prisma } from './prisma';
 import type { Settings } from '@prisma/client';
 
-/** Gets (or lazily creates) the single-row Settings/progress record. */
-export async function getOrCreateSettings(): Promise<Settings> {
+/** Gets (or lazily creates) a user's Settings/progress row. */
+export async function getOrCreateSettings(userId: string): Promise<Settings> {
   return prisma.settings.upsert({
-    where: { id: 'singleton' },
+    where: { userId },
     update: {},
-    create: { id: 'singleton' },
+    create: { userId },
   });
 }
