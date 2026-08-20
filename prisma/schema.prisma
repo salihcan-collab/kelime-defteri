@@ -1,21 +1,23 @@
 // Kelime Defteri — Prisma schema
-// Default datasource is SQLite (zero-config, file-based, perfect for a
-// small self-hosted deployment). Swapping to Postgres/Supabase later only
-// requires changing `provider` + `url` here.
+// Postgres-backed (works with Render's free managed Postgres, Supabase,
+// Neon, or any standard Postgres connection string in DATABASE_URL) so
+// the app can run on a host with no persistent local disk.
 //
-// Note: SQLite has no native enum type, so fields that are conceptually
-// enums (PartOfSpeech, CardStatus, ReviewRating, HighlightStyle) are
-// stored as validated String columns instead — the enum-like union types
-// live in src/types/index.ts and are enforced at the API boundary with
-// zod (see src/lib/validation.ts). Switching to Postgres later can
-// reintroduce real `enum` blocks if desired.
+// Note: fields that are conceptually enums (PartOfSpeech, CardStatus,
+// ReviewRating, HighlightStyle) are still stored as validated String
+// columns rather than native Postgres enums — that's a holdover from an
+// earlier SQLite-backed version of this schema (SQLite has no enum type)
+// kept for simplicity, since the enum-like union types already live in
+// src/types/index.ts and are enforced at the API boundary with zod (see
+// src/lib/validation.ts). Feel free to convert them to real `enum` blocks
+// later; it's a compatible change either way.
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 

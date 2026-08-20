@@ -11,25 +11,24 @@ each with their own private login and notebook.
 | Layer | Choice | Why |
 |---|---|---|
 | Framework | **Next.js 15 (App Router) + TypeScript** | One deployable app for UI + API routes; React Server Components keep data fetching simple; trivial to deploy on Vercel, a Node server, or Docker. |
-| Database | **SQLite via Prisma ORM** | Zero external services to stand up — the whole app (accounts, cards, tags, SRS state, review history, streaks, AI cache) is one file (`prisma/dev.db`). Swapping to Postgres/Supabase later is a one-line `datasource` change since every field type used is portable. |
+| Database | **Postgres via Prisma ORM** | Works with any standard Postgres — Render's free managed database (see §5, "Deploying"), Supabase, Neon, or a local instance for development. No SQLite-specific behavior anywhere in the schema, so this is also a one-line `datasource` change away from other Postgres-compatible providers. |
 | Accounts | **Custom email + password login, capped at 2 accounts** | See §2 below — deliberately minimal since this is a private notebook for you and one other person, not a public app. |
 | Styling | **Tailwind CSS + CSS custom properties** | Six notebook color palettes and four font stacks are implemented as CSS variable sets switched via `data-theme` / `data-font` attributes — no rebuild needed to re-theme, and it composes cleanly with Tailwind utilities. |
 | Client state | **Zustand (persisted)** | Theme/font/highlight-style/preferences painted instantly from `localStorage` (no flash of wrong theme) and mirrored to the `Settings` table so they survive across browsers too. |
 | AI | **OpenAI SDK, server-only** | All calls happen in Next.js Route Handlers so the API key never reaches the browser. Every call uses **Structured Outputs** (`response_format: json_schema`, `strict: true`) so responses are always valid JSON — no retry/repair tokens spent. |
 | Pronunciation | **Free dictionary API (dictionaryapi.dev) + Web Speech API** | Real recorded audio and IPA when available, at zero cost; AI is only used as an IPA fallback for words the dictionary doesn't have. Playback uses the browser's built-in `speechSynthesis` — no TTS API bill at all. |
 
-### Why SQLite instead of Supabase/Firebase
+### Why Postgres instead of Supabase's full BaaS layer
 
-The spec offered Supabase/Firebase/SQLite as options. This app serves a
-handful of people at most, so a managed multi-tenant database adds
-operational overhead — a hosted project, connection strings, RLS policies
-— without buying anything the app needs. SQLite gives the same
-"persistent progress tracking" requirement (retention data, streaks,
-mastered words, full review history) with zero setup. Every table is
-already keyed by `userId`, so switching `provider = "postgresql"` in
-`prisma/schema.prisma` is the entire migration path to Supabase if this
-ever needs to scale past a couple of accounts or move off a single disk
-(see §5, "Deploying").
+The spec offered Supabase/Firebase/SQLite as options. This app doesn't
+need Supabase's auth, storage, or realtime layers — just a reliable place
+to persist "progress tracking" (retention data, streaks, mastered words,
+full review history) for at most two accounts. Plain Postgres via Prisma
+gets that with no extra product surface to learn, while still deploying
+for free on Render's managed database (see §5). Every table is already
+keyed by `userId`, and the schema uses no Postgres-specific column types,
+so pointing `DATABASE_URL` at Supabase's own Postgres later — to pick up
+its auth/storage/realtime features — is a config change, not a rewrite.
 
 ### A note on the requested model name
 
@@ -154,9 +153,11 @@ src/
 ```bash
 npm install
 cp .env.example .env
+# point DATABASE_URL at a Postgres instance (local, Docker, or a free
+# hosted one — see the comment in .env.example)
 # fill in AUTH_SECRET (required — generate with `openssl rand -base64 32`)
 # fill in OPENAI_API_KEY to enable AI features (optional)
-npm run db:push              # create the SQLite schema
+npm run db:push              # create the schema in that database
 npm run dev                  # http://localhost:3000
 ```
 
@@ -176,20 +177,22 @@ quiz questions.
 
 ### Deploying so you can actually use it day-to-day
 
-This was built and tested locally. To get a real URL you and the second
-account holder can open from your phones/laptops, the simplest options are:
+`render.yaml` in the repo root is a [Render Blueprint](https://render.com/docs/infrastructure-as-code):
+push to Render, choose "New +" → "Blueprint", and it provisions a free
+web service plus a free managed Postgres database from that one file —
+no manual configuration. You'll be prompted to paste in `AUTH_SECRET`
+(generate one with `openssl rand -base64 32`) and, optionally,
+`OPENAI_API_KEY`.
 
-- **A small always-on host with persistent disk** (Render, Railway,
-  Fly.io, a cheap VPS): straightforward, since the SQLite file just lives
-  on disk like it does here. Point `DATABASE_URL` at a persistent volume,
-  set `AUTH_SECRET` and (optionally) `OPENAI_API_KEY`/`OPENAI_MODEL` as
-  environment variables, run `npm run build && npm run start`.
-- **Vercel**: works great for the Next.js app itself, but its serverless
-  functions don't have a persistent local filesystem — a SQLite file
-  won't reliably survive between requests there. If you want Vercel,
-  switch the Prisma `datasource` to a hosted Postgres (e.g. Vercel
-  Postgres or Supabase) first; that's the one piece of this app that
-  assumes a writable local disk.
+The free web service plan sleeps after 15 minutes with no visitors and
+takes a few seconds to wake back up on the next request — a fine
+trade-off for two people using this casually. Change `plan: free` to
+`plan: starter` on the service in `render.yaml` (~$7/month) if you want
+it always-on instead; no other changes needed.
+
+Any other Postgres-compatible host works too (Railway, Fly.io, Supabase,
+a VPS with Postgres installed) — just set `DATABASE_URL` to that
+database's connection string and run `npm run build && npm run start`.
 
 ### Scripts
 
@@ -197,7 +200,7 @@ account holder can open from your phones/laptops, the simplest options are:
 |---|---|
 | `npm run dev` / `build` / `start` | standard Next.js dev/build/serve |
 | `npm run lint` / `typecheck` | ESLint / `tsc --noEmit` |
-| `npm run db:push` | sync `prisma/schema.prisma` to the SQLite file |
+| `npm run db:push` | sync `prisma/schema.prisma` to the database in `DATABASE_URL` |
 | `npm run db:seed [-- email]` | insert sample vocabulary cards for an account |
 
 ## 6. Known limitations / next steps

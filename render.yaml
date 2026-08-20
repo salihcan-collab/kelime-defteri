@@ -1,27 +1,42 @@
 # Render Blueprint — lets Render auto-configure this app from one click
 # ("New +" → "Blueprint" in the Render dashboard) instead of filling in
-# build/start commands and a disk by hand. See README.md §5 "Deploying"
-# for the full walkthrough.
+# build/start commands and a database by hand. See README.md §5
+# "Deploying" for the full walkthrough.
+#
+# Free-tier setup: a free Render Postgres database + the free web service
+# plan. The trade-off for $0/month is that a free web service "sleeps"
+# after 15 minutes with no visitors and takes a few seconds to wake back
+# up on the next request — fine for a couple of people using this
+# casually. Bump `plan: free` to `plan: starter` on the service below
+# ($7/mo) if you want it always-on instead.
 #
 # `sync: false` env vars are secrets Render will prompt you to paste in
 # during setup rather than storing in this file / your git history.
+
+databases:
+  - name: kelime-defteri-db
+    plan: free
+    databaseName: kelime_defteri
+    user: kelime_defteri
 
 services:
   - type: web
     name: kelime-defteri
     runtime: node
-    plan: starter # cheapest plan that supports the persistent disk below
+    plan: free
     branch: claude/vocab-learning-app-ww31qa
     buildCommand: npm install && npm run build
-    # `prisma db push` re-syncs the schema against the persistent disk on
-    # every restart — safe to run repeatedly, and keeps the DB schema
-    # current after future deploys without a separate manual step.
+    # `prisma db push` re-syncs the schema on every restart — safe to run
+    # repeatedly, and keeps the DB schema current after future deploys
+    # without a separate manual step.
     startCommand: npx prisma db push && npm run start
     envVars:
       - key: NODE_ENV
         value: production
       - key: DATABASE_URL
-        value: file:/var/data/kelime-defteri.db
+        fromDatabase:
+          name: kelime-defteri-db
+          property: connectionString
       - key: AUTH_SECRET
         sync: false
       - key: OPENAI_API_KEY
@@ -30,7 +45,3 @@ services:
         value: gpt-5.6-luna
       - key: OPENAI_FALLBACK_MODEL
         value: gpt-4o-mini
-    disk:
-      name: kelime-defteri-data
-      mountPath: /var/data
-      sizeGB: 1
