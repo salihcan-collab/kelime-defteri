@@ -10,15 +10,16 @@ import { VocabCardListItem } from '@/components/vocab/VocabCardListItem';
 import { CARD_STATUS_LABELS } from '@/types';
 import type { CardWithRelations } from '@/types';
 
-export default function CardsPage() {
+/** The interactive notebook browser (search/filter/list) for the /cards route. */
+export function CardsBrowser() {
   return (
     <Suspense fallback={<div className="text-ink-soft">Loading…</div>}>
-      <CardsPageInner />
+      <CardsBrowserInner />
     </Suspense>
   );
 }
 
-function CardsPageInner() {
+function CardsBrowserInner() {
   const searchParams = useSearchParams();
   const [cards, setCards] = useState<CardWithRelations[]>([]);
   const [loading, setLoading] = useState(true);
