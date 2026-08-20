@@ -1,0 +1,36 @@
+# Render Blueprint — lets Render auto-configure this app from one click
+# ("New +" → "Blueprint" in the Render dashboard) instead of filling in
+# build/start commands and a disk by hand. See README.md §5 "Deploying"
+# for the full walkthrough.
+#
+# `sync: false` env vars are secrets Render will prompt you to paste in
+# during setup rather than storing in this file / your git history.
+
+services:
+  - type: web
+    name: kelime-defteri
+    runtime: node
+    plan: starter # cheapest plan that supports the persistent disk below
+    branch: claude/vocab-learning-app-ww31qa
+    buildCommand: npm install && npm run build
+    # `prisma db push` re-syncs the schema against the persistent disk on
+    # every restart — safe to run repeatedly, and keeps the DB schema
+    # current after future deploys without a separate manual step.
+    startCommand: npx prisma db push && npm run start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        value: file:/var/data/kelime-defteri.db
+      - key: AUTH_SECRET
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-5.6-luna
+      - key: OPENAI_FALLBACK_MODEL
+        value: gpt-4o-mini
+    disk:
+      name: kelime-defteri-data
+      mountPath: /var/data
+      sizeGB: 1
