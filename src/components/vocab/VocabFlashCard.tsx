@@ -1,0 +1,52 @@
+import Link from 'next/link';
+import { Badge } from '@/components/ui/Card';
+import { CARD_STATUS_LABELS, PART_OF_SPEECH_LABELS } from '@/types';
+import { STATUS_TONE } from '@/components/vocab/VocabCardListItem';
+import type { CardWithRelations } from '@/types';
+
+/**
+ * Compact flashcard-style tile for the notebook grid — a handful fit per
+ * row instead of one full-width row per word (see VocabCardListItem for
+ * the narrower list layout used in the dashboard's "up next" style
+ * previews). The whole tile links to the card's full detail page.
+ */
+export function VocabFlashCard({ card }: { card: CardWithRelations }) {
+  const isDue = new Date(card.dueAt).getTime() <= Date.now();
+  const visibleTags = card.tags.slice(0, 2);
+  const extraTagCount = card.tags.length - visibleTags.length;
+
+  return (
+    <Link
+      href={`/cards/${card.id}`}
+      className="flex h-full flex-col gap-2 rounded-xl border border-line bg-card p-4 shadow-notebook transition hover:-translate-y-0.5 hover:shadow-lift"
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="truncate font-heading text-base font-semibold text-ink">{card.vocabulary}</div>
+          {card.ipa && <div className="truncate font-mono text-xs text-ink-soft">{card.ipa}</div>}
+        </div>
+        <Badge tone={STATUS_TONE[card.status]} className="shrink-0">
+          {CARD_STATUS_LABELS[card.status]}
+        </Badge>
+      </div>
+
+      {card.partOfSpeech && <Badge tone="neutral" className="w-fit">{PART_OF_SPEECH_LABELS[card.partOfSpeech]}</Badge>}
+
+      {card.definitionEn && <p className="line-clamp-3 text-sm text-ink-soft">{card.definitionEn}</p>}
+
+      <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-1">
+        {visibleTags.map(({ tag }) => (
+          <span key={tag.id} className="text-xs text-accent">
+            #{tag.name}
+          </span>
+        ))}
+        {extraTagCount > 0 && <span className="text-xs text-ink-soft">+{extraTagCount}</span>}
+        {isDue && (
+          <Badge tone="danger" className="ml-auto">
+            Due
+          </Badge>
+        )}
+      </div>
+    </Link>
+  );
+}

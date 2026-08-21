@@ -70,7 +70,7 @@ export function QuizRunner({ aiConfigured }: { aiConfigured: boolean }) {
 
   if (stage === 'setup') {
     return (
-      <Panel className="notebook-lines mx-auto max-w-lg space-y-4">
+      <Panel className="mx-auto max-w-lg space-y-4">
         <h2 className="font-heading text-lg font-semibold text-ink">Set up practice</h2>
         <p className="text-sm text-ink-soft">
           Mixes multiple-choice, fill-in-the-blank, sentence construction, and memory-hook recall — generated from your own vocabulary bank
@@ -105,7 +105,7 @@ export function QuizRunner({ aiConfigured }: { aiConfigured: boolean }) {
   if (stage === 'summary') {
     const pct = questions.length ? Math.round((correctCount / questions.length) * 100) : 0;
     return (
-      <Panel className="notebook-lines mx-auto max-w-lg text-center">
+      <Panel className="mx-auto max-w-lg text-center">
         <div className="text-4xl">{pct >= 80 ? '🏆' : pct >= 50 ? '👍' : '📖'}</div>
         <h2 className="mt-2 font-heading text-xl font-semibold text-ink">
           {correctCount} / {questions.length} correct ({pct}%)
@@ -129,7 +129,7 @@ export function QuizRunner({ aiConfigured }: { aiConfigured: boolean }) {
         </span>
         <span>{correctCount} correct so far</span>
       </div>
-      <Panel className="notebook-lines min-h-[16rem]">
+      <Panel className="min-h-[16rem]">
         <QuizQuestionView key={qIndex} question={question} onAnswered={handleAnswered} />
       </Panel>
     </div>

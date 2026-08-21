@@ -46,11 +46,11 @@ export function Navbar({ userEmail }: { userEmail: string }) {
       {/* Top bar: full nav on tablet+; on phones, just branding + account (primary nav moves to the bottom tab bar below). */}
       <header className="sticky top-0 z-20 border-b border-line/70 bg-paper/90 backdrop-blur">
         <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-2 px-4 py-3 sm:px-6 lg:px-8">
-          <Link href="/" className="flex items-center gap-2 font-heading text-lg font-semibold text-ink">
+          <Link href="/" className="flex shrink-0 items-center gap-2 whitespace-nowrap font-heading text-lg font-semibold text-ink">
             <span aria-hidden>📖</span>
             Kelime Defteri
           </Link>
-          <nav className="hidden items-center gap-1 sm:flex">
+          <nav className="hidden items-center gap-1 overflow-x-auto sm:flex">
             {LINKS.map((link) => (
               <Link
                 key={link.href}
@@ -65,8 +65,8 @@ export function Navbar({ userEmail }: { userEmail: string }) {
               </Link>
             ))}
           </nav>
-          <div className="flex items-center gap-2 text-sm text-ink-soft">
-            <span className="hidden truncate sm:inline" title={userEmail}>
+          <div className="flex shrink-0 items-center gap-2 text-sm text-ink-soft">
+            <span className="hidden max-w-[10rem] truncate lg:inline" title={userEmail}>
               {userEmail}
             </span>
             {logoutButton}

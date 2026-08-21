@@ -6,7 +6,7 @@ import { useSearchParams } from 'next/navigation';
 import { Panel } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Select, TextInput } from '@/components/ui/Field';
-import { VocabCardListItem } from '@/components/vocab/VocabCardListItem';
+import { VocabFlashCard } from '@/components/vocab/VocabFlashCard';
 import { CARD_STATUS_LABELS } from '@/types';
 import type { CardWithRelations } from '@/types';
 
@@ -78,9 +78,9 @@ function CardsBrowserInner() {
           No cards match your filters yet. <Link href="/cards/new" className="text-accent hover:underline">Add a word</Link>.
         </Panel>
       ) : (
-        <div className="space-y-2">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {cards.map((card) => (
-            <VocabCardListItem key={card.id} card={card} />
+            <VocabFlashCard key={card.id} card={card} />
           ))}
         </div>
       )}

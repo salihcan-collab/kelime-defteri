@@ -3,7 +3,7 @@ import { Badge } from '@/components/ui/Card';
 import { CARD_STATUS_LABELS, PART_OF_SPEECH_LABELS } from '@/types';
 import type { CardWithRelations } from '@/types';
 
-const STATUS_TONE: Record<string, 'accent' | 'success' | 'warn' | 'neutral'> = {
+export const STATUS_TONE: Record<string, 'accent' | 'success' | 'warn' | 'neutral'> = {
   NEW: 'neutral',
   LEARNING: 'warn',
   REVIEW: 'accent',

@@ -31,9 +31,6 @@ const config: Config = {
       borderRadius: {
         notebook: '1rem',
       },
-      backgroundImage: {
-        rules: 'repeating-linear-gradient(to bottom, transparent 0, transparent 34px, rgb(var(--color-line) / 0.5) 35px)',
-      },
     },
   },
   plugins: [],

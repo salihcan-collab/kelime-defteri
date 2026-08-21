@@ -47,7 +47,7 @@ export function ReviewSession() {
 
   if (queue.length === 0) {
     return (
-      <Panel className="notebook-lines text-center">
+      <Panel className="text-center">
         <div className="text-4xl">🎉</div>
         <h1 className="mt-2 font-heading text-xl font-semibold text-ink">
           {reviewedCount > 0 ? 'Session complete!' : 'Nothing due right now'}
@@ -76,7 +76,7 @@ export function ReviewSession() {
         <span>{reviewedCount} reviewed this session</span>
       </div>
 
-      <Panel className="notebook-lines min-h-[22rem]">
+      <Panel className="min-h-[22rem]">
         <div className="flex items-center justify-between">
           <Badge tone="neutral">{card.partOfSpeech ? PART_OF_SPEECH_LABELS[card.partOfSpeech] : 'Word'}</Badge>
         </div>

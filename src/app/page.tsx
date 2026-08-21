@@ -49,7 +49,7 @@ export default async function DashboardPage() {
   return (
     <AuthedShell>
       <div className="space-y-6">
-        <Panel className="notebook-lines flex flex-wrap items-center justify-between gap-4">
+        <Panel className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <h1 className="font-heading text-2xl font-semibold text-ink">Welcome back 👋</h1>
             <p className="mt-1 text-ink-soft">

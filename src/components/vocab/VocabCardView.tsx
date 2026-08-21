@@ -28,7 +28,7 @@ export function VocabCardView({ card }: { card: CardWithRelations }) {
 
   return (
     <div className="space-y-5">
-      <Panel className="notebook-lines">
+      <Panel>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <div className="flex flex-wrap items-center gap-3">

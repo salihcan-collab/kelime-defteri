@@ -145,21 +145,6 @@ body {
   background-color: rgb(var(--color-highlight) / 0.55);
 }
 
-/* Reusable "ruled notebook paper" look for hero/panel surfaces: visible
-   horizontal rules plus a colored margin line, like a real notebook page.
-   (The rule color was previously too close to the panel background to
-   read as a deliberate texture — this makes it an actual visual motif.) */
-.notebook-lines {
-  background-image: repeating-linear-gradient(
-    to bottom,
-    transparent 0,
-    transparent 31px,
-    rgb(var(--color-line)) 32px
-  );
-  background-position: 0 10px;
-  border-left: 3px solid rgb(var(--color-accent) / 0.4);
-}
-
 .scrollbar-thin::-webkit-scrollbar {
   width: 8px;
   height: 8px;

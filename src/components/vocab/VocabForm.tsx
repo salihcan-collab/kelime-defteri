@@ -175,7 +175,7 @@ export function VocabForm({ card, aiConfigured }: { card?: CardWithRelations; ai
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
-      <Panel className="notebook-lines">
+      <Panel>
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="font-heading text-lg font-semibold">{isEdit ? 'Edit card' : 'New vocabulary card'}</h2>
