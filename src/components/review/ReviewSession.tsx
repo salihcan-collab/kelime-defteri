@@ -114,8 +114,11 @@ export function ReviewSession() {
             Its own row, separate from the pronunciation button above, so
             it doesn't read as another way to hear the word. The button
             (icon + label) stays visible whether the hint is open or
-            closed, so it also doubles as the way to hide it again. */}
-        {card.mnemonic && (
+            closed, so it also doubles as the way to hide it again. Once
+            the answer is revealed the hint is redundant — the full
+            meaning already answers more than the hint would — so it
+            disappears along with the "before" state. */}
+        {!revealed && card.mnemonic && (
           <div className="mt-4 text-center">
             <button
               type="button"
