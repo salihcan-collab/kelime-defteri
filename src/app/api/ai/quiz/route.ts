@@ -5,6 +5,7 @@ import { generateContextualQuiz } from '@/lib/ai';
 import { isAiConfigured } from '@/lib/openai';
 import { buildAlgorithmicQuestions } from '@/lib/quiz';
 import { requireSession } from '@/lib/requireSession';
+import { primaryMeaning } from '@/types';
 import type { QuizQuestion, CardWithRelations } from '@/types';
 
 function shuffle<T>(items: T[]): T[] {
@@ -28,7 +29,7 @@ export async function POST(req: NextRequest) {
 
   const pool = (await prisma.card.findMany({
     where: { userId: auth.session.userId },
-    include: { examples: true, tags: { include: { tag: true } } },
+    include: { meanings: { include: { examples: true } }, tags: { include: { tag: true } } },
   })) as unknown as CardWithRelations[];
 
   const targets = pool.filter((c) => parsed.data.cardIds.includes(c.id));
@@ -52,8 +53,8 @@ export async function POST(req: NextRequest) {
         aiTargets.map((c) => ({
           id: c.id,
           vocabulary: c.vocabulary,
-          definitionEn: c.definitionEn,
-          definitionTr: c.definitionTr,
+          definitionEn: primaryMeaning(c)?.definitionEn ?? null,
+          definitionTr: primaryMeaning(c)?.definitionTr ?? null,
           mnemonic: c.mnemonic,
         })),
       );

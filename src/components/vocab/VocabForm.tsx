@@ -13,19 +13,27 @@ import { findWordSpans, serializeSpans } from '@/lib/highlight';
 import { PART_OF_SPEECH_LABELS, PARTS_OF_SPEECH } from '@/types';
 import type { CardWithRelations, PartOfSpeech } from '@/types';
 
+interface MeaningFormState {
+  partOfSpeech: PartOfSpeech | '';
+  definitionEn: string;
+  definitionTr: string;
+  examples: string[];
+}
+
 interface FormState {
   vocabulary: string;
   ipa: string;
   audioUrl: string;
-  definitionEn: string;
-  definitionTr: string;
-  partOfSpeech: PartOfSpeech | '';
-  mnemonic: string;
-  collocations: string;
-  notes: string;
   tags: string[];
-  examples: string[];
+  meanings: MeaningFormState[];
+  collocations: string;
+  synonyms: string;
+  antonyms: string;
+  mnemonic: string;
+  notes: string;
 }
+
+const BLANK_MEANING: MeaningFormState = { partOfSpeech: '', definitionEn: '', definitionTr: '', examples: [''] };
 
 function initialStateFromCard(card?: CardWithRelations): FormState {
   if (!card) {
@@ -33,28 +41,33 @@ function initialStateFromCard(card?: CardWithRelations): FormState {
       vocabulary: '',
       ipa: '',
       audioUrl: '',
-      definitionEn: '',
-      definitionTr: '',
-      partOfSpeech: '',
-      mnemonic: '',
-      collocations: '',
-      notes: '',
       tags: [],
-      examples: [''],
+      meanings: [{ ...BLANK_MEANING }],
+      collocations: '',
+      synonyms: '',
+      antonyms: '',
+      mnemonic: '',
+      notes: '',
     };
   }
   return {
     vocabulary: card.vocabulary,
     ipa: card.ipa ?? '',
     audioUrl: card.audioUrl ?? '',
-    definitionEn: card.definitionEn ?? '',
-    definitionTr: card.definitionTr ?? '',
-    partOfSpeech: card.partOfSpeech ?? '',
-    mnemonic: card.mnemonic ?? '',
-    collocations: card.collocations ?? '',
-    notes: card.notes ?? '',
     tags: card.tags.map((t) => t.tag.name),
-    examples: card.examples.length ? card.examples.map((e) => e.text) : [''],
+    meanings: card.meanings.length
+      ? card.meanings.map((m) => ({
+          partOfSpeech: m.partOfSpeech ?? '',
+          definitionEn: m.definitionEn ?? '',
+          definitionTr: m.definitionTr ?? '',
+          examples: m.examples.length ? m.examples.map((e) => e.text) : [''],
+        }))
+      : [{ ...BLANK_MEANING }],
+    collocations: card.collocations ?? '',
+    synonyms: card.synonyms ?? '',
+    antonyms: card.antonyms ?? '',
+    mnemonic: card.mnemonic ?? '',
+    notes: card.notes ?? '',
   };
 }
 
@@ -72,7 +85,42 @@ export function VocabForm({ card, aiConfigured }: { card?: CardWithRelations; ai
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
-  const context = useMemo(() => ({ definitionEn: form.definitionEn, partOfSpeech: form.partOfSpeech }), [form.definitionEn, form.partOfSpeech]);
+  // Context for card-level AI fields (mnemonic/collocations/synonyms/antonyms) —
+  // grounded in the primary (first) meaning, since that's the sense being memorized.
+  const primaryContext = useMemo(
+    () => ({ definitionEn: form.meanings[0]?.definitionEn, partOfSpeech: form.meanings[0]?.partOfSpeech }),
+    [form.meanings],
+  );
+
+  function updateMeaning(index: number, patch: Partial<MeaningFormState>) {
+    setForm((prev) => ({ ...prev, meanings: prev.meanings.map((m, i) => (i === index ? { ...m, ...patch } : m)) }));
+  }
+  function addMeaning() {
+    setForm((prev) => ({ ...prev, meanings: [...prev.meanings, { ...BLANK_MEANING, examples: [''] }] }));
+  }
+  function removeMeaning(index: number) {
+    setForm((prev) => ({ ...prev, meanings: prev.meanings.filter((_, i) => i !== index) }));
+  }
+  function updateMeaningExample(meaningIndex: number, exampleIndex: number, text: string) {
+    setForm((prev) => ({
+      ...prev,
+      meanings: prev.meanings.map((m, i) =>
+        i === meaningIndex ? { ...m, examples: m.examples.map((e, j) => (j === exampleIndex ? text : e)) } : m,
+      ),
+    }));
+  }
+  function addMeaningExample(meaningIndex: number) {
+    setForm((prev) => ({
+      ...prev,
+      meanings: prev.meanings.map((m, i) => (i === meaningIndex ? { ...m, examples: [...m.examples, ''] } : m)),
+    }));
+  }
+  function removeMeaningExample(meaningIndex: number, exampleIndex: number) {
+    setForm((prev) => ({
+      ...prev,
+      meanings: prev.meanings.map((m, i) => (i === meaningIndex ? { ...m, examples: m.examples.filter((_, j) => j !== exampleIndex) } : m)),
+    }));
+  }
 
   async function handleGenerateFullCard() {
     if (!form.vocabulary.trim()) {
@@ -90,19 +138,29 @@ export function VocabForm({ card, aiConfigured }: { card?: CardWithRelations; ai
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'AI generation failed');
       const draft = data.draft;
-      setForm((prev) => ({
-        ...prev,
-        ipa: draft.ipa ?? prev.ipa,
-        audioUrl: draft.audioUrl ?? prev.audioUrl,
-        definitionEn: draft.definitionEn ?? prev.definitionEn,
-        definitionTr: draft.definitionTr ?? prev.definitionTr,
-        partOfSpeech: draft.partOfSpeech ?? prev.partOfSpeech,
-        mnemonic: draft.mnemonic ?? prev.mnemonic,
-        collocations: draft.collocations ?? prev.collocations,
-        examples: draft.exampleSentences?.length ? draft.exampleSentences : prev.examples,
-        tags: Array.from(new Set([...prev.tags, ...(draft.suggestedTags ?? [])])),
-      }));
-      setNotice('AI drafted the whole card — review and tweak anything before saving.');
+      setForm((prev) => {
+        const meanings = [...prev.meanings];
+        meanings[0] = {
+          partOfSpeech: draft.partOfSpeech ?? meanings[0].partOfSpeech,
+          definitionEn: draft.definitionEn ?? meanings[0].definitionEn,
+          definitionTr: draft.definitionTr ?? meanings[0].definitionTr,
+          examples: draft.exampleSentences?.length ? draft.exampleSentences : meanings[0].examples,
+        };
+        return {
+          ...prev,
+          ipa: draft.ipa ?? prev.ipa,
+          audioUrl: draft.audioUrl ?? prev.audioUrl,
+          mnemonic: draft.mnemonic ?? prev.mnemonic,
+          collocations: draft.collocations ?? prev.collocations,
+          synonyms: draft.synonyms || prev.synonyms,
+          antonyms: draft.antonyms || prev.antonyms,
+          meanings,
+          tags: Array.from(new Set([...prev.tags, ...(draft.suggestedTags ?? [])])),
+        };
+      });
+      setNotice(
+        'AI drafted the primary meaning — review and tweak it, then add any other common senses below with "+ Add another meaning" if the word has them.',
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : 'AI generation failed');
     } finally {
@@ -125,16 +183,6 @@ export function VocabForm({ card, aiConfigured }: { card?: CardWithRelations; ai
     }
   }
 
-  function updateExample(index: number, text: string) {
-    setForm((prev) => ({ ...prev, examples: prev.examples.map((e, i) => (i === index ? text : e)) }));
-  }
-  function addExample() {
-    setForm((prev) => ({ ...prev, examples: [...prev.examples, ''] }));
-  }
-  function removeExample(index: number) {
-    setForm((prev) => ({ ...prev, examples: prev.examples.filter((_, i) => i !== index) }));
-  }
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!form.vocabulary.trim()) {
@@ -147,14 +195,18 @@ export function VocabForm({ card, aiConfigured }: { card?: CardWithRelations; ai
       vocabulary: form.vocabulary.trim(),
       ipa: form.ipa || null,
       audioUrl: form.audioUrl || null,
-      definitionEn: form.definitionEn || null,
-      definitionTr: form.definitionTr || null,
-      partOfSpeech: form.partOfSpeech || null,
       mnemonic: form.mnemonic || null,
       collocations: form.collocations || null,
+      synonyms: form.synonyms || null,
+      antonyms: form.antonyms || null,
       notes: form.notes || null,
       tags: form.tags,
-      examples: form.examples.filter((e) => e.trim()).map((text) => ({ text, source: 'USER' as const })),
+      meanings: form.meanings.map((m) => ({
+        partOfSpeech: m.partOfSpeech || null,
+        definitionEn: m.definitionEn || null,
+        definitionTr: m.definitionTr || null,
+        examples: m.examples.filter((ex) => ex.trim()).map((text) => ({ text, source: 'USER' as const })),
+      })),
     };
 
     try {
@@ -212,96 +264,64 @@ export function VocabForm({ card, aiConfigured }: { card?: CardWithRelations; ai
           </div>
         </FieldWrapper>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <FieldWrapper>
-            <FieldLabel htmlFor="definitionEn" action={<AIFieldButton field="definitionEn" word={form.vocabulary} disabled={!aiConfigured} onResult={(r) => set('definitionEn', String(r.definitionEn ?? ''))} />}>
-              Definition / Meaning (English)
-            </FieldLabel>
-            <TextArea id="definitionEn" rows={3} value={form.definitionEn} onChange={(e) => set('definitionEn', e.target.value)} placeholder="Able to recover quickly from difficulties." />
-          </FieldWrapper>
-          <FieldWrapper>
-            <FieldLabel htmlFor="definitionTr" action={<AIFieldButton field="definitionTr" word={form.vocabulary} context={context} disabled={!aiConfigured} onResult={(r) => set('definitionTr', String(r.definitionTr ?? ''))} />}>
-              Turkish translation
-            </FieldLabel>
-            <TextArea id="definitionTr" rows={3} value={form.definitionTr} onChange={(e) => set('definitionTr', e.target.value)} placeholder="Zorluklardan çabuk toparlanabilen, dirençli." />
-          </FieldWrapper>
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <FieldWrapper>
-            <FieldLabel htmlFor="partOfSpeech" action={<AIFieldButton field="partOfSpeech" word={form.vocabulary} context={context} disabled={!aiConfigured} onResult={(r) => set('partOfSpeech', r.partOfSpeech as PartOfSpeech)} />}>
-              Parts of Speech
-            </FieldLabel>
-            <Select id="partOfSpeech" value={form.partOfSpeech} onChange={(e) => set('partOfSpeech', e.target.value as PartOfSpeech | '')}>
-              <option value="">Select…</option>
-              {PARTS_OF_SPEECH.map((p) => (
-                <option key={p} value={p}>
-                  {PART_OF_SPEECH_LABELS[p]}
-                </option>
-              ))}
-            </Select>
-          </FieldWrapper>
-          <FieldWrapper>
-            <FieldLabel htmlFor="tags">Tags</FieldLabel>
-            <TagInput value={form.tags} onChange={(tags) => set('tags', tags)} />
-          </FieldWrapper>
-        </div>
-
         <FieldWrapper>
-          <FieldLabel htmlFor="mnemonic" action={<AIFieldButton field="mnemonic" word={form.vocabulary} context={context} disabled={!aiConfigured} onResult={(r) => set('mnemonic', String(r.mnemonic ?? ''))} />}>
-            Memory Hook / Mnemonic
-          </FieldLabel>
-          <TextArea id="mnemonic" rows={2} value={form.mnemonic} onChange={(e) => set('mnemonic', e.target.value)} placeholder="Picture a RE-SILIENT rubber ball bouncing right back after every hit." />
+          <FieldLabel htmlFor="tags">Tags</FieldLabel>
+          <TagInput value={form.tags} onChange={(tags) => set('tags', tags)} />
         </FieldWrapper>
 
+        <div className="mb-4 mt-6 border-t border-line pt-5">
+          <FieldLabel hint="Some words have more than one common sense — e.g. object (noun) vs. object (verb), or make out (perceive / fare / kiss). Add one block per sense.">
+            Meanings
+          </FieldLabel>
+          <div className="space-y-4">
+            {form.meanings.map((meaning, mi) => (
+              <MeaningBlock
+                key={mi}
+                index={mi}
+                meaning={meaning}
+                word={form.vocabulary}
+                aiConfigured={aiConfigured}
+                removable={form.meanings.length > 1}
+                onChange={(patch) => updateMeaning(mi, patch)}
+                onRemove={() => removeMeaning(mi)}
+                onExampleChange={(ei, text) => updateMeaningExample(mi, ei, text)}
+                onExampleAdd={() => addMeaningExample(mi)}
+                onExampleRemove={(ei) => removeMeaningExample(mi, ei)}
+              />
+            ))}
+            <Button type="button" variant="outline" size="sm" onClick={addMeaning}>
+              + Add another meaning
+            </Button>
+          </div>
+        </div>
+
         <FieldWrapper>
-          <FieldLabel htmlFor="collocations" action={<AIFieldButton field="collocations" word={form.vocabulary} context={context} disabled={!aiConfigured} onResult={(r) => set('collocations', String(r.collocations ?? ''))} />}>
+          <FieldLabel htmlFor="collocations" action={<AIFieldButton field="collocations" word={form.vocabulary} context={primaryContext} disabled={!aiConfigured} onResult={(r) => set('collocations', String(r.collocations ?? ''))} />}>
             Collocations & Context
           </FieldLabel>
           <TextInput id="collocations" value={form.collocations} onChange={(e) => set('collocations', e.target.value)} placeholder="remain resilient, resilient economy, emotionally resilient" />
         </FieldWrapper>
 
+        <div className="grid gap-4 sm:grid-cols-2">
+          <FieldWrapper>
+            <FieldLabel htmlFor="synonyms" hint="optional" action={<AIFieldButton field="synonyms" word={form.vocabulary} context={primaryContext} disabled={!aiConfigured} onResult={(r) => set('synonyms', String(r.synonyms ?? ''))} />}>
+              Synonyms
+            </FieldLabel>
+            <TextInput id="synonyms" value={form.synonyms} onChange={(e) => set('synonyms', e.target.value)} placeholder="hardy, tough, adaptable" />
+          </FieldWrapper>
+          <FieldWrapper>
+            <FieldLabel htmlFor="antonyms" hint="optional" action={<AIFieldButton field="antonyms" word={form.vocabulary} context={primaryContext} disabled={!aiConfigured} onResult={(r) => set('antonyms', String(r.antonyms ?? ''))} />}>
+              Antonyms
+            </FieldLabel>
+            <TextInput id="antonyms" value={form.antonyms} onChange={(e) => set('antonyms', e.target.value)} placeholder="fragile, vulnerable" />
+          </FieldWrapper>
+        </div>
+
         <FieldWrapper>
-          <FieldLabel
-            action={
-              <AIFieldButton
-                field="examples"
-                word={form.vocabulary}
-                context={context}
-                disabled={!aiConfigured}
-                label="AI fill"
-                onResult={(r) => {
-                  const sentences = r.exampleSentences as string[] | undefined;
-                  if (sentences?.length) set('examples', sentences);
-                }}
-              />
-            }
-          >
-            Example Sentences
+          <FieldLabel htmlFor="mnemonic" action={<AIFieldButton field="mnemonic" word={form.vocabulary} context={primaryContext} disabled={!aiConfigured} onResult={(r) => set('mnemonic', String(r.mnemonic ?? ''))} />}>
+            Memory Hook / Mnemonic
           </FieldLabel>
-          <div className="space-y-2">
-            {form.examples.map((ex, i) => {
-              const spans = form.vocabulary.trim() ? findWordSpans(ex, form.vocabulary.trim()) : [];
-              return (
-                <div key={i} className="space-y-1">
-                  <div className="flex items-start gap-2">
-                    <TextArea rows={2} value={ex} onChange={(e) => updateExample(i, e.target.value)} placeholder="Write a sentence using the word…" />
-                    <Button type="button" variant="ghost" size="sm" onClick={() => removeExample(i)} aria-label="Remove sentence">
-                      🗑️
-                    </Button>
-                  </div>
-                  {ex.trim() && (
-                    <p className="rounded-lg bg-paper px-3 py-1.5 text-sm text-ink-soft">
-                      Preview: <HighlightedSentence text={ex} highlightSpans={serializeSpans(spans)} />
-                    </p>
-                  )}
-                </div>
-              );
-            })}
-            <Button type="button" variant="outline" size="sm" onClick={addExample}>
-              + Add sentence
-            </Button>
-          </div>
+          <TextArea id="mnemonic" rows={2} value={form.mnemonic} onChange={(e) => set('mnemonic', e.target.value)} placeholder="Picture a RE-SILIENT rubber ball bouncing right back after every hit." />
         </FieldWrapper>
 
         <FieldWrapper>
@@ -327,5 +347,142 @@ export function VocabForm({ card, aiConfigured }: { card?: CardWithRelations; ai
         </div>
       </Panel>
     </form>
+  );
+}
+
+function MeaningBlock({
+  index,
+  meaning,
+  word,
+  aiConfigured,
+  removable,
+  onChange,
+  onRemove,
+  onExampleChange,
+  onExampleAdd,
+  onExampleRemove,
+}: {
+  index: number;
+  meaning: MeaningFormState;
+  word: string;
+  aiConfigured: boolean;
+  removable: boolean;
+  onChange: (patch: Partial<MeaningFormState>) => void;
+  onRemove: () => void;
+  onExampleChange: (exampleIndex: number, text: string) => void;
+  onExampleAdd: () => void;
+  onExampleRemove: (exampleIndex: number) => void;
+}) {
+  const context = { definitionEn: meaning.definitionEn, partOfSpeech: meaning.partOfSpeech };
+
+  return (
+    <div className="rounded-xl border border-line bg-paper p-4">
+      <div className="mb-3 flex items-center justify-between">
+        <span className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
+          Meaning {index + 1}
+        </span>
+        {removable && (
+          <Button type="button" variant="ghost" size="sm" onClick={onRemove}>
+            🗑️ Remove meaning
+          </Button>
+        )}
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <FieldWrapper>
+          <FieldLabel
+            htmlFor={`pos-${index}`}
+            action={<AIFieldButton field="partOfSpeech" word={word} context={context} disabled={!aiConfigured} onResult={(r) => onChange({ partOfSpeech: r.partOfSpeech as PartOfSpeech })} />}
+          >
+            Parts of Speech
+          </FieldLabel>
+          <Select id={`pos-${index}`} value={meaning.partOfSpeech} onChange={(e) => onChange({ partOfSpeech: e.target.value as PartOfSpeech | '' })}>
+            <option value="">Select…</option>
+            {PARTS_OF_SPEECH.map((p) => (
+              <option key={p} value={p}>
+                {PART_OF_SPEECH_LABELS[p]}
+              </option>
+            ))}
+          </Select>
+        </FieldWrapper>
+        <div />
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <FieldWrapper>
+          <FieldLabel
+            htmlFor={`def-en-${index}`}
+            action={<AIFieldButton field="definitionEn" word={word} context={context} disabled={!aiConfigured} onResult={(r) => onChange({ definitionEn: String(r.definitionEn ?? '') })} />}
+          >
+            Definition / Meaning (English)
+          </FieldLabel>
+          <TextArea
+            id={`def-en-${index}`}
+            rows={3}
+            value={meaning.definitionEn}
+            onChange={(e) => onChange({ definitionEn: e.target.value })}
+            placeholder="Able to recover quickly from difficulties."
+          />
+        </FieldWrapper>
+        <FieldWrapper>
+          <FieldLabel
+            htmlFor={`def-tr-${index}`}
+            action={<AIFieldButton field="definitionTr" word={word} context={context} disabled={!aiConfigured} onResult={(r) => onChange({ definitionTr: String(r.definitionTr ?? '') })} />}
+          >
+            Turkish translation
+          </FieldLabel>
+          <TextArea
+            id={`def-tr-${index}`}
+            rows={3}
+            value={meaning.definitionTr}
+            onChange={(e) => onChange({ definitionTr: e.target.value })}
+            placeholder="Zorluklardan çabuk toparlanabilen, dirençli."
+          />
+        </FieldWrapper>
+      </div>
+
+      <FieldWrapper>
+        <FieldLabel
+          action={
+            <AIFieldButton
+              field="examples"
+              word={word}
+              context={context}
+              disabled={!aiConfigured}
+              label="AI fill"
+              onResult={(r) => {
+                const sentences = r.exampleSentences as string[] | undefined;
+                if (sentences?.length) onChange({ examples: sentences });
+              }}
+            />
+          }
+        >
+          Example Sentences
+        </FieldLabel>
+        <div className="space-y-2">
+          {meaning.examples.map((ex, ei) => {
+            const spans = word.trim() ? findWordSpans(ex, word.trim()) : [];
+            return (
+              <div key={ei} className="space-y-1">
+                <div className="flex items-start gap-2">
+                  <TextArea rows={2} value={ex} onChange={(e) => onExampleChange(ei, e.target.value)} placeholder="Write a sentence using the word…" />
+                  <Button type="button" variant="ghost" size="sm" onClick={() => onExampleRemove(ei)} aria-label="Remove sentence">
+                    🗑️
+                  </Button>
+                </div>
+                {ex.trim() && (
+                  <p className="rounded-lg bg-paper-alt px-3 py-1.5 text-sm text-ink-soft">
+                    Preview: <HighlightedSentence text={ex} highlightSpans={serializeSpans(spans)} />
+                  </p>
+                )}
+              </div>
+            );
+          })}
+          <Button type="button" variant="outline" size="sm" onClick={onExampleAdd}>
+            + Add sentence
+          </Button>
+        </div>
+      </FieldWrapper>
+    </div>
   );
 }

@@ -44,11 +44,10 @@ model Card {
   vocabulary     String
   ipa            String?
   audioUrl       String?
-  definitionEn   String?
-  definitionTr   String?
-  partOfSpeech   String? // NOUN | VERB | ADJECTIVE | ADVERB | PREPOSITION | CONJUNCTION | PRONOUN | INTERJECTION
   mnemonic       String?
   collocations   String?
+  synonyms       String?
+  antonyms       String?
   notes          String?
 
   // SRS (SM-2) state
@@ -62,7 +61,11 @@ model Card {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  examples       ExampleSentence[]
+  // A word can have more than one sense — e.g. "object" (noun: a thing;
+  // verb: to protest) or "make out" (to perceive; to fare; to kiss). Each
+  // Meaning carries its own part of speech, definitions, and examples;
+  // `order` 0 is the primary sense shown in previews/quizzes/review.
+  meanings       Meaning[]
   tags           TagsOnCards[]
   reviews        ReviewLog[]
 
@@ -70,10 +73,24 @@ model Card {
   @@index([userId, vocabulary])
 }
 
+model Meaning {
+  id           String   @id @default(cuid())
+  cardId       String
+  card         Card     @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  order        Int      @default(0)
+  partOfSpeech String? // NOUN | VERB | ADJECTIVE | ADVERB | PREPOSITION | CONJUNCTION | PRONOUN | INTERJECTION | PHRASAL_VERB
+  definitionEn String?
+  definitionTr String?
+
+  examples     ExampleSentence[]
+
+  @@index([cardId])
+}
+
 model ExampleSentence {
   id            String   @id @default(cuid())
-  cardId        String
-  card          Card     @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  meaningId     String
+  meaning       Meaning  @relation(fields: [meaningId], references: [id], onDelete: Cascade)
   text          String
   // Character offsets of the target word occurrence(s) inside `text`,
   // stored as JSON e.g. "[[4,9]]", so highlighting survives arbitrary
@@ -82,7 +99,7 @@ model ExampleSentence {
   order         Int      @default(0)
   source        String   @default("USER") // USER | AI
 
-  @@index([cardId])
+  @@index([meaningId])
 }
 
 // Tags are personal to each notebook (not shared between the two

@@ -3,6 +3,7 @@ import { z } from 'zod';
 export const partOfSpeechEnum = z.enum([
   'NOUN',
   'VERB',
+  'PHRASAL_VERB',
   'ADJECTIVE',
   'ADVERB',
   'PREPOSITION',
@@ -16,18 +17,26 @@ export const exampleSentenceInput = z.object({
   source: z.enum(['USER', 'AI']).default('USER'),
 });
 
+export const meaningInputSchema = z.object({
+  partOfSpeech: partOfSpeechEnum.optional().nullable(),
+  definitionEn: z.string().max(2000).optional().nullable(),
+  definitionTr: z.string().max(2000).optional().nullable(),
+  examples: z.array(exampleSentenceInput).default([]),
+});
+
 export const cardInputSchema = z.object({
   vocabulary: z.string().trim().min(1, 'Vocabulary is required').max(120),
   ipa: z.string().max(200).optional().nullable(),
   audioUrl: z.string().max(1000).optional().nullable(),
-  definitionEn: z.string().max(2000).optional().nullable(),
-  definitionTr: z.string().max(2000).optional().nullable(),
-  partOfSpeech: partOfSpeechEnum.optional().nullable(),
   mnemonic: z.string().max(2000).optional().nullable(),
   collocations: z.string().max(2000).optional().nullable(),
+  synonyms: z.string().max(500).optional().nullable(),
+  antonyms: z.string().max(500).optional().nullable(),
   notes: z.string().max(2000).optional().nullable(),
   tags: z.array(z.string().trim().min(1).max(40)).default([]),
-  examples: z.array(exampleSentenceInput).default([]),
+  // At least one sense — even a blank one, so a freshly-created card
+  // always has somewhere for its first definition to live.
+  meanings: z.array(meaningInputSchema).min(1),
 });
 
 export type CardInputParsed = z.infer<typeof cardInputSchema>;
@@ -46,7 +55,7 @@ export const settingsUpdateSchema = z.object({
 });
 
 export const aiFieldRequestSchema = z.object({
-  field: z.enum(['ipa', 'definitionEn', 'definitionTr', 'partOfSpeech', 'mnemonic', 'collocations', 'examples']),
+  field: z.enum(['ipa', 'definitionEn', 'definitionTr', 'partOfSpeech', 'mnemonic', 'collocations', 'synonyms', 'antonyms', 'examples']),
   word: z.string().trim().min(1),
   context: z
     .object({

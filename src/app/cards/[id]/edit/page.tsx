@@ -15,7 +15,7 @@ export default async function EditCardPage({ params }: { params: Promise<{ id: s
   const { id } = await params;
   const card = await prisma.card.findUnique({
     where: { id },
-    include: { examples: { orderBy: { order: 'asc' } }, tags: { include: { tag: true } } },
+    include: { meanings: { orderBy: { order: 'asc' }, include: { examples: { orderBy: { order: 'asc' } } } }, tags: { include: { tag: true } } },
   });
   if (!card || card.userId !== session.userId) notFound();
   return (

@@ -17,6 +17,7 @@ import type { AiFillableField, PartOfSpeech, QuizQuestion } from '@/types';
 const PARTS_OF_SPEECH_ENUM: PartOfSpeech[] = [
   'NOUN',
   'VERB',
+  'PHRASAL_VERB',
   'ADJECTIVE',
   'ADVERB',
   'PREPOSITION',
@@ -32,6 +33,8 @@ export interface FullCardDraft {
   partOfSpeech: PartOfSpeech;
   mnemonic: string;
   collocations: string;
+  synonyms: string;
+  antonyms: string;
   exampleSentences: string[];
   suggestedTags: string[];
 }
@@ -41,17 +44,23 @@ const FULL_CARD_SCHEMA = {
   additionalProperties: false,
   properties: {
     ipa: { type: 'string', description: 'IPA phonetic transcription, e.g. /rɪˈzɪliənt/' },
-    definitionEn: { type: 'string', description: 'Clear English definition, one or two sentences.' },
-    definitionTr: { type: 'string', description: 'Accurate Turkish translation/definition of the word.' },
-    partOfSpeech: { type: 'string', enum: PARTS_OF_SPEECH_ENUM },
+    definitionEn: { type: 'string', description: 'Clear English definition of the primary/most common sense, one or two sentences.' },
+    definitionTr: { type: 'string', description: 'Accurate Turkish translation/definition of that same sense.' },
+    partOfSpeech: {
+      type: 'string',
+      enum: PARTS_OF_SPEECH_ENUM,
+      description: 'Use PHRASAL_VERB (not VERB) for multi-word verbs like "give up" or "work out".',
+    },
     mnemonic: { type: 'string', description: 'A short, vivid memory hook / mnemonic association to remember the word.' },
     collocations: { type: 'string', description: 'Comma-separated common collocations / phrases using the word.' },
+    synonyms: { type: 'string', description: 'Comma-separated close synonyms, or an empty string if the word has none worth listing.' },
+    antonyms: { type: 'string', description: 'Comma-separated antonyms/opposites, or an empty string if the word has none worth listing.' },
     exampleSentences: {
       type: 'array',
       items: { type: 'string' },
       minItems: 2,
       maxItems: 3,
-      description: 'Natural example sentences that each use the target word exactly once.',
+      description: 'Natural example sentences that each use the target word exactly once, in this same primary sense.',
     },
     suggestedTags: {
       type: 'array',
@@ -61,9 +70,29 @@ const FULL_CARD_SCHEMA = {
       description: 'Short lowercase topic tags, e.g. "business", "emotions", "toefl".',
     },
   },
-  required: ['ipa', 'definitionEn', 'definitionTr', 'partOfSpeech', 'mnemonic', 'collocations', 'exampleSentences', 'suggestedTags'],
+  required: [
+    'ipa',
+    'definitionEn',
+    'definitionTr',
+    'partOfSpeech',
+    'mnemonic',
+    'collocations',
+    'synonyms',
+    'antonyms',
+    'exampleSentences',
+    'suggestedTags',
+  ],
 } as const;
 
+/**
+ * Drafts the word's *primary* sense only — if it has other common meanings
+ * (see the "object" / "make out" style cases in types/index.ts), the
+ * learner adds those manually as additional meanings, optionally using
+ * generateCardField for individual fields within that new meaning.
+ * Auto-detecting every sense would be a nice future enhancement, but
+ * guessing which senses are "common enough" to include is exactly the
+ * kind of judgment call better left to a human for now.
+ */
 export async function generateFullCard(word: string): Promise<FullCardDraft> {
   const cached = await getCached<FullCardDraft>('full_card', word);
   if (cached) return cached;
@@ -71,8 +100,8 @@ export async function generateFullCard(word: string): Promise<FullCardDraft> {
   const result = await callStructured<FullCardDraft>({
     schemaName: 'vocabulary_card',
     system:
-      'You are an expert English lexicographer and language-learning coach helping a Turkish-speaking learner build a vocabulary flashcard. Be concise, accurate, and pedagogically useful. Mnemonics should be vivid and memorable, not generic.',
-    user: `Create a complete vocabulary flashcard for the English word/phrase: "${word}".`,
+      'You are an expert English lexicographer and language-learning coach helping a Turkish-speaking learner build a vocabulary flashcard. Be concise, accurate, and pedagogically useful. Mnemonics should be vivid and memorable, not generic. If the word is a multi-word verb (e.g. "give up", "work out"), classify it as PHRASAL_VERB rather than VERB.',
+    user: `Create a complete vocabulary flashcard for the English word/phrase: "${word}", covering its single most common sense.`,
     schema: FULL_CARD_SCHEMA,
   });
 
@@ -117,6 +146,18 @@ const FIELD_SCHEMAS: Partial<Record<AiFillableField, Record<string, unknown>>> =
     properties: { collocations: { type: 'string' } },
     required: ['collocations'],
   },
+  synonyms: {
+    type: 'object',
+    additionalProperties: false,
+    properties: { synonyms: { type: 'string' } },
+    required: ['synonyms'],
+  },
+  antonyms: {
+    type: 'object',
+    additionalProperties: false,
+    properties: { antonyms: { type: 'string' } },
+    required: ['antonyms'],
+  },
   examples: {
     type: 'object',
     additionalProperties: false,
@@ -134,6 +175,8 @@ const FIELD_PROMPTS: Partial<Record<AiFillableField, string>> = {
   partOfSpeech: 'Classify the primary part of speech only.',
   mnemonic: 'Give one vivid, memorable mnemonic / memory hook only, tailored so it is easy to visualize.',
   collocations: 'Give common collocations and set phrases using the word, comma-separated, only.',
+  synonyms: 'Give close synonyms, comma-separated, only. If there genuinely are none worth listing, return an empty string.',
+  antonyms: 'Give antonyms/opposites, comma-separated, only. If there genuinely are none worth listing, return an empty string.',
   examples: 'Give 2-3 natural example sentences that each use the word exactly once.',
 };
 

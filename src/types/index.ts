@@ -1,14 +1,13 @@
-import type { Card, ExampleSentence, Tag } from '@prisma/client';
+import type { Card, ExampleSentence, Meaning, Tag } from '@prisma/client';
 
-// SQLite has no native enum type (see prisma/schema.prisma), so the
-// conceptually-enum fields are stored as validated strings. These union
-// types are the single source of truth for their allowed values across
-// both the API layer (validated with zod, see lib/validation.ts) and the
-// UI — Prisma's generated Card type has them typed as plain `string`, so
-// CardWithRelations narrows them back here.
+// Postgres enum-like fields are stored as validated strings (see the note
+// in prisma/schema.prisma) — these union types are the single source of
+// truth for their allowed values across both the API layer (validated
+// with zod, see lib/validation.ts) and the UI.
 export type PartOfSpeech =
   | 'NOUN'
   | 'VERB'
+  | 'PHRASAL_VERB'
   | 'ADJECTIVE'
   | 'ADVERB'
   | 'PREPOSITION'
@@ -20,30 +19,46 @@ export type CardStatus = 'NEW' | 'LEARNING' | 'REVIEW' | 'MASTERED';
 export type ReviewRating = 'AGAIN' | 'HARD' | 'GOOD' | 'EASY';
 export type HighlightStyle = 'BOLD' | 'UNDERLINE' | 'COLOR' | 'BOLD_UNDERLINE';
 
-export type CardWithRelations = Omit<Card, 'partOfSpeech' | 'status'> & {
+export type MeaningWithExamples = Omit<Meaning, 'partOfSpeech'> & {
   partOfSpeech: PartOfSpeech | null;
-  status: CardStatus;
   examples: ExampleSentence[];
+};
+
+export type CardWithRelations = Omit<Card, 'status'> & {
+  status: CardStatus;
+  meanings: MeaningWithExamples[];
   tags: { tag: Tag }[];
 };
+
+/** The word's primary (first) sense — what previews, quizzes, and review show. */
+export function primaryMeaning(card: Pick<CardWithRelations, 'meanings'>): MeaningWithExamples | undefined {
+  return card.meanings[0];
+}
+
+export interface MeaningInput {
+  partOfSpeech?: PartOfSpeech | null;
+  definitionEn?: string;
+  definitionTr?: string;
+  examples: { text: string; source?: 'USER' | 'AI' }[];
+}
 
 export interface CardInput {
   vocabulary: string;
   ipa?: string;
   audioUrl?: string;
-  definitionEn?: string;
-  definitionTr?: string;
-  partOfSpeech?: PartOfSpeech | null;
   mnemonic?: string;
   collocations?: string;
+  synonyms?: string;
+  antonyms?: string;
   notes?: string;
   tags: string[];
-  examples: { text: string; source?: 'USER' | 'AI' }[];
+  meanings: MeaningInput[];
 }
 
 export const PARTS_OF_SPEECH: PartOfSpeech[] = [
   'NOUN',
   'VERB',
+  'PHRASAL_VERB',
   'ADJECTIVE',
   'ADVERB',
   'PREPOSITION',
@@ -55,6 +70,7 @@ export const PARTS_OF_SPEECH: PartOfSpeech[] = [
 export const PART_OF_SPEECH_LABELS: Record<PartOfSpeech, string> = {
   NOUN: 'Noun',
   VERB: 'Verb',
+  PHRASAL_VERB: 'Phrasal Verb',
   ADJECTIVE: 'Adjective',
   ADVERB: 'Adverb',
   PREPOSITION: 'Preposition',
@@ -84,6 +100,8 @@ export type AiFillableField =
   | 'partOfSpeech'
   | 'mnemonic'
   | 'collocations'
+  | 'synonyms'
+  | 'antonyms'
   | 'examples'
   | 'all';
 

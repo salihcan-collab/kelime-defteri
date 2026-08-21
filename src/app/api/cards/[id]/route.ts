@@ -5,7 +5,10 @@ import { findWordSpans, serializeSpans } from '@/lib/highlight';
 import { requireSession } from '@/lib/requireSession';
 
 const cardInclude = {
-  examples: { orderBy: { order: 'asc' as const } },
+  meanings: {
+    orderBy: { order: 'asc' as const },
+    include: { examples: { orderBy: { order: 'asc' as const } } },
+  },
   tags: { include: { tag: true } },
 };
 
@@ -54,7 +57,8 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
 
   const card = await prisma.$transaction(async (tx) => {
     await tx.tagsOnCards.deleteMany({ where: { cardId: id } });
-    await tx.exampleSentence.deleteMany({ where: { cardId: id } });
+    // Cascades to each meaning's examples too (ExampleSentence.meaning has onDelete: Cascade).
+    await tx.meaning.deleteMany({ where: { cardId: id } });
 
     return tx.card.update({
       where: { id },
@@ -62,19 +66,26 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
         vocabulary: data.vocabulary,
         ipa: data.ipa || null,
         audioUrl: data.audioUrl || null,
-        definitionEn: data.definitionEn || null,
-        definitionTr: data.definitionTr || null,
-        partOfSpeech: data.partOfSpeech || null,
         mnemonic: data.mnemonic || null,
         collocations: data.collocations || null,
+        synonyms: data.synonyms || null,
+        antonyms: data.antonyms || null,
         notes: data.notes || null,
         tags: { create: tagIds.map((tagId) => ({ tagId })) },
-        examples: {
-          create: data.examples.map((ex, i) => ({
-            text: ex.text,
-            source: ex.source ?? 'USER',
-            order: i,
-            highlightSpans: serializeSpans(findWordSpans(ex.text, data.vocabulary)),
+        meanings: {
+          create: data.meanings.map((meaning, mi) => ({
+            order: mi,
+            partOfSpeech: meaning.partOfSpeech || null,
+            definitionEn: meaning.definitionEn || null,
+            definitionTr: meaning.definitionTr || null,
+            examples: {
+              create: meaning.examples.map((ex, i) => ({
+                text: ex.text,
+                source: ex.source ?? 'USER',
+                order: i,
+                highlightSpans: serializeSpans(findWordSpans(ex.text, data.vocabulary)),
+              })),
+            },
           })),
         },
       },

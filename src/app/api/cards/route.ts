@@ -7,7 +7,10 @@ import type { Prisma } from '@prisma/client';
 import type { CardStatus } from '@/types';
 
 const cardInclude = {
-  examples: { orderBy: { order: 'asc' as const } },
+  meanings: {
+    orderBy: { order: 'asc' as const },
+    include: { examples: { orderBy: { order: 'asc' as const } } },
+  },
   tags: { include: { tag: true } },
 };
 
@@ -25,8 +28,13 @@ export async function GET(req: NextRequest) {
   if (search) {
     where.OR = [
       { vocabulary: { contains: search } },
-      { definitionEn: { contains: search } },
-      { definitionTr: { contains: search } },
+      {
+        meanings: {
+          some: {
+            OR: [{ definitionEn: { contains: search } }, { definitionTr: { contains: search } }],
+          },
+        },
+      },
     ];
   }
   if (tag) where.tags = { some: { tag: { name: tag } } };
@@ -71,19 +79,26 @@ export async function POST(req: NextRequest) {
       vocabulary: data.vocabulary,
       ipa: data.ipa || null,
       audioUrl: data.audioUrl || null,
-      definitionEn: data.definitionEn || null,
-      definitionTr: data.definitionTr || null,
-      partOfSpeech: data.partOfSpeech || null,
       mnemonic: data.mnemonic || null,
       collocations: data.collocations || null,
+      synonyms: data.synonyms || null,
+      antonyms: data.antonyms || null,
       notes: data.notes || null,
       tags: { create: tagConnections.map((tagId) => ({ tagId })) },
-      examples: {
-        create: data.examples.map((ex, i) => ({
-          text: ex.text,
-          source: ex.source ?? 'USER',
-          order: i,
-          highlightSpans: serializeSpans(findWordSpans(ex.text, data.vocabulary)),
+      meanings: {
+        create: data.meanings.map((meaning, mi) => ({
+          order: mi,
+          partOfSpeech: meaning.partOfSpeech || null,
+          definitionEn: meaning.definitionEn || null,
+          definitionTr: meaning.definitionTr || null,
+          examples: {
+            create: meaning.examples.map((ex, i) => ({
+              text: ex.text,
+              source: ex.source ?? 'USER',
+              order: i,
+              highlightSpans: serializeSpans(findWordSpans(ex.text, data.vocabulary)),
+            })),
+          },
         })),
       },
     },

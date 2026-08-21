@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { PronunciationPlayer } from '@/components/vocab/PronunciationPlayer';
 import { HighlightedSentence } from '@/components/vocab/HighlightedSentence';
 import { RatingButtons } from '@/components/review/RatingButtons';
-import { PART_OF_SPEECH_LABELS } from '@/types';
+import { PART_OF_SPEECH_LABELS, primaryMeaning } from '@/types';
 import type { CardWithRelations, ReviewRating } from '@/types';
 
 export function ReviewSession() {
@@ -68,6 +68,7 @@ export function ReviewSession() {
   }
 
   const card = queue[0];
+  const meaning = primaryMeaning(card);
 
   return (
     <div className="mx-auto max-w-xl space-y-4">
@@ -78,7 +79,7 @@ export function ReviewSession() {
 
       <Panel className="min-h-[22rem]">
         <div className="flex items-center justify-between">
-          <Badge tone="neutral">{card.partOfSpeech ? PART_OF_SPEECH_LABELS[card.partOfSpeech] : 'Word'}</Badge>
+          <Badge tone="neutral">{meaning?.partOfSpeech ? PART_OF_SPEECH_LABELS[meaning.partOfSpeech] : 'Word'}</Badge>
         </div>
 
         <div className="mt-6 text-center">
@@ -95,16 +96,16 @@ export function ReviewSession() {
           </div>
         ) : (
           <div className="mt-6 space-y-3 text-left">
-            {card.definitionEn && (
+            {meaning?.definitionEn && (
               <div>
                 <div className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Definition</div>
-                <p className="text-ink">{card.definitionEn}</p>
+                <p className="text-ink">{meaning.definitionEn}</p>
               </div>
             )}
-            {card.definitionTr && (
+            {meaning?.definitionTr && (
               <div>
                 <div className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Turkish</div>
-                <p className="text-ink">{card.definitionTr}</p>
+                <p className="text-ink">{meaning.definitionTr}</p>
               </div>
             )}
             {card.mnemonic && (
@@ -113,13 +114,16 @@ export function ReviewSession() {
                 <p className="text-ink">{card.mnemonic}</p>
               </div>
             )}
-            {card.examples[0] && (
+            {meaning?.examples[0] && (
               <div>
                 <div className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Example</div>
                 <p className="text-ink">
-                  <HighlightedSentence text={card.examples[0].text} highlightSpans={card.examples[0].highlightSpans} />
+                  <HighlightedSentence text={meaning.examples[0].text} highlightSpans={meaning.examples[0].highlightSpans} />
                 </p>
               </div>
+            )}
+            {card.meanings.length > 1 && (
+              <p className="text-xs text-ink-soft">+{card.meanings.length - 1} more sense{card.meanings.length - 1 === 1 ? '' : 's'} — see full card after review.</p>
             )}
           </div>
         )}

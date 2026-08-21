@@ -5,6 +5,7 @@ import { Panel } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Field';
 import { QuizQuestionView } from '@/components/quiz/QuizQuestionView';
+import { primaryMeaning } from '@/types';
 import type { CardWithRelations, QuizQuestion } from '@/types';
 
 type Stage = 'setup' | 'loading' | 'running' | 'summary';
@@ -32,7 +33,7 @@ export function QuizRunner({ aiConfigured }: { aiConfigured: boolean }) {
       const cardsRes = await fetch('/api/cards');
       const cardsData = await cardsRes.json();
       const cards: CardWithRelations[] = cardsData.cards ?? [];
-      const withDefinitions = cards.filter((c) => c.definitionEn);
+      const withDefinitions = cards.filter((c) => primaryMeaning(c)?.definitionEn);
       const pool = withDefinitions.length >= 4 ? withDefinitions : cards;
       const chosen = shuffle(pool).slice(0, Math.min(count, pool.length));
 

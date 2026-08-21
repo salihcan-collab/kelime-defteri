@@ -1,3 +1,4 @@
+import { primaryMeaning } from '@/types';
 import type { CardWithRelations, QuizQuestion, QuizQuestionMCQ, QuizQuestionRecall } from '@/types';
 
 /**
@@ -7,6 +8,11 @@ import type { CardWithRelations, QuizQuestion, QuizQuestionMCQ, QuizQuestionReca
  * generative text at all, keeping the AI budget reserved for the
  * fill-in-the-blank / sentence-construction types (see ai.ts) that
  * genuinely need it.
+ *
+ * All of these quiz off the card's *primary* meaning — a word can have
+ * several senses (see types/index.ts), but a quiz question testing one
+ * sense at a time is simpler and less ambiguous than testing all of them
+ * at once.
  */
 
 function shuffle<T>(items: T[]): T[] {
@@ -19,27 +25,29 @@ function shuffle<T>(items: T[]): T[] {
 }
 
 function pickDistractors(pool: CardWithRelations[], correct: CardWithRelations, count: number): CardWithRelations[] {
-  const others = pool.filter((c) => c.id !== correct.id && c.definitionEn);
+  const others = pool.filter((c) => c.id !== correct.id && primaryMeaning(c)?.definitionEn);
   return shuffle(others).slice(0, count);
 }
 
 export function buildDefinitionMCQ(pool: CardWithRelations[], card: CardWithRelations): QuizQuestionMCQ | null {
-  if (!card.definitionEn) return null;
+  const definitionEn = primaryMeaning(card)?.definitionEn;
+  if (!definitionEn) return null;
   const distractors = pickDistractors(pool, card, 3);
   if (distractors.length < 2) return null;
 
-  const options = shuffle([card.definitionEn, ...distractors.map((d) => d.definitionEn as string)]);
+  const options = shuffle([definitionEn, ...distractors.map((d) => primaryMeaning(d)?.definitionEn as string)]);
   return {
     type: 'multiple_choice',
     cardId: card.id,
     prompt: `Which definition matches "${card.vocabulary}"?`,
     options,
-    correctIndex: options.indexOf(card.definitionEn),
+    correctIndex: options.indexOf(definitionEn),
   };
 }
 
 export function buildWordForDefinitionMCQ(pool: CardWithRelations[], card: CardWithRelations): QuizQuestionMCQ | null {
-  if (!card.definitionEn) return null;
+  const definitionEn = primaryMeaning(card)?.definitionEn;
+  if (!definitionEn) return null;
   const distractors = pickDistractors(pool, card, 3);
   if (distractors.length < 2) return null;
 
@@ -47,7 +55,7 @@ export function buildWordForDefinitionMCQ(pool: CardWithRelations[], card: CardW
   return {
     type: 'multiple_choice',
     cardId: card.id,
-    prompt: `Which word means: "${card.definitionEn}"?`,
+    prompt: `Which word means: "${definitionEn}"?`,
     options,
     correctIndex: options.indexOf(card.vocabulary),
   };
@@ -65,13 +73,14 @@ export function buildMnemonicRecall(card: CardWithRelations): QuizQuestionRecall
 }
 
 export function buildDefinitionRecall(card: CardWithRelations): QuizQuestionRecall | null {
-  if (!card.definitionEn) return null;
+  const definitionEn = primaryMeaning(card)?.definitionEn;
+  if (!definitionEn) return null;
   return {
     type: 'recall_definition',
     cardId: card.id,
     word: card.vocabulary,
     prompt: `Define "${card.vocabulary}" in your own words, then reveal.`,
-    answer: card.definitionEn,
+    answer: definitionEn,
   };
 }
 

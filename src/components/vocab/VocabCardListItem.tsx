@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { Badge } from '@/components/ui/Card';
-import { CARD_STATUS_LABELS, PART_OF_SPEECH_LABELS } from '@/types';
+import { CARD_STATUS_LABELS, PART_OF_SPEECH_LABELS, primaryMeaning } from '@/types';
 import type { CardWithRelations } from '@/types';
 
 export const STATUS_TONE: Record<string, 'accent' | 'success' | 'warn' | 'neutral'> = {
@@ -12,6 +12,7 @@ export const STATUS_TONE: Record<string, 'accent' | 'success' | 'warn' | 'neutra
 
 export function VocabCardListItem({ card }: { card: CardWithRelations }) {
   const isDue = new Date(card.dueAt).getTime() <= Date.now();
+  const meaning = primaryMeaning(card);
   return (
     <Link
       href={`/cards/${card.id}`}
@@ -21,9 +22,9 @@ export function VocabCardListItem({ card }: { card: CardWithRelations }) {
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-heading text-base font-semibold text-ink">{card.vocabulary}</span>
           {card.ipa && <span className="font-mono text-xs text-ink-soft">{card.ipa}</span>}
-          {card.partOfSpeech && <Badge tone="neutral">{PART_OF_SPEECH_LABELS[card.partOfSpeech]}</Badge>}
+          {meaning?.partOfSpeech && <Badge tone="neutral">{PART_OF_SPEECH_LABELS[meaning.partOfSpeech]}</Badge>}
         </div>
-        {card.definitionEn && <p className="mt-1 truncate text-sm text-ink-soft">{card.definitionEn}</p>}
+        {meaning?.definitionEn && <p className="mt-1 truncate text-sm text-ink-soft">{meaning.definitionEn}</p>}
         {card.tags.length > 0 && (
           <div className="mt-1.5 flex flex-wrap gap-1">
             {card.tags.slice(0, 5).map(({ tag }) => (

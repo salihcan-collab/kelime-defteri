@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { Badge } from '@/components/ui/Card';
-import { CARD_STATUS_LABELS, PART_OF_SPEECH_LABELS } from '@/types';
+import { CARD_STATUS_LABELS, PART_OF_SPEECH_LABELS, primaryMeaning } from '@/types';
 import { STATUS_TONE } from '@/components/vocab/VocabCardListItem';
 import type { CardWithRelations } from '@/types';
 
@@ -8,12 +8,16 @@ import type { CardWithRelations } from '@/types';
  * Compact flashcard-style tile for the notebook grid — a handful fit per
  * row instead of one full-width row per word (see VocabCardListItem for
  * the narrower list layout used in the dashboard's "up next" style
- * previews). The whole tile links to the card's full detail page.
+ * previews). Shows the card's primary sense; a small "+N senses" badge
+ * hints when there's more to see. The whole tile links to the card's
+ * full detail page.
  */
 export function VocabFlashCard({ card }: { card: CardWithRelations }) {
   const isDue = new Date(card.dueAt).getTime() <= Date.now();
   const visibleTags = card.tags.slice(0, 2);
   const extraTagCount = card.tags.length - visibleTags.length;
+  const meaning = primaryMeaning(card);
+  const extraMeanings = card.meanings.length - 1;
 
   return (
     <Link
@@ -30,9 +34,16 @@ export function VocabFlashCard({ card }: { card: CardWithRelations }) {
         </Badge>
       </div>
 
-      {card.partOfSpeech && <Badge tone="neutral" className="w-fit">{PART_OF_SPEECH_LABELS[card.partOfSpeech]}</Badge>}
+      <div className="flex flex-wrap items-center gap-1.5">
+        {meaning?.partOfSpeech && <Badge tone="neutral">{PART_OF_SPEECH_LABELS[meaning.partOfSpeech]}</Badge>}
+        {extraMeanings > 0 && (
+          <Badge tone="accent" title={`${extraMeanings + 1} meanings recorded for this word`}>
+            +{extraMeanings} sense{extraMeanings === 1 ? '' : 's'}
+          </Badge>
+        )}
+      </div>
 
-      {card.definitionEn && <p className="line-clamp-3 text-sm text-ink-soft">{card.definitionEn}</p>}
+      {meaning?.definitionEn && <p className="line-clamp-3 text-sm text-ink-soft">{meaning.definitionEn}</p>}
 
       <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-1">
         {visibleTags.map(({ tag }) => (
