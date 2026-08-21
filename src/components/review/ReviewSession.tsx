@@ -13,6 +13,7 @@ import type { CardWithRelations, ReviewRating } from '@/types';
 export function ReviewSession() {
   const [queue, setQueue] = useState<CardWithRelations[] | null>(null);
   const [revealed, setRevealed] = useState(false);
+  const [hintOpen, setHintOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [reviewedCount, setReviewedCount] = useState(0);
 
@@ -36,6 +37,7 @@ export function ReviewSession() {
       // "Again" cards go to the back of today's queue so they resurface this session.
       setQueue(rating === 'AGAIN' ? [...rest, card] : rest);
       setRevealed(false);
+      setHintOpen(false);
     } finally {
       setSubmitting(false);
     }
@@ -89,38 +91,46 @@ export function ReviewSession() {
           </div>
         </div>
 
+        {/* The memory hook is a recall aid, so it's offered while the user is
+            still struggling — not tucked behind "Show answer" — but stays
+            hidden until asked for so it doesn't spoil the recall attempt. */}
+        {card.mnemonic && (
+          <div className="mt-4 text-center">
+            {!hintOpen ? (
+              <button type="button" onClick={() => setHintOpen(true)} className="text-xs font-medium text-accent hover:underline">
+                💡 Need a hint?
+              </button>
+            ) : (
+              <div className="mx-auto max-w-sm rounded-lg bg-accent-soft/50 p-2.5 text-left">
+                <p className="text-ink">{card.mnemonic}</p>
+              </div>
+            )}
+          </div>
+        )}
+
         {!revealed ? (
           <div className="mt-8 text-center">
             <p className="mb-3 text-sm text-ink-soft">Try to recall the meaning, then reveal.</p>
             <Button onClick={() => setRevealed(true)}>Show answer</Button>
           </div>
         ) : (
+          // Same typography-only field distinction as the card detail page —
+          // no "Definition" / "Turkish" / "Example" labels, each field just
+          // has its own look (see VocabCardView's MeaningDetail).
           <div className="mt-6 space-y-3 text-left">
-            {meaning?.definitionEn && (
-              <div>
-                <div className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Definition</div>
-                <p className="text-ink">{meaning.definitionEn}</p>
-              </div>
-            )}
+            {meaning?.definitionEn && <p className="text-ink">{meaning.definitionEn}</p>}
             {meaning?.definitionTr && (
-              <div>
-                <div className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Turkish</div>
-                <p className="text-ink">{meaning.definitionTr}</p>
-              </div>
-            )}
-            {card.mnemonic && (
-              <div className="rounded-lg bg-accent-soft/50 p-2.5">
-                <div className="text-xs font-semibold uppercase tracking-wide text-accent">💡 Memory hook</div>
-                <p className="text-ink">{card.mnemonic}</p>
-              </div>
+              <p className="text-sm italic text-ink-soft">
+                <span className="mr-1 not-italic">🇹🇷</span>
+                {meaning.definitionTr}
+              </p>
             )}
             {meaning?.examples[0] && (
-              <div>
-                <div className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Example</div>
-                <p className="text-ink">
-                  <HighlightedSentence text={meaning.examples[0].text} highlightSpans={meaning.examples[0].highlightSpans} />
-                </p>
-              </div>
+              <p className="rounded-lg bg-paper px-3 py-2 text-sm text-ink">
+                &ldquo;
+                <HighlightedSentence text={meaning.examples[0].text} highlightSpans={meaning.examples[0].highlightSpans} />
+                &rdquo;
+              </p>
             )}
             {card.meanings.length > 1 && (
               <p className="text-xs text-ink-soft">+{card.meanings.length - 1} more sense{card.meanings.length - 1 === 1 ? '' : 's'} — see full card after review.</p>

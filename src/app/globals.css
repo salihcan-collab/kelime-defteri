@@ -108,23 +108,27 @@
 /* ---------------------------------------------------------------------
    Font styles. Deliberately web-safe stacks (no external font fetch)
    so the app never depends on network access at build or run time.
+   Each style pairs a distinct heading face with its body text instead
+   of reusing one font for both, for more visual character — headings
+   fall back gracefully to the same family as the body text on systems
+   that don't have the paired face installed, so nothing ever breaks.
 ------------------------------------------------------------------------ */
 :root,
 [data-font='sans'] {
   --font-body: ui-sans-serif, system-ui, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  --font-heading: ui-sans-serif, system-ui, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-heading: 'Century Gothic', Futura, 'Trebuchet MS', ui-sans-serif, system-ui, sans-serif;
 }
 [data-font='serif'] {
   --font-body: Georgia, 'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', Palatino, serif;
-  --font-heading: Georgia, 'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', Palatino, serif;
+  --font-heading: Didot, 'Bodoni MT', Georgia, 'Iowan Old Style', serif;
 }
 [data-font='rounded'] {
   --font-body: 'Segoe UI Rounded', 'Trebuchet MS', Verdana, sans-serif;
-  --font-heading: 'Segoe UI Rounded', 'Trebuchet MS', Verdana, sans-serif;
+  --font-heading: 'Arial Rounded MT Bold', 'Segoe UI Rounded', 'Trebuchet MS', sans-serif;
 }
 [data-font='mono'] {
   --font-body: 'Courier New', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  --font-heading: 'Courier New', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-heading: 'American Typewriter', 'Courier New', ui-monospace, monospace;
 }
 
 html {

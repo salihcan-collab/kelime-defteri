@@ -9,6 +9,7 @@ import { PronunciationPlayer } from '@/components/vocab/PronunciationPlayer';
 import { CambridgeLookupLink } from '@/components/vocab/CambridgeLookupLink';
 import { HighlightedSentence } from '@/components/vocab/HighlightedSentence';
 import { groupMeaningsByPos } from '@/lib/meaningGroups';
+import { STATUS_TONE, STATUS_STRIPE } from '@/components/vocab/VocabCardListItem';
 import { CARD_STATUS_LABELS, PART_OF_SPEECH_LABELS } from '@/types';
 import type { CardWithRelations, MeaningWithExamples } from '@/types';
 
@@ -33,12 +34,13 @@ export function VocabCardView({ card }: { card: CardWithRelations }) {
 
   return (
     <div className="space-y-5">
-      <Panel>
+      <Panel className="relative pl-7">
+        <span className={`absolute inset-y-4 left-3 w-1.5 rounded-full ${STATUS_STRIPE[card.status]}`} aria-hidden="true" />
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <div className="flex flex-wrap items-center gap-3">
               <h1 className="font-heading text-3xl font-semibold text-ink">{card.vocabulary}</h1>
-              <Badge tone="accent">{CARD_STATUS_LABELS[card.status]}</Badge>
+              <Badge tone={STATUS_TONE[card.status]}>{CARD_STATUS_LABELS[card.status]}</Badge>
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-3">
               <CambridgeLookupLink word={card.vocabulary} />

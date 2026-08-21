@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { Badge } from '@/components/ui/Card';
+import { PronunciationPlayer } from '@/components/vocab/PronunciationPlayer';
 import { CARD_STATUS_LABELS, PART_OF_SPEECH_LABELS, primaryMeaning } from '@/types';
 import type { CardWithRelations } from '@/types';
 
@@ -10,23 +11,39 @@ export const STATUS_TONE: Record<string, 'accent' | 'success' | 'warn' | 'neutra
   MASTERED: 'success',
 };
 
+/** Solid fill for the left-edge status stripe on every card surface (flashcard tile, list row, detail header) — same status colors as STATUS_TONE, just as a background instead of text/badge. */
+export const STATUS_STRIPE: Record<string, string> = {
+  NEW: 'bg-ink/25',
+  LEARNING: 'bg-warn',
+  REVIEW: 'bg-accent',
+  MASTERED: 'bg-success',
+};
+
 export function VocabCardListItem({ card }: { card: CardWithRelations }) {
   const isDue = new Date(card.dueAt).getTime() <= Date.now();
   const meaning = primaryMeaning(card);
+  const extraMeanings = card.meanings.length - 1;
   return (
     <Link
       href={`/cards/${card.id}`}
-      className="flex items-center justify-between gap-3 rounded-xl border border-line bg-card px-4 py-3 shadow-notebook transition hover:-translate-y-0.5 hover:shadow-lift"
+      className="relative flex items-center justify-between gap-3 rounded-xl border border-line bg-card py-3 pl-6 pr-4 shadow-notebook transition hover:-translate-y-0.5 hover:shadow-lift"
     >
+      <span className={`absolute inset-y-2.5 left-2 w-1.5 rounded-full ${STATUS_STRIPE[card.status]}`} aria-hidden="true" />
+
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-heading text-base font-semibold text-ink">{card.vocabulary}</span>
-          {card.ipa && <span className="font-mono text-xs text-ink-soft">{card.ipa}</span>}
+          <PronunciationPlayer word={card.vocabulary} ipa={card.ipa} audioUrl={card.audioUrl} size="sm" />
           {meaning?.partOfSpeech && <Badge tone="neutral">{PART_OF_SPEECH_LABELS[meaning.partOfSpeech]}</Badge>}
           {meaning?.cefr && (
             <span className="rounded-full border border-warn/40 bg-warn/15 px-1.5 py-0.5 text-[10px] font-bold text-warn" title="CEFR difficulty level">
               {meaning.cefr}
             </span>
+          )}
+          {extraMeanings > 0 && (
+            <Badge tone="accent" title={`${extraMeanings + 1} meanings recorded for this word`}>
+              +{extraMeanings} sense{extraMeanings === 1 ? '' : 's'}
+            </Badge>
           )}
         </div>
         {meaning?.definitionEn && <p className="mt-1 truncate text-sm text-ink-soft">{meaning.definitionEn}</p>}

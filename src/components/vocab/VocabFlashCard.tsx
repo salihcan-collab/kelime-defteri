@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import { Badge } from '@/components/ui/Card';
+import { PronunciationPlayer } from '@/components/vocab/PronunciationPlayer';
 import { CARD_STATUS_LABELS, PART_OF_SPEECH_LABELS, primaryMeaning } from '@/types';
-import { STATUS_TONE } from '@/components/vocab/VocabCardListItem';
+import { STATUS_TONE, STATUS_STRIPE } from '@/components/vocab/VocabCardListItem';
 import type { CardWithRelations } from '@/types';
 
 /**
@@ -25,12 +26,14 @@ export function VocabFlashCard({ card }: { card: CardWithRelations }) {
   return (
     <Link
       href={`/cards/${card.id}`}
-      className="flex h-full flex-col gap-2 rounded-xl border border-line bg-card p-4 shadow-notebook transition hover:-translate-y-0.5 hover:shadow-lift"
+      className="relative flex h-full flex-col gap-2 rounded-xl border border-line bg-card p-4 pl-6 shadow-notebook transition hover:-translate-y-0.5 hover:shadow-lift"
     >
+      <span className={`absolute inset-y-2.5 left-2 w-1.5 rounded-full ${STATUS_STRIPE[card.status]}`} aria-hidden="true" />
+
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="truncate font-heading text-base font-semibold text-ink">{card.vocabulary}</div>
-          {card.ipa && <div className="truncate font-mono text-xs text-ink-soft">{card.ipa}</div>}
+          <PronunciationPlayer word={card.vocabulary} ipa={card.ipa} audioUrl={card.audioUrl} size="sm" />
         </div>
         <Badge tone={STATUS_TONE[card.status]} className="shrink-0">
           {CARD_STATUS_LABELS[card.status]}
