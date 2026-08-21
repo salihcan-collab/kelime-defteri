@@ -25,12 +25,12 @@ export type MeaningWithExamples = Omit<Meaning, 'partOfSpeech' | 'cefr'> & {
   partOfSpeech: PartOfSpeech | null;
   cefr: CefrLevel | null;
   examples: ExampleSentence[];
+  tags: { tag: Tag }[];
 };
 
 export type CardWithRelations = Omit<Card, 'status'> & {
   status: CardStatus;
   meanings: MeaningWithExamples[];
-  tags: { tag: Tag }[];
 };
 
 /** The word's primary (first) sense — what previews, quizzes, and review show. */
@@ -47,6 +47,7 @@ export interface MeaningInput {
   definitionTr?: string;
   synonyms?: string | null;
   antonyms?: string | null;
+  tags: string[];
   examples: { text: string; source?: 'USER' | 'AI' }[];
 }
 
@@ -57,7 +58,6 @@ export interface CardInput {
   mnemonic?: string;
   collocations?: string;
   notes?: string;
-  tags: string[];
   meanings: MeaningInput[];
 }
 

@@ -61,10 +61,9 @@ model Card {
 
   // A word can have more than one sense — e.g. "object" (noun: a thing;
   // verb: to protest) or "make out" (to perceive; to fare; to kiss). Each
-  // Meaning carries its own part of speech, definitions, and examples;
-  // `order` 0 is the primary sense shown in previews/quizzes/review.
+  // Meaning carries its own part of speech, definitions, examples, and
+  // tags; `order` 0 is the primary sense shown in previews/quizzes/review.
   meanings       Meaning[]
-  tags           TagsOnCards[]
   reviews        ReviewLog[]
 
   @@index([userId, dueAt])
@@ -92,12 +91,13 @@ model Meaning {
   definitionEn String?
   definitionTr String?
   // Per-sense, not per-card — "object" (thing) and "object" (protest) don't
-  // share synonyms even though one shares a part of speech with the other's
-  // sibling sense.
+  // share synonyms, antonyms, or topic tags even though one shares a part
+  // of speech with the other's sibling sense.
   synonyms     String?
   antonyms     String?
 
   examples     ExampleSentence[]
+  tags         TagsOnMeanings[]
 
   @@index([cardId])
 }
@@ -119,25 +119,27 @@ model ExampleSentence {
 
 // Tags are personal to each notebook (not shared between the two
 // accounts), so uniqueness is scoped to (userId, name) rather than global.
+// Scoped to Meaning, not Card — different senses of the same word can
+// belong under different topics (see the note on Meaning).
 model Tag {
-  id        String        @id @default(cuid())
+  id        String           @id @default(cuid())
   userId    String
-  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   name      String
-  color     String        @default("accent")
-  createdAt DateTime      @default(now())
-  cards     TagsOnCards[]
+  color     String           @default("accent")
+  createdAt DateTime         @default(now())
+  meanings  TagsOnMeanings[]
 
   @@unique([userId, name])
 }
 
-model TagsOnCards {
-  cardId String
-  tagId  String
-  card   Card   @relation(fields: [cardId], references: [id], onDelete: Cascade)
-  tag    Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+model TagsOnMeanings {
+  meaningId String
+  tagId     String
+  meaning   Meaning @relation(fields: [meaningId], references: [id], onDelete: Cascade)
+  tag       Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
 
-  @@id([cardId, tagId])
+  @@id([meaningId, tagId])
 }
 
 model ReviewLog {

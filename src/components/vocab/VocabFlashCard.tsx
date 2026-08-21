@@ -14,10 +14,13 @@ import type { CardWithRelations } from '@/types';
  */
 export function VocabFlashCard({ card }: { card: CardWithRelations }) {
   const isDue = new Date(card.dueAt).getTime() <= Date.now();
-  const visibleTags = card.tags.slice(0, 2);
-  const extraTagCount = card.tags.length - visibleTags.length;
   const meaning = primaryMeaning(card);
   const extraMeanings = card.meanings.length - 1;
+  // Tags live on each sense now — the tile previews the primary sense's,
+  // same as its part of speech/definition/CEFR above.
+  const tags = meaning?.tags ?? [];
+  const visibleTags = tags.slice(0, 2);
+  const extraTagCount = tags.length - visibleTags.length;
 
   return (
     <Link

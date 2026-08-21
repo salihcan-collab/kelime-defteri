@@ -9,9 +9,11 @@ import type { CardStatus } from '@/types';
 const cardInclude = {
   meanings: {
     orderBy: { order: 'asc' as const },
-    include: { examples: { orderBy: { order: 'asc' as const } } },
+    include: {
+      examples: { orderBy: { order: 'asc' as const } },
+      tags: { include: { tag: true } },
+    },
   },
-  tags: { include: { tag: true } },
 };
 
 export async function GET(req: NextRequest) {
@@ -37,7 +39,9 @@ export async function GET(req: NextRequest) {
       },
     ];
   }
-  if (tag) where.tags = { some: { tag: { name: tag } } };
+  // Tags now live on Meaning, not Card — a card matches if any of its
+  // senses carries the tag.
+  if (tag) where.meanings = { some: { tags: { some: { tag: { name: tag } } } } };
   if (status) where.status = status as CardStatus;
   if (due === 'true') where.dueAt = { lte: new Date() };
 
@@ -62,14 +66,21 @@ export async function POST(req: NextRequest) {
   }
   const data = parsed.data;
 
-  const tagConnections = await Promise.all(
-    data.tags.map(async (name) => {
-      const tag = await prisma.tag.upsert({
-        where: { userId_name: { userId, name: name.toLowerCase() } },
-        update: {},
-        create: { userId, name: name.toLowerCase() },
-      });
-      return tag.id;
+  // Each sense carries its own tags now, so resolve/upsert them per meaning
+  // rather than once for the whole card.
+  const meaningsWithTagIds = await Promise.all(
+    data.meanings.map(async (meaning) => {
+      const tagIds = await Promise.all(
+        meaning.tags.map(async (name) => {
+          const tag = await prisma.tag.upsert({
+            where: { userId_name: { userId, name: name.toLowerCase() } },
+            update: {},
+            create: { userId, name: name.toLowerCase() },
+          });
+          return tag.id;
+        }),
+      );
+      return { meaning, tagIds };
     }),
   );
 
@@ -82,9 +93,8 @@ export async function POST(req: NextRequest) {
       mnemonic: data.mnemonic || null,
       collocations: data.collocations || null,
       notes: data.notes || null,
-      tags: { create: tagConnections.map((tagId) => ({ tagId })) },
       meanings: {
-        create: data.meanings.map((meaning, mi) => ({
+        create: meaningsWithTagIds.map(({ meaning, tagIds }, mi) => ({
           order: mi,
           partOfSpeech: meaning.partOfSpeech || null,
           ipa: meaning.ipa || null,
@@ -94,6 +104,7 @@ export async function POST(req: NextRequest) {
           definitionTr: meaning.definitionTr || null,
           synonyms: meaning.synonyms || null,
           antonyms: meaning.antonyms || null,
+          tags: { create: tagIds.map((tagId) => ({ tagId })) },
           examples: {
             create: meaning.examples.map((ex, i) => ({
               text: ex.text,

@@ -30,9 +30,9 @@ export function VocabCardListItem({ card }: { card: CardWithRelations }) {
           )}
         </div>
         {meaning?.definitionEn && <p className="mt-1 truncate text-sm text-ink-soft">{meaning.definitionEn}</p>}
-        {card.tags.length > 0 && (
+        {meaning && meaning.tags.length > 0 && (
           <div className="mt-1.5 flex flex-wrap gap-1">
-            {card.tags.slice(0, 5).map(({ tag }) => (
+            {meaning.tags.slice(0, 5).map(({ tag }) => (
               <span key={tag.id} className="text-xs text-accent">
                 #{tag.name}
               </span>

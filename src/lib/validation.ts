@@ -32,6 +32,7 @@ export const meaningInputSchema = z.object({
   // Per-sense, not per-card — see the note in schema.prisma.
   synonyms: z.string().max(500).optional().nullable(),
   antonyms: z.string().max(500).optional().nullable(),
+  tags: z.array(z.string().trim().min(1).max(40)).default([]),
   examples: z.array(exampleSentenceInput).default([]),
 });
 
@@ -42,7 +43,6 @@ export const cardInputSchema = z.object({
   mnemonic: z.string().max(2000).optional().nullable(),
   collocations: z.string().max(2000).optional().nullable(),
   notes: z.string().max(2000).optional().nullable(),
-  tags: z.array(z.string().trim().min(1).max(40)).default([]),
   // At least one sense — even a blank one, so a freshly-created card
   // always has somewhere for its first definition to live.
   meanings: z.array(meaningInputSchema).min(1),

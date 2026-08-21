@@ -23,6 +23,7 @@ interface MeaningFormState {
   definitionTr: string;
   synonyms: string;
   antonyms: string;
+  tags: string[];
   examples: string[];
 }
 
@@ -30,7 +31,6 @@ interface FormState {
   vocabulary: string;
   ipa: string;
   audioUrl: string;
-  tags: string[];
   meanings: MeaningFormState[];
   collocations: string;
   mnemonic: string;
@@ -46,6 +46,7 @@ const BLANK_MEANING: MeaningFormState = {
   definitionTr: '',
   synonyms: '',
   antonyms: '',
+  tags: [],
   examples: [''],
 };
 
@@ -55,7 +56,6 @@ function initialStateFromCard(card?: CardWithRelations): FormState {
       vocabulary: '',
       ipa: '',
       audioUrl: '',
-      tags: [],
       meanings: [{ ...BLANK_MEANING }],
       collocations: '',
       mnemonic: '',
@@ -66,7 +66,6 @@ function initialStateFromCard(card?: CardWithRelations): FormState {
     vocabulary: card.vocabulary,
     ipa: card.ipa ?? '',
     audioUrl: card.audioUrl ?? '',
-    tags: card.tags.map((t) => t.tag.name),
     meanings: card.meanings.length
       ? card.meanings.map((m) => ({
           partOfSpeech: m.partOfSpeech ?? '',
@@ -77,6 +76,7 @@ function initialStateFromCard(card?: CardWithRelations): FormState {
           definitionTr: m.definitionTr ?? '',
           synonyms: m.synonyms ?? '',
           antonyms: m.antonyms ?? '',
+          tags: m.tags.map((t) => t.tag.name),
           examples: m.examples.length ? m.examples.map((e) => e.text) : [''],
         }))
       : [{ ...BLANK_MEANING }],
@@ -108,6 +108,7 @@ export function VocabForm({ card, aiConfigured }: { card?: CardWithRelations; ai
   function updateMeaning(index: number, patch: Partial<MeaningFormState>) {
     setForm((prev) => ({ ...prev, meanings: prev.meanings.map((m, i) => (i === index ? { ...m, ...patch } : m)) }));
   }
+  /** Opens a new blank sense — everything left empty since its part of speech and pronunciation might match the existing one(s) or not. */
   function addMeaning() {
     setForm((prev) => ({ ...prev, meanings: [...prev.meanings, { ...BLANK_MEANING, examples: [''] }] }));
   }
@@ -161,6 +162,7 @@ export function VocabForm({ card, aiConfigured }: { card?: CardWithRelations; ai
           definitionTr: draft.definitionTr ?? meanings[0].definitionTr,
           synonyms: draft.synonyms || meanings[0].synonyms,
           antonyms: draft.antonyms || meanings[0].antonyms,
+          tags: Array.from(new Set([...meanings[0].tags, ...(draft.suggestedTags ?? [])])),
           examples: draft.exampleSentences?.length ? draft.exampleSentences : meanings[0].examples,
         };
         return {
@@ -170,7 +172,6 @@ export function VocabForm({ card, aiConfigured }: { card?: CardWithRelations; ai
           mnemonic: draft.mnemonic ?? prev.mnemonic,
           collocations: draft.collocations ?? prev.collocations,
           meanings,
-          tags: Array.from(new Set([...prev.tags, ...(draft.suggestedTags ?? [])])),
         };
       });
       setNotice('AI drafted the primary meaning — review and tweak it, then use "+ Add another meaning" below if the word has other common senses.');
@@ -211,7 +212,6 @@ export function VocabForm({ card, aiConfigured }: { card?: CardWithRelations; ai
       mnemonic: form.mnemonic || null,
       collocations: form.collocations || null,
       notes: form.notes || null,
-      tags: form.tags,
       meanings: form.meanings.map((m) => ({
         partOfSpeech: m.partOfSpeech || null,
         ipa: m.ipa || null,
@@ -221,6 +221,7 @@ export function VocabForm({ card, aiConfigured }: { card?: CardWithRelations; ai
         definitionTr: m.definitionTr || null,
         synonyms: m.synonyms || null,
         antonyms: m.antonyms || null,
+        tags: m.tags,
         examples: m.examples.filter((ex) => ex.trim()).map((text) => ({ text, source: 'USER' as const })),
       })),
     };
@@ -282,36 +283,27 @@ export function VocabForm({ card, aiConfigured }: { card?: CardWithRelations; ai
           </div>
         </FieldWrapper>
 
-        <FieldWrapper>
-          <FieldLabel htmlFor="tags">Tags</FieldLabel>
-          <TagInput value={form.tags} onChange={(tags) => set('tags', tags)} />
-        </FieldWrapper>
-
-        <div className="mb-4 mt-6 border-t border-line pt-5">
-          <FieldLabel hint="Add another meaning for a different part of speech (object noun vs. verb) or a different sense of the same one (make out: perceive / fare / kiss).">
-            Meanings
-          </FieldLabel>
-          <div className="space-y-4">
-            {form.meanings.map((meaning, mi) => (
-              <MeaningBlock
-                key={mi}
-                index={mi}
-                meaning={meaning}
-                word={form.vocabulary}
-                aiConfigured={aiConfigured}
-                boxed={form.meanings.length > 1}
-                onChange={(patch) => updateMeaning(mi, patch)}
-                onRemove={() => removeMeaning(mi)}
-                onExampleChange={(ei, text) => updateMeaningExample(mi, ei, text)}
-                onExampleAdd={() => addMeaningExample(mi)}
-                onExampleRemove={(ei) => removeMeaningExample(mi, ei)}
-              />
-            ))}
-            <Button type="button" variant="outline" size="sm" onClick={addMeaning}>
-              + Add another meaning
-            </Button>
-          </div>
-        </div>
+        {/* Each new card starts with exactly one meaning, rendered inline
+            (no "Meanings" section, no box) so a simple single-sense card —
+            most of them — is just one continuous set of fields, same as
+            Vocabulary/Pronunciation above. A box only appears once there's
+            more than one meaning to tell apart; "+ Add another meaning"
+            below opens one. */}
+        {form.meanings.map((meaning, mi) => (
+          <MeaningBlock
+            key={mi}
+            index={mi}
+            meaning={meaning}
+            word={form.vocabulary}
+            aiConfigured={aiConfigured}
+            boxed={form.meanings.length > 1}
+            onChange={(patch) => updateMeaning(mi, patch)}
+            onRemove={() => removeMeaning(mi)}
+            onExampleChange={(ei, text) => updateMeaningExample(mi, ei, text)}
+            onExampleAdd={() => addMeaningExample(mi)}
+            onExampleRemove={(ei) => removeMeaningExample(mi, ei)}
+          />
+        ))}
 
         <FieldWrapper>
           <FieldLabel htmlFor="collocations" action={<AIFieldButton field="collocations" word={form.vocabulary} context={primaryContext} disabled={!aiConfigured} onResult={(r) => set('collocations', String(r.collocations ?? ''))} />}>
@@ -331,6 +323,15 @@ export function VocabForm({ card, aiConfigured }: { card?: CardWithRelations; ai
           <FieldLabel htmlFor="notes">Notes (optional)</FieldLabel>
           <TextArea id="notes" rows={2} value={form.notes} onChange={(e) => set('notes', e.target.value)} placeholder="Anything else you want to remember…" />
         </FieldWrapper>
+
+        <div className="mb-5 border-t border-line pt-4">
+          <Button type="button" variant="outline" size="sm" onClick={addMeaning}>
+            + Add another meaning
+          </Button>
+          <p className="mt-1.5 text-xs text-ink-soft">
+            For a different part of speech (object noun vs. verb) or another sense of the same one (make out: perceive / fare / kiss).
+          </p>
+        </div>
 
         {notice && <p className="mb-3 rounded-lg bg-success/10 px-3 py-2 text-sm text-success">{notice}</p>}
         {error && <p className="mb-3 rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
@@ -356,13 +357,15 @@ export function VocabForm({ card, aiConfigured }: { card?: CardWithRelations; ai
 /**
  * One meaning's fields. For the common case — a word with a single sense
  * — `boxed` is false and this renders inline as part of the normal form
- * flow, exactly like the Vocabulary/Tags fields above it, so a simple
- * card doesn't feel like a nested sub-form. Once there's more than one
- * meaning, each gets a light bordered box with a "Meaning N" / remove
- * header so they're visually distinct. Pronunciation override, sense
- * label, and CEFR level are the more dictionary-specific fields — most
- * cards don't need them — so they live behind a collapsed "More fields"
- * disclosure rather than adding three more rows to every meaning.
+ * flow, exactly like the Vocabulary/Pronunciation fields above it, so a
+ * simple card doesn't feel like a nested sub-form. Once there's more than
+ * one meaning, each gets a light bordered box headed by the word itself
+ * (repeating it, the way a dictionary repeats the headword on each entry)
+ * plus a remove button. Pronunciation override, sense label, and CEFR
+ * level are the more dictionary-specific fields — most cards don't need
+ * them — so they live behind a collapsed "More fields" disclosure rather
+ * than adding three more rows to every meaning. Tags sit last, at the
+ * bottom of the block, since they describe this specific sense.
  */
 function MeaningBlock({
   index,
@@ -393,7 +396,7 @@ function MeaningBlock({
     <>
       {boxed && (
         <div className="mb-3 flex items-center justify-between">
-          <span className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Meaning {index + 1}</span>
+          <span className="font-heading text-base font-semibold text-ink">{word.trim() || 'This word'}</span>
           <Button type="button" variant="ghost" size="sm" onClick={onRemove}>
             🗑️ Remove
           </Button>
@@ -559,10 +562,15 @@ function MeaningBlock({
           </FieldWrapper>
         </div>
       </details>
+
+      <FieldWrapper>
+        <FieldLabel htmlFor={`tags-${index}`}>Tags</FieldLabel>
+        <TagInput value={meaning.tags} onChange={(tags) => onChange({ tags })} />
+      </FieldWrapper>
     </>
   );
 
   if (!boxed) return <div className="space-y-1">{content}</div>;
 
-  return <div className="rounded-xl border border-line bg-paper p-4">{content}</div>;
+  return <div className="mb-5 rounded-xl border border-line bg-paper p-4">{content}</div>;
 }

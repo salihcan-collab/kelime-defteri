@@ -26,13 +26,23 @@ async function getDashboardData(userId: string) {
       where: { userId },
       orderBy: { createdAt: 'desc' },
       take: 5,
-      include: { meanings: { orderBy: { order: 'asc' }, include: { examples: { orderBy: { order: 'asc' } } } }, tags: { include: { tag: true } } },
+      include: {
+        meanings: {
+          orderBy: { order: 'asc' },
+          include: { examples: { orderBy: { order: 'asc' } }, tags: { include: { tag: true } } },
+        },
+      },
     }),
     prisma.card.findMany({
       where: { userId, dueAt: { lte: now } },
       orderBy: { dueAt: 'asc' },
       take: 5,
-      include: { meanings: { orderBy: { order: 'asc' }, include: { examples: { orderBy: { order: 'asc' } } } }, tags: { include: { tag: true } } },
+      include: {
+        meanings: {
+          orderBy: { order: 'asc' },
+          include: { examples: { orderBy: { order: 'asc' } }, tags: { include: { tag: true } } },
+        },
+      },
     }),
   ]);
 

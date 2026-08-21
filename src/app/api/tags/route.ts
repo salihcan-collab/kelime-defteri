@@ -9,10 +9,10 @@ export async function GET() {
 
   const tags = await prisma.tag.findMany({
     where: { userId: auth.session.userId },
-    include: { _count: { select: { cards: true } } },
-    orderBy: { cards: { _count: 'desc' } },
+    include: { _count: { select: { meanings: true } } },
+    orderBy: { meanings: { _count: 'desc' } },
   });
   return NextResponse.json({
-    tags: tags.map((t) => ({ id: t.id, name: t.name, color: t.color, count: t._count.cards })),
+    tags: tags.map((t) => ({ id: t.id, name: t.name, color: t.color, count: t._count.meanings })),
   });
 }

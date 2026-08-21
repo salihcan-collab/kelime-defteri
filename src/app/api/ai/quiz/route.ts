@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
 
   const pool = (await prisma.card.findMany({
     where: { userId: auth.session.userId },
-    include: { meanings: { include: { examples: true } }, tags: { include: { tag: true } } },
+    include: { meanings: { include: { examples: true, tags: { include: { tag: true } } } } },
   })) as unknown as CardWithRelations[];
 
   const targets = pool.filter((c) => parsed.data.cardIds.includes(c.id));

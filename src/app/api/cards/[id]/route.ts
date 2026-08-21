@@ -7,9 +7,11 @@ import { requireSession } from '@/lib/requireSession';
 const cardInclude = {
   meanings: {
     orderBy: { order: 'asc' as const },
-    include: { examples: { orderBy: { order: 'asc' as const } } },
+    include: {
+      examples: { orderBy: { order: 'asc' as const } },
+      tags: { include: { tag: true } },
+    },
   },
-  tags: { include: { tag: true } },
 };
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -44,21 +46,28 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: 'Card not found' }, { status: 404 });
   }
 
-  const tagIds = await Promise.all(
-    data.tags.map(async (name) => {
-      const tag = await prisma.tag.upsert({
-        where: { userId_name: { userId, name: name.toLowerCase() } },
-        update: {},
-        create: { userId, name: name.toLowerCase() },
-      });
-      return tag.id;
-    }),
-  );
-
   const card = await prisma.$transaction(async (tx) => {
-    await tx.tagsOnCards.deleteMany({ where: { cardId: id } });
-    // Cascades to each meaning's examples too (ExampleSentence.meaning has onDelete: Cascade).
+    // Cascades to each meaning's examples and tags too (ExampleSentence.meaning
+    // and TagsOnMeanings.meaning both have onDelete: Cascade).
     await tx.meaning.deleteMany({ where: { cardId: id } });
+
+    // Each sense carries its own tags now, so resolve/upsert them per
+    // meaning rather than once for the whole card.
+    const meaningsWithTagIds = await Promise.all(
+      data.meanings.map(async (meaning) => {
+        const tagIds = await Promise.all(
+          meaning.tags.map(async (name) => {
+            const tag = await tx.tag.upsert({
+              where: { userId_name: { userId, name: name.toLowerCase() } },
+              update: {},
+              create: { userId, name: name.toLowerCase() },
+            });
+            return tag.id;
+          }),
+        );
+        return { meaning, tagIds };
+      }),
+    );
 
     return tx.card.update({
       where: { id },
@@ -69,9 +78,8 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
         mnemonic: data.mnemonic || null,
         collocations: data.collocations || null,
         notes: data.notes || null,
-        tags: { create: tagIds.map((tagId) => ({ tagId })) },
         meanings: {
-          create: data.meanings.map((meaning, mi) => ({
+          create: meaningsWithTagIds.map(({ meaning, tagIds }, mi) => ({
             order: mi,
             partOfSpeech: meaning.partOfSpeech || null,
             ipa: meaning.ipa || null,
@@ -81,6 +89,7 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
             definitionTr: meaning.definitionTr || null,
             synonyms: meaning.synonyms || null,
             antonyms: meaning.antonyms || null,
+            tags: { create: tagIds.map((tagId) => ({ tagId })) },
             examples: {
               create: meaning.examples.map((ex, i) => ({
                 text: ex.text,

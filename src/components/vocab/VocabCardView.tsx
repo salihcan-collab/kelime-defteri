@@ -55,24 +55,21 @@ export function VocabCardView({ card }: { card: CardWithRelations }) {
             </Button>
           </div>
         </div>
-
-        {card.tags.length > 0 && (
-          <div className="mt-3 flex flex-wrap gap-1.5">
-            {card.tags.map(({ tag }) => (
-              <Link key={tag.id} href={`/cards?tag=${encodeURIComponent(tag.name)}`} className="text-sm text-accent hover:underline">
-                #{tag.name}
-              </Link>
-            ))}
-          </div>
-        )}
       </Panel>
 
       {meaningGroups.map((group, gi) => {
         const groupIpa = group.items.find((it) => it.meaning.ipa)?.meaning.ipa || card.ipa;
         return (
           <Panel key={group.partOfSpeech ?? `sense-${gi}`}>
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-line pb-3">
-              <div className="flex items-center gap-2">
+            {/* Each part-of-speech block is a self-contained dictionary
+                entry — repeats the headword (Cambridge/Merriam-Webster both
+                do this rather than relying on a single page-level title),
+                its part of speech, "N of M" when the word has more than
+                one, and a compact pronunciation for this specific entry
+                (stress often shifts by word class). */}
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-line pb-3">
+              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                <span className="font-heading text-xl font-bold text-ink">{card.vocabulary}</span>
                 <Badge tone="accent">{group.partOfSpeech ? PART_OF_SPEECH_LABELS[group.partOfSpeech] : 'Meaning'}</Badge>
                 {meaningGroups.length > 1 && (
                   <span className="text-xs font-medium text-ink-soft">
@@ -83,7 +80,7 @@ export function VocabCardView({ card }: { card: CardWithRelations }) {
               {groupIpa && <PronunciationPlayer word={card.vocabulary} ipa={groupIpa} audioUrl={card.audioUrl} size="sm" />}
             </div>
 
-            <div className="space-y-5">
+            <div className="space-y-4">
               {group.items.map(({ meaning }, si) => (
                 <MeaningDetail key={meaning.id} meaning={meaning} showLetter={group.items.length > 1} letterIndex={si} bordered={si > 0} />
               ))}
@@ -126,12 +123,19 @@ export function VocabCardView({ card }: { card: CardWithRelations }) {
 }
 
 /**
- * One sense within a part-of-speech group. When a group holds more than
- * one sense (e.g. the noun senses of "object": THING vs. PURPOSE vs.
- * CAUSE), each gets a small a/b/c marker — mirroring Merriam-Webster's
- * 1a/1b numbering — plus its optional Cambridge-style label and CEFR
- * badge. A group with only one sense skips all of that and just shows
- * the definition, keeping the common case (most words) uncluttered.
+ * One sense within a part-of-speech block. When a block holds more than
+ * one sense (e.g. the noun senses of "object": THING vs. PURPOSE), each
+ * gets a small a/b/c marker — mirroring Merriam-Webster's 1a/1b numbering
+ * — plus its optional Cambridge-style label and CEFR badge. A block with
+ * only one sense skips all of that.
+ *
+ * No "Definition" / "Turkish Translation" / "Example Sentences" text
+ * headings here on purpose — the field labels are only useful while
+ * filling the form in (see VocabForm). On the read view each field is
+ * told apart by its own typography instead: the English definition reads
+ * as plain body text, the Turkish translation sits just under it in
+ * italics behind a flag, and examples are quoted, shaded lines with the
+ * target word highlighted — three distinct looks, no repeated labels.
  */
 function MeaningDetail({
   meaning,
@@ -145,7 +149,7 @@ function MeaningDetail({
   bordered: boolean;
 }) {
   return (
-    <div className={bordered ? 'border-t border-line/60 pt-5' : undefined}>
+    <div className={bordered ? 'border-t border-line/60 pt-4' : undefined}>
       {(showLetter || meaning.label || meaning.cefr) && (
         <div className="mb-2 flex flex-wrap items-center gap-2">
           {showLetter && (
@@ -167,45 +171,49 @@ function MeaningDetail({
         </div>
       )}
 
-      <div className="grid gap-5 sm:grid-cols-2">
-        <div>
-          <h2 className="mb-2 font-heading text-sm font-semibold uppercase tracking-wide text-ink-soft">Definition</h2>
-          <p className="whitespace-pre-wrap text-ink">{meaning.definitionEn || '—'}</p>
-        </div>
-        <div>
-          <h2 className="mb-2 font-heading text-sm font-semibold uppercase tracking-wide text-ink-soft">Turkish Translation</h2>
-          <p className="whitespace-pre-wrap text-ink">{meaning.definitionTr || '—'}</p>
-        </div>
-      </div>
+      <p className="whitespace-pre-wrap text-ink">{meaning.definitionEn || '—'}</p>
+      {meaning.definitionTr && (
+        <p className="mt-1 whitespace-pre-wrap text-sm italic text-ink-soft">
+          <span className="mr-1 not-italic">🇹🇷</span>
+          {meaning.definitionTr}
+        </p>
+      )}
 
       {meaning.examples.length > 0 && (
-        <div className="mt-4">
-          <h2 className="mb-2 font-heading text-sm font-semibold uppercase tracking-wide text-ink-soft">Example Sentences</h2>
-          <ul className="space-y-2">
-            {meaning.examples.map((ex) => (
-              <li key={ex.id} className="rounded-lg bg-paper px-3 py-2 text-ink">
-                <HighlightedSentence text={ex.text} highlightSpans={ex.highlightSpans} />
-                {ex.source === 'AI' && <span className="ml-2 text-xs text-ink-soft">✨ AI</span>}
-              </li>
-            ))}
-          </ul>
-        </div>
+        <ul className="mt-3 space-y-1.5">
+          {meaning.examples.map((ex) => (
+            <li key={ex.id} className="rounded-lg bg-paper px-3 py-2 text-sm text-ink">
+              &ldquo;
+              <HighlightedSentence text={ex.text} highlightSpans={ex.highlightSpans} />
+              &rdquo;
+              {ex.source === 'AI' && <span className="ml-2 text-xs text-ink-soft">✨</span>}
+            </li>
+          ))}
+        </ul>
       )}
 
       {(meaning.synonyms || meaning.antonyms) && (
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-sm text-ink">
           {meaning.synonyms && (
-            <div>
-              <h2 className="mb-1 font-heading text-sm font-semibold uppercase tracking-wide text-ink-soft">Synonyms</h2>
-              <p className="text-ink">{meaning.synonyms}</p>
-            </div>
+            <p>
+              <span className="text-ink-soft">Syn:</span> {meaning.synonyms}
+            </p>
           )}
           {meaning.antonyms && (
-            <div>
-              <h2 className="mb-1 font-heading text-sm font-semibold uppercase tracking-wide text-ink-soft">Antonyms</h2>
-              <p className="text-ink">{meaning.antonyms}</p>
-            </div>
+            <p>
+              <span className="text-ink-soft">Ant:</span> {meaning.antonyms}
+            </p>
           )}
+        </div>
+      )}
+
+      {meaning.tags.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {meaning.tags.map(({ tag }) => (
+            <Link key={tag.id} href={`/cards?tag=${encodeURIComponent(tag.name)}`} className="text-xs text-accent hover:underline">
+              #{tag.name}
+            </Link>
+          ))}
         </div>
       )}
     </div>
