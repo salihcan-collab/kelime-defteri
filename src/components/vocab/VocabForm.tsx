@@ -262,33 +262,16 @@ export function VocabForm({ card, aiConfigured }: { card?: CardWithRelations; ai
           <TextInput id="vocabulary" required value={form.vocabulary} onChange={(e) => set('vocabulary', e.target.value)} placeholder="e.g. resilient" />
         </FieldWrapper>
 
-        <FieldWrapper>
-          <FieldLabel
-            htmlFor="ipa"
-            hint="IPA / phonetic spelling"
-            action={
-              <span className="flex items-center gap-2">
-                <Button type="button" variant="outline" size="sm" onClick={handleLookupPronunciation}>
-                  🔎 Look up
-                </Button>
-                <AIFieldButton field="ipa" word={form.vocabulary} disabled={!aiConfigured} onResult={(r) => set('ipa', String(r.ipa ?? ''))} />
-              </span>
-            }
-          >
-            Pronunciation
-          </FieldLabel>
-          <div className="flex items-center gap-3">
-            <TextInput id="ipa" value={form.ipa} onChange={(e) => set('ipa', e.target.value)} placeholder="/rɪˈzɪliənt/" className="max-w-xs font-mono" />
-            <PronunciationPlayer word={form.vocabulary || 'word'} ipa="" audioUrl={form.audioUrl} />
-          </div>
-        </FieldWrapper>
-
         {/* Each new card starts with exactly one meaning, rendered inline
             (no "Meanings" section, no box) so a simple single-sense card —
             most of them — is just one continuous set of fields, same as
-            Vocabulary/Pronunciation above. A box only appears once there's
-            more than one meaning to tell apart; "+ Add another meaning"
-            below opens one. */}
+            Vocabulary above. Part of Speech sits right under Vocabulary,
+            paired with Pronunciation in the same row — for the first
+            meaning that's the word's main pronunciation; for any meaning
+            after it, that meaning's own override, since a different part
+            of speech often means different stress ("record" noun vs.
+            verb). A box only appears once there's more than one meaning
+            to tell apart; "+ Add another meaning" below opens one. */}
         {form.meanings.map((meaning, mi) => (
           <MeaningBlock
             key={mi}
@@ -297,6 +280,11 @@ export function VocabForm({ card, aiConfigured }: { card?: CardWithRelations; ai
             word={form.vocabulary}
             aiConfigured={aiConfigured}
             boxed={form.meanings.length > 1}
+            primaryPronunciation={
+              mi === 0
+                ? { ipa: form.ipa, audioUrl: form.audioUrl, onIpaChange: (value) => set('ipa', value), onLookup: handleLookupPronunciation }
+                : undefined
+            }
             onChange={(patch) => updateMeaning(mi, patch)}
             onRemove={() => removeMeaning(mi)}
             onExampleChange={(ei, text) => updateMeaningExample(mi, ei, text)}
@@ -357,15 +345,15 @@ export function VocabForm({ card, aiConfigured }: { card?: CardWithRelations; ai
 /**
  * One meaning's fields. For the common case — a word with a single sense
  * — `boxed` is false and this renders inline as part of the normal form
- * flow, exactly like the Vocabulary/Pronunciation fields above it, so a
- * simple card doesn't feel like a nested sub-form. Once there's more than
- * one meaning, each gets a light bordered box headed by the word itself
- * (repeating it, the way a dictionary repeats the headword on each entry)
- * plus a remove button. Pronunciation override, sense label, and CEFR
- * level are the more dictionary-specific fields — most cards don't need
- * them — so they live behind a collapsed "More fields" disclosure rather
- * than adding three more rows to every meaning. Tags sit last, at the
- * bottom of the block, since they describe this specific sense.
+ * flow, exactly like the Vocabulary field above it, so a simple card
+ * doesn't feel like a nested sub-form. Once there's more than one
+ * meaning, each gets a light bordered box headed by the word itself
+ * (repeating it, the way a dictionary repeats the headword on each
+ * entry) plus a remove button. Sense label and CEFR level are the more
+ * dictionary-specific fields — most cards don't need them — so they
+ * live behind a collapsed "More fields" disclosure rather than adding
+ * two more rows to every meaning. Tags sit last, at the bottom of the
+ * block, since they describe this specific sense.
  */
 function MeaningBlock({
   index,
@@ -373,6 +361,7 @@ function MeaningBlock({
   word,
   aiConfigured,
   boxed,
+  primaryPronunciation,
   onChange,
   onRemove,
   onExampleChange,
@@ -384,6 +373,8 @@ function MeaningBlock({
   word: string;
   aiConfigured: boolean;
   boxed: boolean;
+  /** Passed only for the first meaning — its "Pronunciation" field is the word's shared one, not a per-meaning override. */
+  primaryPronunciation?: { ipa: string; audioUrl: string; onIpaChange: (value: string) => void; onLookup: () => void };
   onChange: (patch: Partial<MeaningFormState>) => void;
   onRemove: () => void;
   onExampleChange: (exampleIndex: number, text: string) => void;
@@ -403,22 +394,64 @@ function MeaningBlock({
         </div>
       )}
 
-      <FieldWrapper>
-        <FieldLabel
-          htmlFor={`pos-${index}`}
-          action={<AIFieldButton field="partOfSpeech" word={word} context={context} disabled={!aiConfigured} onResult={(r) => onChange({ partOfSpeech: r.partOfSpeech as PartOfSpeech })} />}
-        >
-          Part of Speech
-        </FieldLabel>
-        <Select id={`pos-${index}`} value={meaning.partOfSpeech} onChange={(e) => onChange({ partOfSpeech: e.target.value as PartOfSpeech | '' })} className="max-w-xs">
-          <option value="">Select…</option>
-          {PARTS_OF_SPEECH.map((p) => (
-            <option key={p} value={p}>
-              {PART_OF_SPEECH_LABELS[p]}
-            </option>
-          ))}
-        </Select>
-      </FieldWrapper>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <FieldWrapper>
+          <FieldLabel
+            htmlFor={`pos-${index}`}
+            action={<AIFieldButton field="partOfSpeech" word={word} context={context} disabled={!aiConfigured} onResult={(r) => onChange({ partOfSpeech: r.partOfSpeech as PartOfSpeech })} />}
+          >
+            Part of Speech
+          </FieldLabel>
+          <Select id={`pos-${index}`} value={meaning.partOfSpeech} onChange={(e) => onChange({ partOfSpeech: e.target.value as PartOfSpeech | '' })}>
+            <option value="">Select…</option>
+            {PARTS_OF_SPEECH.map((p) => (
+              <option key={p} value={p}>
+                {PART_OF_SPEECH_LABELS[p]}
+              </option>
+            ))}
+          </Select>
+        </FieldWrapper>
+
+        {primaryPronunciation ? (
+          <FieldWrapper>
+            <FieldLabel
+              htmlFor={`ipa-${index}`}
+              hint="IPA / phonetic spelling"
+              action={
+                <span className="flex items-center gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={primaryPronunciation.onLookup}>
+                    🔎 Look up
+                  </Button>
+                  <AIFieldButton field="ipa" word={word} disabled={!aiConfigured} onResult={(r) => primaryPronunciation.onIpaChange(String(r.ipa ?? ''))} />
+                </span>
+              }
+            >
+              Pronunciation
+            </FieldLabel>
+            <div className="flex items-center gap-2">
+              <TextInput
+                id={`ipa-${index}`}
+                value={primaryPronunciation.ipa}
+                onChange={(e) => primaryPronunciation.onIpaChange(e.target.value)}
+                placeholder="/rɪˈzɪliənt/"
+                className="font-mono"
+              />
+              <PronunciationPlayer word={word || 'word'} ipa="" audioUrl={primaryPronunciation.audioUrl} size="sm" />
+            </div>
+          </FieldWrapper>
+        ) : (
+          <FieldWrapper>
+            <FieldLabel
+              htmlFor={`ipa-${index}`}
+              hint="only if different from the pronunciation above"
+              action={<AIFieldButton field="ipa" word={word} context={context} disabled={!aiConfigured} onResult={(r) => onChange({ ipa: String(r.ipa ?? '') })} />}
+            >
+              Pronunciation
+            </FieldLabel>
+            <TextInput id={`ipa-${index}`} value={meaning.ipa} onChange={(e) => onChange({ ipa: e.target.value })} placeholder="/əbˈdʒɛkt/" className="font-mono" />
+          </FieldWrapper>
+        )}
+      </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <FieldWrapper>
@@ -519,22 +552,12 @@ function MeaningBlock({
         </FieldWrapper>
       </div>
 
-      <details className="group">
+      <details className="group mb-4">
         <summary className="flex cursor-pointer list-none items-center gap-1 text-xs font-medium text-ink-soft [&::-webkit-details-marker]:hidden">
           <span className="inline-block transition-transform group-open:rotate-90">▸</span>
-          More fields — pronunciation, sense label, CEFR level
+          More fields — sense label, CEFR level
         </summary>
-        <div className="mt-3 grid gap-4 sm:grid-cols-3">
-          <FieldWrapper>
-            <FieldLabel
-              htmlFor={`ipa-${index}`}
-              hint="if different from the pronunciation above"
-              action={<AIFieldButton field="ipa" word={word} context={context} disabled={!aiConfigured} onResult={(r) => onChange({ ipa: String(r.ipa ?? '') })} />}
-            >
-              Pronunciation
-            </FieldLabel>
-            <TextInput id={`ipa-${index}`} value={meaning.ipa} onChange={(e) => onChange({ ipa: e.target.value })} placeholder="/əbˈdʒɛkt/" className="font-mono" />
-          </FieldWrapper>
+        <div className="mt-3 grid gap-4 sm:grid-cols-2">
           <FieldWrapper>
             <FieldLabel
               htmlFor={`label-${index}`}
@@ -570,7 +593,10 @@ function MeaningBlock({
     </>
   );
 
-  if (!boxed) return <div className="space-y-1">{content}</div>;
+  // The boxed case wraps content in a bordered p-4 box — without this, the
+  // last field's own bottom margin would stack with that padding and leave
+  // an oversized gap below it that the top of the box doesn't match.
+  if (!boxed) return <div>{content}</div>;
 
-  return <div className="mb-5 rounded-xl border border-line bg-paper p-4">{content}</div>;
+  return <div className="mb-5 rounded-xl border border-line bg-paper p-4 [&>*:last-child]:mb-0">{content}</div>;
 }

@@ -153,7 +153,7 @@ function MeaningDetail({
       {(showLetter || meaning.label || meaning.cefr) && (
         <div className="mb-2 flex flex-wrap items-center gap-2">
           {showLetter && (
-            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-accent-soft text-[11px] font-semibold text-accent">
+            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-ink/10 text-[11px] font-semibold text-ink-soft">
               {SENSE_LETTERS[letterIndex] ?? letterIndex + 1}
             </span>
           )}
@@ -162,7 +162,7 @@ function MeaningDetail({
           )}
           {meaning.cefr && (
             <span
-              className="rounded-full border border-accent/40 bg-accent-soft px-2 py-0.5 text-[10px] font-bold text-accent"
+              className="rounded-full border border-warn/40 bg-warn/15 px-2 py-0.5 text-[10px] font-bold text-warn"
               title="CEFR difficulty level"
             >
               {meaning.cefr}
