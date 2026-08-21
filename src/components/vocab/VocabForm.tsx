@@ -8,9 +8,7 @@ import { FieldLabel, FieldWrapper, Select, TextArea, TextInput } from '@/compone
 import { TagInput } from '@/components/vocab/TagInput';
 import { AIFieldButton } from '@/components/vocab/AIFieldButton';
 import { CambridgeLookupLink } from '@/components/vocab/CambridgeLookupLink';
-import { HighlightedSentence } from '@/components/vocab/HighlightedSentence';
 import { PronunciationPlayer } from '@/components/vocab/PronunciationPlayer';
-import { findWordSpans, serializeSpans } from '@/lib/highlight';
 import { CEFR_LEVELS, PART_OF_SPEECH_LABELS, PARTS_OF_SPEECH } from '@/types';
 import type { CardWithRelations, CefrLevel, PartOfSpeech } from '@/types';
 
@@ -505,24 +503,14 @@ function MeaningBlock({
           Example Sentences
         </FieldLabel>
         <div className="space-y-2">
-          {meaning.examples.map((ex, ei) => {
-            const spans = word.trim() ? findWordSpans(ex, word.trim()) : [];
-            return (
-              <div key={ei} className="space-y-1">
-                <div className="flex items-start gap-2">
-                  <TextArea rows={2} value={ex} onChange={(e) => onExampleChange(ei, e.target.value)} placeholder="Write a sentence using the word…" />
-                  <Button type="button" variant="ghost" size="sm" onClick={() => onExampleRemove(ei)} aria-label="Remove sentence">
-                    🗑️
-                  </Button>
-                </div>
-                {ex.trim() && (
-                  <p className="rounded-lg bg-paper-alt px-3 py-1.5 text-sm text-ink-soft">
-                    Preview: <HighlightedSentence text={ex} highlightSpans={serializeSpans(spans)} />
-                  </p>
-                )}
-              </div>
-            );
-          })}
+          {meaning.examples.map((ex, ei) => (
+            <div key={ei} className="flex items-start gap-2">
+              <TextArea rows={2} value={ex} onChange={(e) => onExampleChange(ei, e.target.value)} placeholder="Write a sentence using the word…" />
+              <Button type="button" variant="ghost" size="sm" onClick={() => onExampleRemove(ei)} aria-label="Remove sentence">
+                🗑️
+              </Button>
+            </div>
+          ))}
           <Button type="button" variant="outline" size="sm" onClick={onExampleAdd}>
             + Add sentence
           </Button>
