@@ -81,8 +81,6 @@ export async function POST(req: NextRequest) {
       audioUrl: data.audioUrl || null,
       mnemonic: data.mnemonic || null,
       collocations: data.collocations || null,
-      synonyms: data.synonyms || null,
-      antonyms: data.antonyms || null,
       notes: data.notes || null,
       tags: { create: tagConnections.map((tagId) => ({ tagId })) },
       meanings: {
@@ -94,6 +92,8 @@ export async function POST(req: NextRequest) {
           cefr: meaning.cefr || null,
           definitionEn: meaning.definitionEn || null,
           definitionTr: meaning.definitionTr || null,
+          synonyms: meaning.synonyms || null,
+          antonyms: meaning.antonyms || null,
           examples: {
             create: meaning.examples.map((ex, i) => ({
               text: ex.text,

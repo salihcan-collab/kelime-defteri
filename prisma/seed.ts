@@ -10,6 +10,8 @@ type SampleMeaning = {
   cefr?: 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2';
   definitionEn: string;
   definitionTr: string;
+  synonyms?: string;
+  antonyms?: string;
   examples: string[];
 };
 
@@ -18,8 +20,6 @@ type SampleCard = {
   ipa: string;
   mnemonic: string;
   collocations: string;
-  synonyms?: string;
-  antonyms?: string;
   tags: string[];
   meanings: SampleMeaning[];
 };
@@ -30,8 +30,6 @@ const SAMPLE_CARDS: SampleCard[] = [
     ipa: '/rɪˈzɪliənt/',
     mnemonic: 'Picture a RE-SILIENT rubber ball — no matter how hard it\'s thrown down, it bounces right back up.',
     collocations: 'remain resilient, resilient economy, emotionally resilient',
-    synonyms: 'tough, hardy, adaptable, durable',
-    antonyms: 'fragile, vulnerable',
     tags: ['emotions', 'toefl'],
     meanings: [
       {
@@ -39,6 +37,8 @@ const SAMPLE_CARDS: SampleCard[] = [
         cefr: 'C1',
         definitionEn: 'Able to withstand or recover quickly from difficult conditions.',
         definitionTr: 'Zorluklardan çabuk toparlanabilen, dirençli.',
+        synonyms: 'tough, hardy, adaptable, durable',
+        antonyms: 'fragile, vulnerable',
         examples: [
           'Despite losing her job, she remained remarkably resilient and found new opportunities within weeks.',
           'Coral reefs are surprisingly resilient, recovering from storm damage over a few seasons.',
@@ -51,8 +51,6 @@ const SAMPLE_CARDS: SampleCard[] = [
     ipa: '/məˈtɪkjʊləs/',
     mnemonic: 'A MET-ICULOUS chef weighs every single ingredient on a tiny scale before cooking.',
     collocations: 'meticulous planning, meticulous attention to detail, meticulous researcher',
-    synonyms: 'precise, thorough, painstaking',
-    antonyms: 'careless, sloppy',
     tags: ['business', 'academic'],
     meanings: [
       {
@@ -60,6 +58,8 @@ const SAMPLE_CARDS: SampleCard[] = [
         cefr: 'C1',
         definitionEn: 'Showing great attention to detail; very careful and precise.',
         definitionTr: 'Titiz, ayrıntılara büyük özen gösteren.',
+        synonyms: 'precise, thorough, painstaking',
+        antonyms: 'careless, sloppy',
         examples: [
           'The architect was meticulous about every measurement on the blueprint.',
           'Her meticulous notes made it easy for the team to pick up the project.',
@@ -72,8 +72,6 @@ const SAMPLE_CARDS: SampleCard[] = [
     ipa: '/æmˈbɪɡjuəs/',
     mnemonic: 'AMBI- means "both" — like AMBIdextrous uses both hands, an AMBIguous sentence has two meanings.',
     collocations: 'ambiguous statement, morally ambiguous, deliberately ambiguous',
-    synonyms: 'vague, unclear, equivocal',
-    antonyms: 'clear, unambiguous, explicit',
     tags: ['academic'],
     meanings: [
       {
@@ -81,6 +79,8 @@ const SAMPLE_CARDS: SampleCard[] = [
         cefr: 'C1',
         definitionEn: 'Open to more than one interpretation; not having one obvious meaning.',
         definitionTr: 'Belirsiz, birden fazla anlama gelebilen.',
+        synonyms: 'vague, unclear, equivocal',
+        antonyms: 'clear, unambiguous, explicit',
         examples: [
           'The contract\'s wording was ambiguous, so both sides interpreted it differently.',
           'His ambiguous answer left us more confused than before.',
@@ -93,8 +93,6 @@ const SAMPLE_CARDS: SampleCard[] = [
     ipa: '/ɡɪv ʌp/',
     mnemonic: 'You GIVE your effort UP into the air and let it go — you stop holding on.',
     collocations: 'give up smoking, never give up, give up on a dream',
-    synonyms: 'quit, abandon, surrender',
-    antonyms: 'persevere, persist',
     tags: ['phrasal-verbs', 'daily-life'],
     meanings: [
       {
@@ -102,6 +100,8 @@ const SAMPLE_CARDS: SampleCard[] = [
         cefr: 'A2',
         definitionEn: 'To stop trying to do something; to quit.',
         definitionTr: 'Vazgeçmek, pes etmek.',
+        synonyms: 'quit, abandon, surrender',
+        antonyms: 'persevere, persist',
         examples: [
           'She refused to give up on her dream of becoming a pilot.',
           'Don\'t give up now — you\'re almost at the finish line.',
@@ -111,8 +111,9 @@ const SAMPLE_CARDS: SampleCard[] = [
   },
   {
     // Two-sense showcase across *different* parts of speech — stress and
-    // pronunciation shift with word class, so each sense group carries its
-    // own per-part-of-speech ipa override.
+    // pronunciation shift with word class, so each part-of-speech header
+    // carries its own ipa override, and each sense keeps its own
+    // synonyms/antonyms since "a thing" and "to protest" share nothing.
     vocabulary: 'object',
     ipa: '/ˈɒbdʒɪkt/',
     mnemonic: 'The stress moves: an OBject is a THING (stress up front); to obJECT is to push back (stress jumps to the end).',
@@ -126,6 +127,7 @@ const SAMPLE_CARDS: SampleCard[] = [
         cefr: 'A2',
         definitionEn: 'A thing that can be seen or touched but is not alive.',
         definitionTr: 'Cansız, elle tutulur bir şey.',
+        synonyms: 'item, thing, article',
         examples: ['There was a strange object lying on the table.'],
       },
       {
@@ -135,6 +137,7 @@ const SAMPLE_CARDS: SampleCard[] = [
         cefr: 'B2',
         definitionEn: 'The goal or aim of an action or effort.',
         definitionTr: 'Bir eylemin veya çabanın amacı, hedefi.',
+        synonyms: 'goal, aim, purpose, objective',
         examples: ['Her main object in life was to help others.'],
       },
       {
@@ -143,6 +146,8 @@ const SAMPLE_CARDS: SampleCard[] = [
         cefr: 'B1',
         definitionEn: 'To express disapproval of or disagreement with something.',
         definitionTr: 'Bir şeye itiraz etmek, karşı çıkmak.',
+        synonyms: 'protest, oppose, disagree',
+        antonyms: 'agree, accept, consent',
         examples: [
           'Several residents objected to the new construction plan.',
           'I object to being spoken to in that tone.',
@@ -152,7 +157,8 @@ const SAMPLE_CARDS: SampleCard[] = [
   },
   {
     // Three senses within the *same* part of speech — showcases the
-    // a/b/c sub-sense lettering inside a single "phrasal verb" header.
+    // a/b/c sub-sense lettering inside a single "phrasal verb" header,
+    // each with its own synonyms even though the part of speech matches.
     vocabulary: 'make out',
     ipa: '/meɪk aʊt/',
     mnemonic: 'You have to "make out" shapes in the fog before you can "make out" what someone means, or make out okay despite the fog.',
@@ -165,6 +171,7 @@ const SAMPLE_CARDS: SampleCard[] = [
         cefr: 'B2',
         definitionEn: 'To manage to see, hear, or understand something with difficulty.',
         definitionTr: 'Güçlükle görmek, duymak veya anlamak; seçebilmek.',
+        synonyms: 'discern, distinguish, detect',
         examples: ['Through the fog, we could just make out the shape of the lighthouse.'],
       },
       {
@@ -173,6 +180,7 @@ const SAMPLE_CARDS: SampleCard[] = [
         cefr: 'B2',
         definitionEn: 'To manage or fare in a situation (informal, especially American English).',
         definitionTr: 'Bir durumda idare etmek, başarılı olmak (gündelik dilde).',
+        synonyms: 'manage, cope, fare',
         examples: ['How did you make out on your final exams?'],
       },
       {
@@ -181,6 +189,7 @@ const SAMPLE_CARDS: SampleCard[] = [
         cefr: 'B2',
         definitionEn: 'To kiss and touch someone in a romantic/sexual way (informal).',
         definitionTr: 'Sarılıp öpüşmek (gündelik/argo dilde).',
+        synonyms: 'smooch, neck',
         examples: ['They were making out on the porch when the lights came on.'],
       },
     ],
@@ -235,8 +244,6 @@ async function main() {
         ipa: sample.ipa,
         mnemonic: sample.mnemonic,
         collocations: sample.collocations,
-        synonyms: sample.synonyms ?? null,
-        antonyms: sample.antonyms ?? null,
         tags: { create: tagIds.map((tagId) => ({ tagId })) },
         meanings: {
           create: sample.meanings.map((meaning, mi) => ({
@@ -247,6 +254,8 @@ async function main() {
             cefr: meaning.cefr ?? null,
             definitionEn: meaning.definitionEn,
             definitionTr: meaning.definitionTr,
+            synonyms: meaning.synonyms ?? null,
+            antonyms: meaning.antonyms ?? null,
             examples: {
               create: meaning.examples.map((text, i) => ({
                 text,

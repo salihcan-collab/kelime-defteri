@@ -45,6 +45,8 @@ export interface MeaningInput {
   cefr?: CefrLevel | null;
   definitionEn?: string;
   definitionTr?: string;
+  synonyms?: string | null;
+  antonyms?: string | null;
   examples: { text: string; source?: 'USER' | 'AI' }[];
 }
 
@@ -54,8 +56,6 @@ export interface CardInput {
   audioUrl?: string;
   mnemonic?: string;
   collocations?: string;
-  synonyms?: string;
-  antonyms?: string;
   notes?: string;
   tags: string[];
   meanings: MeaningInput[];

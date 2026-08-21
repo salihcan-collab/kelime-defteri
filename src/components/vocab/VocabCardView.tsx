@@ -41,7 +41,6 @@ export function VocabCardView({ card }: { card: CardWithRelations }) {
               <Badge tone="accent">{CARD_STATUS_LABELS[card.status]}</Badge>
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-3">
-              <PronunciationPlayer word={card.vocabulary} ipa={card.ipa} audioUrl={card.audioUrl} />
               <CambridgeLookupLink word={card.vocabulary} />
             </div>
           </div>
@@ -98,23 +97,6 @@ export function VocabCardView({ card }: { card: CardWithRelations }) {
           <h2 className="mb-2 font-heading text-sm font-semibold uppercase tracking-wide text-ink-soft">Collocations &amp; Context</h2>
           <p className="whitespace-pre-wrap text-ink">{card.collocations}</p>
         </Panel>
-      )}
-
-      {(card.synonyms || card.antonyms) && (
-        <div className="grid gap-5 sm:grid-cols-2">
-          {card.synonyms && (
-            <Panel>
-              <h2 className="mb-2 font-heading text-sm font-semibold uppercase tracking-wide text-ink-soft">Synonyms</h2>
-              <p className="whitespace-pre-wrap text-ink">{card.synonyms}</p>
-            </Panel>
-          )}
-          {card.antonyms && (
-            <Panel>
-              <h2 className="mb-2 font-heading text-sm font-semibold uppercase tracking-wide text-ink-soft">Antonyms</h2>
-              <p className="whitespace-pre-wrap text-ink">{card.antonyms}</p>
-            </Panel>
-          )}
-        </div>
       )}
 
       {card.mnemonic && (
@@ -207,6 +189,23 @@ function MeaningDetail({
               </li>
             ))}
           </ul>
+        </div>
+      )}
+
+      {(meaning.synonyms || meaning.antonyms) && (
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          {meaning.synonyms && (
+            <div>
+              <h2 className="mb-1 font-heading text-sm font-semibold uppercase tracking-wide text-ink-soft">Synonyms</h2>
+              <p className="text-ink">{meaning.synonyms}</p>
+            </div>
+          )}
+          {meaning.antonyms && (
+            <div>
+              <h2 className="mb-1 font-heading text-sm font-semibold uppercase tracking-wide text-ink-soft">Antonyms</h2>
+              <p className="text-ink">{meaning.antonyms}</p>
+            </div>
+          )}
         </div>
       )}
     </div>

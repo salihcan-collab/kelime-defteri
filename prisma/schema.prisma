@@ -46,8 +46,6 @@ model Card {
   audioUrl       String?
   mnemonic       String?
   collocations   String?
-  synonyms       String?
-  antonyms       String?
   notes          String?
 
   // SRS (SM-2) state
@@ -93,6 +91,11 @@ model Meaning {
   cefr         String? // A1 | A2 | B1 | B2 | C1 | C2
   definitionEn String?
   definitionTr String?
+  // Per-sense, not per-card — "object" (thing) and "object" (protest) don't
+  // share synonyms even though one shares a part of speech with the other's
+  // sibling sense.
+  synonyms     String?
+  antonyms     String?
 
   examples     ExampleSentence[]
 

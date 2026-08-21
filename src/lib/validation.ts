@@ -29,6 +29,9 @@ export const meaningInputSchema = z.object({
   cefr: cefrEnum.optional().nullable(),
   definitionEn: z.string().max(2000).optional().nullable(),
   definitionTr: z.string().max(2000).optional().nullable(),
+  // Per-sense, not per-card — see the note in schema.prisma.
+  synonyms: z.string().max(500).optional().nullable(),
+  antonyms: z.string().max(500).optional().nullable(),
   examples: z.array(exampleSentenceInput).default([]),
 });
 
@@ -38,8 +41,6 @@ export const cardInputSchema = z.object({
   audioUrl: z.string().max(1000).optional().nullable(),
   mnemonic: z.string().max(2000).optional().nullable(),
   collocations: z.string().max(2000).optional().nullable(),
-  synonyms: z.string().max(500).optional().nullable(),
-  antonyms: z.string().max(500).optional().nullable(),
   notes: z.string().max(2000).optional().nullable(),
   tags: z.array(z.string().trim().min(1).max(40)).default([]),
   // At least one sense — even a blank one, so a freshly-created card
