@@ -28,7 +28,7 @@ export function VocabFlashCard({ card }: { card: CardWithRelations }) {
       href={`/cards/${card.id}`}
       className="relative flex h-full flex-col gap-2 rounded-xl border border-line bg-card p-4 pl-6 shadow-notebook transition hover:-translate-y-0.5 hover:shadow-lift"
     >
-      <span className={`absolute inset-y-3 left-0 w-1.5 rounded-full ${STATUS_STRIPE[card.status]}`} aria-hidden="true" />
+      <span className={`absolute inset-y-3 left-0 w-3 rounded-r-full ${STATUS_STRIPE[card.status]}`} aria-hidden="true" />
 
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
