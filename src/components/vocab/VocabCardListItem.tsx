@@ -28,7 +28,7 @@ export function VocabCardListItem({ card }: { card: CardWithRelations }) {
       href={`/cards/${card.id}`}
       className="relative flex items-center justify-between gap-3 rounded-xl border border-line bg-card py-3 pl-6 pr-4 shadow-notebook transition hover:-translate-y-0.5 hover:shadow-lift"
     >
-      <span className={`absolute inset-y-2.5 left-2 w-1.5 rounded-full ${STATUS_STRIPE[card.status]}`} aria-hidden="true" />
+      <span className={`absolute inset-y-3 left-0 w-1.5 rounded-full ${STATUS_STRIPE[card.status]}`} aria-hidden="true" />
 
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">

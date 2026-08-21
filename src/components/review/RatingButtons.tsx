@@ -16,7 +16,7 @@ export function RatingButtons({ onRate, disabled }: { onRate: (rating: ReviewRat
       {RATINGS.map((r) => (
         <Button key={r.rating} type="button" disabled={disabled} onClick={() => onRate(r.rating)} className={r.className} size="lg">
           <span className="flex flex-col items-center">
-            <span className="text-lg font-semibold">{r.label}</span>
+            <span className="text-2xl font-bold">{r.label}</span>
             <span className="text-[10px] font-normal opacity-80">{r.hint}</span>
           </span>
         </Button>

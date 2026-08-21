@@ -10,6 +10,24 @@ import { RatingButtons } from '@/components/review/RatingButtons';
 import { PART_OF_SPEECH_LABELS, primaryMeaning } from '@/types';
 import type { CardWithRelations, ReviewRating } from '@/types';
 
+/** Lightbulb icon for the memory-hint toggle — same hand-drawn-icon
+ * treatment as PronunciationPlayer's speaker, so the two recall aids
+ * next to the headword read as a matched pair instead of one icon
+ * button next to a plain text link. */
+function HintIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+      <path
+        d="M12 3a6 6 0 0 0-3.6 10.8c.6.45.9 1.05.9 1.7V16h5.4v-.5c0-.65.3-1.25.9-1.7A6 6 0 0 0 12 3Z"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+      />
+      <path d="M9.5 18.5h5M10.3 21h3.4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export function ReviewSession() {
   const [queue, setQueue] = useState<CardWithRelations[] | null>(null);
   const [revealed, setRevealed] = useState(false);
@@ -86,25 +104,35 @@ export function ReviewSession() {
 
         <div className="mt-6 text-center">
           <h1 className="font-heading text-3xl font-semibold text-ink">{card.vocabulary}</h1>
-          <div className="mt-2 flex justify-center">
+          <div className="mt-2 flex items-center justify-center gap-2">
             <PronunciationPlayer word={card.vocabulary} ipa={card.ipa} audioUrl={card.audioUrl} />
+            {/* The memory hook is a recall aid, so it's offered while the
+                user is still struggling — not tucked behind "Show answer"
+                — but stays hidden until asked for so it doesn't spoil the
+                recall attempt. Same icon-button treatment as the
+                pronunciation player, so the pair of recall aids reads as
+                one deliberate row instead of a button next to plain text. */}
+            {card.mnemonic && (
+              <button
+                type="button"
+                onClick={() => setHintOpen((v) => !v)}
+                title={hintOpen ? 'Hide memory hint' : 'Show memory hint'}
+                aria-label={hintOpen ? 'Hide memory hint' : 'Show memory hint'}
+                aria-pressed={hintOpen}
+                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition hover:opacity-80 ${
+                  hintOpen ? 'bg-accent text-accent-ink' : 'bg-accent-soft text-accent'
+                }`}
+              >
+                <HintIcon className="h-4 w-4" />
+              </button>
+            )}
           </div>
         </div>
 
-        {/* The memory hook is a recall aid, so it's offered while the user is
-            still struggling — not tucked behind "Show answer" — but stays
-            hidden until asked for so it doesn't spoil the recall attempt. */}
-        {card.mnemonic && (
-          <div className="mt-4 text-center">
-            {!hintOpen ? (
-              <button type="button" onClick={() => setHintOpen(true)} className="text-xs font-medium text-accent hover:underline">
-                💡 Need a hint?
-              </button>
-            ) : (
-              <div className="mx-auto max-w-sm rounded-lg bg-accent-soft/50 p-2.5 text-left">
-                <p className="text-ink">{card.mnemonic}</p>
-              </div>
-            )}
+        {card.mnemonic && hintOpen && (
+          <div className="mx-auto mt-4 flex max-w-sm items-start gap-2 rounded-lg bg-accent-soft/50 p-2.5 text-left">
+            <HintIcon className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
+            <p className="text-ink">{card.mnemonic}</p>
           </div>
         )}
 
