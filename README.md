@@ -177,22 +177,12 @@ quiz questions.
 
 ### Deploying so you can actually use it day-to-day
 
-`render.yaml` in the repo root is a [Render Blueprint](https://render.com/docs/infrastructure-as-code):
-push to Render, choose "New +" → "Blueprint", and it provisions a free
-web service plus a free managed Postgres database from that one file —
-no manual configuration. You'll be prompted to paste in `AUTH_SECRET`
-(generate one with `openssl rand -base64 32`) and, optionally,
-`OPENAI_API_KEY`.
-
-The free web service plan sleeps after 15 minutes with no visitors and
-takes a few seconds to wake back up on the next request — a fine
-trade-off for two people using this casually. Change `plan: free` to
-`plan: starter` on the service in `render.yaml` (~$7/month) if you want
-it always-on instead; no other changes needed.
-
-Any other Postgres-compatible host works too (Railway, Fly.io, Supabase,
-a VPS with Postgres installed) — just set `DATABASE_URL` to that
-database's connection string and run `npm run build && npm run start`.
+Any Postgres-compatible host works (Railway, Fly.io, Supabase, a VPS with
+Postgres installed): provision a Postgres database, set `DATABASE_URL` to
+its connection string, set `AUTH_SECRET` (generate one with `openssl rand
+-base64 32`) and optionally `OPENAI_API_KEY`, then run
+`npm run build && npm run start`. `npm run db:push` syncs the schema to
+whichever database `DATABASE_URL` points at.
 
 ### Scripts
 
