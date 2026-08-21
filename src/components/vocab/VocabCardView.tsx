@@ -35,7 +35,7 @@ export function VocabCardView({ card }: { card: CardWithRelations }) {
   return (
     <div className="space-y-5">
       <Panel className="relative pl-7">
-        <span className={`absolute inset-y-4 left-0 w-3 rounded-r-full ${STATUS_STRIPE[card.status]}`} aria-hidden="true" />
+        <span className={`absolute inset-y-4 left-0 w-[0.6rem] rounded-r-full ${STATUS_STRIPE[card.status]}`} aria-hidden="true" />
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <div className="flex flex-wrap items-center gap-3">
