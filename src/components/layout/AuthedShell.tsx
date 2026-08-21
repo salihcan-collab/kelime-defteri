@@ -22,7 +22,8 @@ export async function AuthedShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen flex-col">
       <Navbar userEmail={session.email} />
-      <main className="mx-auto w-full max-w-6xl flex-1 px-4 pb-16 pt-6 sm:px-6 lg:px-8">{children}</main>
+      {/* Extra bottom padding on phones clears the fixed tab bar in Navbar. */}
+      <main className="mx-auto w-full max-w-6xl flex-1 px-4 pb-24 pt-6 sm:px-6 sm:pb-16 lg:px-8">{children}</main>
     </div>
   );
 }
