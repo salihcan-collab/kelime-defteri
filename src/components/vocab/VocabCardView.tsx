@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { Panel, Badge } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { PronunciationPlayer } from '@/components/vocab/PronunciationPlayer';
+import { CambridgeLookupLink } from '@/components/vocab/CambridgeLookupLink';
 import { HighlightedSentence } from '@/components/vocab/HighlightedSentence';
 import { CARD_STATUS_LABELS, PART_OF_SPEECH_LABELS } from '@/types';
 import type { CardWithRelations } from '@/types';
@@ -35,8 +36,9 @@ export function VocabCardView({ card }: { card: CardWithRelations }) {
               <h1 className="font-heading text-3xl font-semibold text-ink">{card.vocabulary}</h1>
               <Badge tone="accent">{CARD_STATUS_LABELS[card.status]}</Badge>
             </div>
-            <div className="mt-2">
+            <div className="mt-2 flex flex-wrap items-center gap-3">
               <PronunciationPlayer word={card.vocabulary} ipa={card.ipa} audioUrl={card.audioUrl} />
+              <CambridgeLookupLink word={card.vocabulary} />
             </div>
           </div>
           <div className="flex gap-2">

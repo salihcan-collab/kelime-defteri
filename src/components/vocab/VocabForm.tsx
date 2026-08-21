@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { FieldLabel, FieldWrapper, Select, TextArea, TextInput } from '@/components/ui/Field';
 import { TagInput } from '@/components/vocab/TagInput';
 import { AIFieldButton } from '@/components/vocab/AIFieldButton';
+import { CambridgeLookupLink } from '@/components/vocab/CambridgeLookupLink';
 import { HighlightedSentence } from '@/components/vocab/HighlightedSentence';
 import { PronunciationPlayer } from '@/components/vocab/PronunciationPlayer';
 import { findWordSpans, serializeSpans } from '@/lib/highlight';
@@ -239,7 +240,9 @@ export function VocabForm({ card, aiConfigured }: { card?: CardWithRelations; ai
         </div>
 
         <FieldWrapper>
-          <FieldLabel htmlFor="vocabulary">Vocabulary</FieldLabel>
+          <FieldLabel htmlFor="vocabulary" action={<CambridgeLookupLink word={form.vocabulary} />}>
+            Vocabulary
+          </FieldLabel>
           <TextInput id="vocabulary" required value={form.vocabulary} onChange={(e) => set('vocabulary', e.target.value)} placeholder="e.g. resilient" />
         </FieldWrapper>
 
