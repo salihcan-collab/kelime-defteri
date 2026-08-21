@@ -23,6 +23,11 @@ export function VocabCardListItem({ card }: { card: CardWithRelations }) {
           <span className="font-heading text-base font-semibold text-ink">{card.vocabulary}</span>
           {card.ipa && <span className="font-mono text-xs text-ink-soft">{card.ipa}</span>}
           {meaning?.partOfSpeech && <Badge tone="neutral">{PART_OF_SPEECH_LABELS[meaning.partOfSpeech]}</Badge>}
+          {meaning?.cefr && (
+            <span className="rounded-full border border-accent/40 bg-accent-soft px-1.5 py-0.5 text-[10px] font-bold text-accent" title="CEFR difficulty level">
+              {meaning.cefr}
+            </span>
+          )}
         </div>
         {meaning?.definitionEn && <p className="mt-1 truncate text-sm text-ink-soft">{meaning.definitionEn}</p>}
         {card.tags.length > 0 && (

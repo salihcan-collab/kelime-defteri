@@ -36,6 +36,11 @@ export function VocabFlashCard({ card }: { card: CardWithRelations }) {
 
       <div className="flex flex-wrap items-center gap-1.5">
         {meaning?.partOfSpeech && <Badge tone="neutral">{PART_OF_SPEECH_LABELS[meaning.partOfSpeech]}</Badge>}
+        {meaning?.cefr && (
+          <span className="rounded-full border border-accent/40 bg-accent-soft px-1.5 py-0.5 text-[10px] font-bold text-accent" title="CEFR difficulty level">
+            {meaning.cefr}
+          </span>
+        )}
         {extraMeanings > 0 && (
           <Badge tone="accent" title={`${extraMeanings + 1} meanings recorded for this word`}>
             +{extraMeanings} sense{extraMeanings === 1 ? '' : 's'}

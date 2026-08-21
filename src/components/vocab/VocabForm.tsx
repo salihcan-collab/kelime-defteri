@@ -11,11 +11,17 @@ import { CambridgeLookupLink } from '@/components/vocab/CambridgeLookupLink';
 import { HighlightedSentence } from '@/components/vocab/HighlightedSentence';
 import { PronunciationPlayer } from '@/components/vocab/PronunciationPlayer';
 import { findWordSpans, serializeSpans } from '@/lib/highlight';
-import { PART_OF_SPEECH_LABELS, PARTS_OF_SPEECH } from '@/types';
-import type { CardWithRelations, PartOfSpeech } from '@/types';
+import { groupMeaningsByPos } from '@/lib/meaningGroups';
+import { CEFR_LEVELS, PART_OF_SPEECH_LABELS, PARTS_OF_SPEECH } from '@/types';
+import type { CardWithRelations, CefrLevel, PartOfSpeech } from '@/types';
+
+const SENSE_LETTERS = 'abcdefghijklmnopqrstuvwxyz';
 
 interface MeaningFormState {
   partOfSpeech: PartOfSpeech | '';
+  ipa: string;
+  label: string;
+  cefr: CefrLevel | '';
   definitionEn: string;
   definitionTr: string;
   examples: string[];
@@ -34,7 +40,7 @@ interface FormState {
   notes: string;
 }
 
-const BLANK_MEANING: MeaningFormState = { partOfSpeech: '', definitionEn: '', definitionTr: '', examples: [''] };
+const BLANK_MEANING: MeaningFormState = { partOfSpeech: '', ipa: '', label: '', cefr: '', definitionEn: '', definitionTr: '', examples: [''] };
 
 function initialStateFromCard(card?: CardWithRelations): FormState {
   if (!card) {
@@ -59,6 +65,9 @@ function initialStateFromCard(card?: CardWithRelations): FormState {
     meanings: card.meanings.length
       ? card.meanings.map((m) => ({
           partOfSpeech: m.partOfSpeech ?? '',
+          ipa: m.ipa ?? '',
+          label: m.label ?? '',
+          cefr: m.cefr ?? '',
           definitionEn: m.definitionEn ?? '',
           definitionTr: m.definitionTr ?? '',
           examples: m.examples.length ? m.examples.map((e) => e.text) : [''],
@@ -96,8 +105,16 @@ export function VocabForm({ card, aiConfigured }: { card?: CardWithRelations; ai
   function updateMeaning(index: number, patch: Partial<MeaningFormState>) {
     setForm((prev) => ({ ...prev, meanings: prev.meanings.map((m, i) => (i === index ? { ...m, ...patch } : m)) }));
   }
-  function addMeaning() {
-    setForm((prev) => ({ ...prev, meanings: [...prev.meanings, { ...BLANK_MEANING, examples: [''] }] }));
+  /** Adds a new blank sense, optionally pre-assigned to a part of speech so it joins that group immediately. */
+  function addMeaning(partOfSpeech: PartOfSpeech | '' = '') {
+    setForm((prev) => ({ ...prev, meanings: [...prev.meanings, { ...BLANK_MEANING, partOfSpeech, examples: [''] }] }));
+  }
+  /** Changing the shared "Part of Speech" select for a group re-tags every sense currently in it. */
+  function updateGroupPartOfSpeech(indices: number[], partOfSpeech: PartOfSpeech | '') {
+    setForm((prev) => ({
+      ...prev,
+      meanings: prev.meanings.map((m, i) => (indices.includes(i) ? { ...m, partOfSpeech } : m)),
+    }));
   }
   function removeMeaning(index: number) {
     setForm((prev) => ({ ...prev, meanings: prev.meanings.filter((_, i) => i !== index) }));
@@ -142,7 +159,9 @@ export function VocabForm({ card, aiConfigured }: { card?: CardWithRelations; ai
       setForm((prev) => {
         const meanings = [...prev.meanings];
         meanings[0] = {
+          ...meanings[0],
           partOfSpeech: draft.partOfSpeech ?? meanings[0].partOfSpeech,
+          cefr: draft.cefr ?? meanings[0].cefr,
           definitionEn: draft.definitionEn ?? meanings[0].definitionEn,
           definitionTr: draft.definitionTr ?? meanings[0].definitionTr,
           examples: draft.exampleSentences?.length ? draft.exampleSentences : meanings[0].examples,
@@ -160,7 +179,7 @@ export function VocabForm({ card, aiConfigured }: { card?: CardWithRelations; ai
         };
       });
       setNotice(
-        'AI drafted the primary meaning — review and tweak it, then add any other common senses below with "+ Add another meaning" if the word has them.',
+        'AI drafted the primary meaning — review and tweak it, then use "+ Add another sense" or "+ Add a different part of speech" below if the word has other common meanings.',
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : 'AI generation failed');
@@ -204,6 +223,9 @@ export function VocabForm({ card, aiConfigured }: { card?: CardWithRelations; ai
       tags: form.tags,
       meanings: form.meanings.map((m) => ({
         partOfSpeech: m.partOfSpeech || null,
+        ipa: m.ipa || null,
+        label: m.label || null,
+        cefr: m.cefr || null,
         definitionEn: m.definitionEn || null,
         definitionTr: m.definitionTr || null,
         examples: m.examples.filter((ex) => ex.trim()).map((text) => ({ text, source: 'USER' as const })),
@@ -225,6 +247,8 @@ export function VocabForm({ card, aiConfigured }: { card?: CardWithRelations; ai
       setSaving(false);
     }
   }
+
+  const meaningGroups = groupMeaningsByPos(form.meanings);
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
@@ -273,27 +297,31 @@ export function VocabForm({ card, aiConfigured }: { card?: CardWithRelations; ai
         </FieldWrapper>
 
         <div className="mb-4 mt-6 border-t border-line pt-5">
-          <FieldLabel hint="Some words have more than one common sense — e.g. object (noun) vs. object (verb), or make out (perceive / fare / kiss). Add one block per sense.">
+          <FieldLabel hint="Grouped by part of speech — e.g. object (noun) vs. object (verb). Within a part of speech, add another sense for words like make out (perceive / fare / kiss).">
             Meanings
           </FieldLabel>
           <div className="space-y-4">
-            {form.meanings.map((meaning, mi) => (
-              <MeaningBlock
-                key={mi}
-                index={mi}
-                meaning={meaning}
+            {meaningGroups.map((group, gi) => (
+              <MeaningGroupBlock
+                key={group.partOfSpeech ?? `blank-${gi}`}
+                group={group}
+                groupIndex={gi}
+                totalGroups={meaningGroups.length}
                 word={form.vocabulary}
                 aiConfigured={aiConfigured}
-                removable={form.meanings.length > 1}
-                onChange={(patch) => updateMeaning(mi, patch)}
-                onRemove={() => removeMeaning(mi)}
-                onExampleChange={(ei, text) => updateMeaningExample(mi, ei, text)}
-                onExampleAdd={() => addMeaningExample(mi)}
-                onExampleRemove={(ei) => removeMeaningExample(mi, ei)}
+                canRemoveSense={form.meanings.length > 1}
+                onPosChange={(pos) => updateGroupPartOfSpeech(group.items.map((it) => it.index), pos)}
+                onIpaChange={(ipa) => updateMeaning(group.items[0].index, { ipa })}
+                onAddSense={() => addMeaning(group.partOfSpeech ?? '')}
+                onChange={updateMeaning}
+                onRemove={removeMeaning}
+                onExampleChange={updateMeaningExample}
+                onExampleAdd={addMeaningExample}
+                onExampleRemove={removeMeaningExample}
               />
             ))}
-            <Button type="button" variant="outline" size="sm" onClick={addMeaning}>
-              + Add another meaning
+            <Button type="button" variant="outline" size="sm" onClick={() => addMeaning('')}>
+              + Add a different part of speech
             </Button>
           </div>
         </div>
@@ -353,11 +381,116 @@ export function VocabForm({ card, aiConfigured }: { card?: CardWithRelations; ai
   );
 }
 
+/**
+ * One part-of-speech group in the editor — a shared "Part of Speech" +
+ * "Pronunciation" pair up top (stress often shifts by word class, e.g.
+ * "OB-ject" noun vs. "ob-JECT" verb), then one MeaningBlock per sense
+ * within that part of speech. Re-derived from form.meanings on every
+ * render (see groupMeaningsByPos), so changing a sense's part of speech
+ * moves it into a different group automatically.
+ */
+function MeaningGroupBlock({
+  group,
+  groupIndex,
+  totalGroups,
+  word,
+  aiConfigured,
+  canRemoveSense,
+  onPosChange,
+  onIpaChange,
+  onAddSense,
+  onChange,
+  onRemove,
+  onExampleChange,
+  onExampleAdd,
+  onExampleRemove,
+}: {
+  group: ReturnType<typeof groupMeaningsByPos<MeaningFormState>>[number];
+  groupIndex: number;
+  totalGroups: number;
+  word: string;
+  aiConfigured: boolean;
+  canRemoveSense: boolean;
+  onPosChange: (pos: PartOfSpeech | '') => void;
+  onIpaChange: (ipa: string) => void;
+  onAddSense: () => void;
+  onChange: (index: number, patch: Partial<MeaningFormState>) => void;
+  onRemove: (index: number) => void;
+  onExampleChange: (index: number, exampleIndex: number, text: string) => void;
+  onExampleAdd: (index: number) => void;
+  onExampleRemove: (index: number, exampleIndex: number) => void;
+}) {
+  const groupContext = { partOfSpeech: group.partOfSpeech ?? '' };
+  const firstIpa = group.items[0].meaning.ipa;
+
+  return (
+    <div className="rounded-2xl border-2 border-line/70 p-4">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <span className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
+          Part of speech {totalGroups > 1 && `— ${groupIndex + 1} of ${totalGroups}`}
+        </span>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <FieldWrapper>
+          <FieldLabel
+            htmlFor={`pos-${groupIndex}`}
+            action={<AIFieldButton field="partOfSpeech" word={word} context={{ definitionEn: group.items[0].meaning.definitionEn }} disabled={!aiConfigured} onResult={(r) => onPosChange(r.partOfSpeech as PartOfSpeech)} />}
+          >
+            Part of Speech
+          </FieldLabel>
+          <Select id={`pos-${groupIndex}`} value={group.partOfSpeech ?? ''} onChange={(e) => onPosChange(e.target.value as PartOfSpeech | '')}>
+            <option value="">Select…</option>
+            {PARTS_OF_SPEECH.map((p) => (
+              <option key={p} value={p}>
+                {PART_OF_SPEECH_LABELS[p]}
+              </option>
+            ))}
+          </Select>
+        </FieldWrapper>
+        <FieldWrapper>
+          <FieldLabel
+            htmlFor={`group-ipa-${groupIndex}`}
+            hint="optional — only if it differs from the word's main pronunciation"
+            action={<AIFieldButton field="ipa" word={word} context={groupContext} disabled={!aiConfigured} onResult={(r) => onIpaChange(String(r.ipa ?? ''))} />}
+          >
+            Pronunciation for this part of speech
+          </FieldLabel>
+          <TextInput id={`group-ipa-${groupIndex}`} value={firstIpa} onChange={(e) => onIpaChange(e.target.value)} placeholder="/əbˈdʒɛkt/" className="font-mono" />
+        </FieldWrapper>
+      </div>
+
+      <div className="mt-4 space-y-4">
+        {group.items.map(({ meaning, index }, si) => (
+          <MeaningBlock
+            key={index}
+            index={index}
+            meaning={meaning}
+            word={word}
+            aiConfigured={aiConfigured}
+            senseLetter={group.items.length > 1 ? SENSE_LETTERS[si] ?? String(si + 1) : null}
+            removable={canRemoveSense}
+            onChange={(patch) => onChange(index, patch)}
+            onRemove={() => onRemove(index)}
+            onExampleChange={(ei, text) => onExampleChange(index, ei, text)}
+            onExampleAdd={() => onExampleAdd(index)}
+            onExampleRemove={(ei) => onExampleRemove(index, ei)}
+          />
+        ))}
+        <Button type="button" variant="outline" size="sm" onClick={onAddSense}>
+          + Add another sense for this part of speech
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function MeaningBlock({
   index,
   meaning,
   word,
   aiConfigured,
+  senseLetter,
   removable,
   onChange,
   onRemove,
@@ -369,6 +502,7 @@ function MeaningBlock({
   meaning: MeaningFormState;
   word: string;
   aiConfigured: boolean;
+  senseLetter: string | null;
   removable: boolean;
   onChange: (patch: Partial<MeaningFormState>) => void;
   onRemove: () => void;
@@ -381,12 +515,21 @@ function MeaningBlock({
   return (
     <div className="rounded-xl border border-line bg-paper p-4">
       <div className="mb-3 flex items-center justify-between">
-        <span className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
-          Meaning {index + 1}
+        <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-ink-soft">
+          {senseLetter ? (
+            <>
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-accent-soft text-[11px] font-semibold normal-case text-accent">
+                {senseLetter}
+              </span>
+              Sense {senseLetter}
+            </>
+          ) : (
+            'Meaning'
+          )}
         </span>
         {removable && (
           <Button type="button" variant="ghost" size="sm" onClick={onRemove}>
-            🗑️ Remove meaning
+            🗑️ Remove {senseLetter ? 'sense' : 'meaning'}
           </Button>
         )}
       </div>
@@ -394,21 +537,31 @@ function MeaningBlock({
       <div className="grid gap-4 sm:grid-cols-2">
         <FieldWrapper>
           <FieldLabel
-            htmlFor={`pos-${index}`}
-            action={<AIFieldButton field="partOfSpeech" word={word} context={context} disabled={!aiConfigured} onResult={(r) => onChange({ partOfSpeech: r.partOfSpeech as PartOfSpeech })} />}
+            htmlFor={`label-${index}`}
+            hint="optional"
+            action={<AIFieldButton field="label" word={word} context={context} disabled={!aiConfigured} onResult={(r) => onChange({ label: String(r.label ?? '') })} />}
           >
-            Parts of Speech
+            Sense label
           </FieldLabel>
-          <Select id={`pos-${index}`} value={meaning.partOfSpeech} onChange={(e) => onChange({ partOfSpeech: e.target.value as PartOfSpeech | '' })}>
-            <option value="">Select…</option>
-            {PARTS_OF_SPEECH.map((p) => (
-              <option key={p} value={p}>
-                {PART_OF_SPEECH_LABELS[p]}
+          <TextInput id={`label-${index}`} value={meaning.label} onChange={(e) => onChange({ label: e.target.value })} placeholder="e.g. THING, PURPOSE, CAUSE" />
+        </FieldWrapper>
+        <FieldWrapper>
+          <FieldLabel
+            htmlFor={`cefr-${index}`}
+            hint="optional"
+            action={<AIFieldButton field="cefr" word={word} context={context} disabled={!aiConfigured} onResult={(r) => onChange({ cefr: r.cefr as CefrLevel })} />}
+          >
+            CEFR level
+          </FieldLabel>
+          <Select id={`cefr-${index}`} value={meaning.cefr} onChange={(e) => onChange({ cefr: e.target.value as CefrLevel | '' })}>
+            <option value="">—</option>
+            {CEFR_LEVELS.map((level) => (
+              <option key={level} value={level}>
+                {level}
               </option>
             ))}
           </Select>
         </FieldWrapper>
-        <div />
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">

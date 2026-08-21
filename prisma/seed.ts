@@ -5,6 +5,9 @@ const prisma = new PrismaClient();
 
 type SampleMeaning = {
   partOfSpeech: 'NOUN' | 'VERB' | 'ADJECTIVE' | 'ADVERB' | 'PREPOSITION' | 'CONJUNCTION' | 'PRONOUN' | 'INTERJECTION' | 'PHRASAL_VERB';
+  ipa?: string;
+  label?: string;
+  cefr?: 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2';
   definitionEn: string;
   definitionTr: string;
   examples: string[];
@@ -33,6 +36,7 @@ const SAMPLE_CARDS: SampleCard[] = [
     meanings: [
       {
         partOfSpeech: 'ADJECTIVE',
+        cefr: 'C1',
         definitionEn: 'Able to withstand or recover quickly from difficult conditions.',
         definitionTr: 'Zorluklardan çabuk toparlanabilen, dirençli.',
         examples: [
@@ -53,6 +57,7 @@ const SAMPLE_CARDS: SampleCard[] = [
     meanings: [
       {
         partOfSpeech: 'ADJECTIVE',
+        cefr: 'C1',
         definitionEn: 'Showing great attention to detail; very careful and precise.',
         definitionTr: 'Titiz, ayrıntılara büyük özen gösteren.',
         examples: [
@@ -73,6 +78,7 @@ const SAMPLE_CARDS: SampleCard[] = [
     meanings: [
       {
         partOfSpeech: 'ADJECTIVE',
+        cefr: 'C1',
         definitionEn: 'Open to more than one interpretation; not having one obvious meaning.',
         definitionTr: 'Belirsiz, birden fazla anlama gelebilen.',
         examples: [
@@ -93,6 +99,7 @@ const SAMPLE_CARDS: SampleCard[] = [
     meanings: [
       {
         partOfSpeech: 'PHRASAL_VERB',
+        cefr: 'A2',
         definitionEn: 'To stop trying to do something; to quit.',
         definitionTr: 'Vazgeçmek, pes etmek.',
         examples: [
@@ -103,29 +110,78 @@ const SAMPLE_CARDS: SampleCard[] = [
     ],
   },
   {
+    // Two-sense showcase across *different* parts of speech — stress and
+    // pronunciation shift with word class, so each sense group carries its
+    // own per-part-of-speech ipa override.
     vocabulary: 'object',
-    ipa: '/ˈɒbdʒɪkt/ (noun), /əbˈdʒɛkt/ (verb)',
+    ipa: '/ˈɒbdʒɪkt/',
     mnemonic: 'The stress moves: an OBject is a THING (stress up front); to obJECT is to push back (stress jumps to the end).',
     collocations: 'object of desire, direct object, object strongly, object to a proposal',
     tags: ['grammar', 'academic'],
     meanings: [
       {
         partOfSpeech: 'NOUN',
-        definitionEn: 'A thing that can be seen or touched but is not alive; also, the target or goal of an action or feeling.',
-        definitionTr: 'Cansız, elle tutulur bir şey; ayrıca bir eylemin veya duygunun hedefi.',
-        examples: [
-          'There was a strange object lying on the table.',
-          'Her main object in life was to help others.',
-        ],
+        ipa: '/ˈɒbdʒɪkt/',
+        label: 'THING',
+        cefr: 'A2',
+        definitionEn: 'A thing that can be seen or touched but is not alive.',
+        definitionTr: 'Cansız, elle tutulur bir şey.',
+        examples: ['There was a strange object lying on the table.'],
+      },
+      {
+        partOfSpeech: 'NOUN',
+        ipa: '/ˈɒbdʒɪkt/',
+        label: 'PURPOSE',
+        cefr: 'B2',
+        definitionEn: 'The goal or aim of an action or effort.',
+        definitionTr: 'Bir eylemin veya çabanın amacı, hedefi.',
+        examples: ['Her main object in life was to help others.'],
       },
       {
         partOfSpeech: 'VERB',
+        ipa: '/əbˈdʒɛkt/',
+        cefr: 'B1',
         definitionEn: 'To express disapproval of or disagreement with something.',
         definitionTr: 'Bir şeye itiraz etmek, karşı çıkmak.',
         examples: [
           'Several residents objected to the new construction plan.',
           'I object to being spoken to in that tone.',
         ],
+      },
+    ],
+  },
+  {
+    // Three senses within the *same* part of speech — showcases the
+    // a/b/c sub-sense lettering inside a single "phrasal verb" header.
+    vocabulary: 'make out',
+    ipa: '/meɪk aʊt/',
+    mnemonic: 'You have to "make out" shapes in the fog before you can "make out" what someone means, or make out okay despite the fog.',
+    collocations: 'make out a figure in the distance, make out fine, make out with someone',
+    tags: ['phrasal-verbs', 'daily-life'],
+    meanings: [
+      {
+        partOfSpeech: 'PHRASAL_VERB',
+        label: 'PERCEIVE',
+        cefr: 'B2',
+        definitionEn: 'To manage to see, hear, or understand something with difficulty.',
+        definitionTr: 'Güçlükle görmek, duymak veya anlamak; seçebilmek.',
+        examples: ['Through the fog, we could just make out the shape of the lighthouse.'],
+      },
+      {
+        partOfSpeech: 'PHRASAL_VERB',
+        label: 'FARE',
+        cefr: 'B2',
+        definitionEn: 'To manage or fare in a situation (informal, especially American English).',
+        definitionTr: 'Bir durumda idare etmek, başarılı olmak (gündelik dilde).',
+        examples: ['How did you make out on your final exams?'],
+      },
+      {
+        partOfSpeech: 'PHRASAL_VERB',
+        label: 'KISS',
+        cefr: 'B2',
+        definitionEn: 'To kiss and touch someone in a romantic/sexual way (informal).',
+        definitionTr: 'Sarılıp öpüşmek (gündelik/argo dilde).',
+        examples: ['They were making out on the porch when the lights came on.'],
       },
     ],
   },
@@ -186,6 +242,9 @@ async function main() {
           create: sample.meanings.map((meaning, mi) => ({
             order: mi,
             partOfSpeech: meaning.partOfSpeech,
+            ipa: meaning.ipa ?? null,
+            label: meaning.label ?? null,
+            cefr: meaning.cefr ?? null,
             definitionEn: meaning.definitionEn,
             definitionTr: meaning.definitionTr,
             examples: {

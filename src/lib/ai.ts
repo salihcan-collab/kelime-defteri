@@ -1,7 +1,8 @@
 import { callStructured } from './openai';
 import { getCached, setCached } from './cache';
 import { lookupDictionary } from './dictionary';
-import type { AiFillableField, PartOfSpeech, QuizQuestion } from '@/types';
+import { CEFR_LEVELS } from '@/types';
+import type { AiFillableField, CefrLevel, PartOfSpeech, QuizQuestion } from '@/types';
 
 /**
  * All AI-assisted content generation for the app. Every function here:
@@ -31,6 +32,7 @@ export interface FullCardDraft {
   definitionEn: string;
   definitionTr: string;
   partOfSpeech: PartOfSpeech;
+  cefr: CefrLevel;
   mnemonic: string;
   collocations: string;
   synonyms: string;
@@ -50,6 +52,11 @@ const FULL_CARD_SCHEMA = {
       type: 'string',
       enum: PARTS_OF_SPEECH_ENUM,
       description: 'Use PHRASAL_VERB (not VERB) for multi-word verbs like "give up" or "work out".',
+    },
+    cefr: {
+      type: 'string',
+      enum: CEFR_LEVELS,
+      description: 'This sense\'s CEFR difficulty level (A1-C2), per standard CEFR vocabulary guidance (e.g. Cambridge English Profile).',
     },
     mnemonic: { type: 'string', description: 'A short, vivid memory hook / mnemonic association to remember the word.' },
     collocations: { type: 'string', description: 'Comma-separated common collocations / phrases using the word.' },
@@ -75,6 +82,7 @@ const FULL_CARD_SCHEMA = {
     'definitionEn',
     'definitionTr',
     'partOfSpeech',
+    'cefr',
     'mnemonic',
     'collocations',
     'synonyms',
@@ -134,6 +142,18 @@ const FIELD_SCHEMAS: Partial<Record<AiFillableField, Record<string, unknown>>> =
     properties: { partOfSpeech: { type: 'string', enum: PARTS_OF_SPEECH_ENUM } },
     required: ['partOfSpeech'],
   },
+  label: {
+    type: 'object',
+    additionalProperties: false,
+    properties: { label: { type: 'string' } },
+    required: ['label'],
+  },
+  cefr: {
+    type: 'object',
+    additionalProperties: false,
+    properties: { cefr: { type: 'string', enum: CEFR_LEVELS } },
+    required: ['cefr'],
+  },
   mnemonic: {
     type: 'object',
     additionalProperties: false,
@@ -169,10 +189,12 @@ const FIELD_SCHEMAS: Partial<Record<AiFillableField, Record<string, unknown>>> =
 };
 
 const FIELD_PROMPTS: Partial<Record<AiFillableField, string>> = {
-  ipa: 'Give the IPA phonetic transcription only.',
+  ipa: 'Give the IPA phonetic transcription only. If a part of speech is given in context and this word\'s stress or pronunciation shifts by part of speech (e.g. "record" as a noun vs. a verb), give the transcription for that specific part of speech.',
   definitionEn: 'Give a clear, concise English definition (1-2 sentences) only.',
   definitionTr: 'Give an accurate Turkish translation/definition only.',
   partOfSpeech: 'Classify the primary part of speech only.',
+  label: 'Give a very short (1-3 word, ALL CAPS) semantic tag distinguishing this specific sense from the word\'s other senses within the same part of speech, e.g. THING, PURPOSE, CAUSE. Only, with no other text. If the given definition is the only sense this word has in this part of speech, return an empty string — no tag needed.',
+  cefr: 'Classify this specific sense\'s CEFR difficulty level (one of A1, A2, B1, B2, C1, C2) per standard CEFR vocabulary guidance (e.g. Cambridge English Profile). Return just the level code.',
   mnemonic: 'Give one vivid, memorable mnemonic / memory hook only, tailored so it is easy to visualize.',
   collocations: 'Give common collocations and set phrases using the word, comma-separated, only.',
   synonyms: 'Give close synonyms, comma-separated, only. If there genuinely are none worth listing, return an empty string.',

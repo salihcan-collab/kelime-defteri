@@ -79,6 +79,18 @@ model Meaning {
   card         Card     @relation(fields: [cardId], references: [id], onDelete: Cascade)
   order        Int      @default(0)
   partOfSpeech String? // NOUN | VERB | ADJECTIVE | ADVERB | PREPOSITION | CONJUNCTION | PRONOUN | INTERJECTION | PHRASAL_VERB
+  // Meanings sharing a partOfSpeech are grouped into one header in the UI
+  // (mirroring how Merriam-Webster splits "1 of 3 noun" / "2 of 3 verb").
+  // `ipa` is a per-part-of-speech pronunciation override — stress often
+  // shifts with word class ("OB-ject" noun vs. "ob-JECT" verb) — and falls
+  // back to Card.ipa when blank. `label` is a short Cambridge-style tag
+  // distinguishing senses within the same part of speech (e.g. "THING" vs
+  // "PURPOSE" for the noun senses of "object"); optional, since most
+  // words only need one sense per part of speech. `cefr` is that sense's
+  // CEFR difficulty level (A1–C2).
+  ipa          String?
+  label        String?
+  cefr         String? // A1 | A2 | B1 | B2 | C1 | C2
   definitionEn String?
   definitionTr String?
 

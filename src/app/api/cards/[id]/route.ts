@@ -76,6 +76,9 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
           create: data.meanings.map((meaning, mi) => ({
             order: mi,
             partOfSpeech: meaning.partOfSpeech || null,
+            ipa: meaning.ipa || null,
+            label: meaning.label || null,
+            cefr: meaning.cefr || null,
             definitionEn: meaning.definitionEn || null,
             definitionTr: meaning.definitionTr || null,
             examples: {

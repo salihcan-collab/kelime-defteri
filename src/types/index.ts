@@ -18,9 +18,12 @@ export type PartOfSpeech =
 export type CardStatus = 'NEW' | 'LEARNING' | 'REVIEW' | 'MASTERED';
 export type ReviewRating = 'AGAIN' | 'HARD' | 'GOOD' | 'EASY';
 export type HighlightStyle = 'BOLD' | 'UNDERLINE' | 'COLOR' | 'BOLD_UNDERLINE';
+export const CEFR_LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'] as const;
+export type CefrLevel = (typeof CEFR_LEVELS)[number];
 
-export type MeaningWithExamples = Omit<Meaning, 'partOfSpeech'> & {
+export type MeaningWithExamples = Omit<Meaning, 'partOfSpeech' | 'cefr'> & {
   partOfSpeech: PartOfSpeech | null;
+  cefr: CefrLevel | null;
   examples: ExampleSentence[];
 };
 
@@ -37,6 +40,9 @@ export function primaryMeaning(card: Pick<CardWithRelations, 'meanings'>): Meani
 
 export interface MeaningInput {
   partOfSpeech?: PartOfSpeech | null;
+  ipa?: string | null;
+  label?: string | null;
+  cefr?: CefrLevel | null;
   definitionEn?: string;
   definitionTr?: string;
   examples: { text: string; source?: 'USER' | 'AI' }[];
@@ -98,6 +104,8 @@ export type AiFillableField =
   | 'definitionEn'
   | 'definitionTr'
   | 'partOfSpeech'
+  | 'label'
+  | 'cefr'
   | 'mnemonic'
   | 'collocations'
   | 'synonyms'

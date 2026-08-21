@@ -12,6 +12,8 @@ export const partOfSpeechEnum = z.enum([
   'INTERJECTION',
 ]);
 
+export const cefrEnum = z.enum(['A1', 'A2', 'B1', 'B2', 'C1', 'C2']);
+
 export const exampleSentenceInput = z.object({
   text: z.string().min(1).max(500),
   source: z.enum(['USER', 'AI']).default('USER'),
@@ -19,6 +21,12 @@ export const exampleSentenceInput = z.object({
 
 export const meaningInputSchema = z.object({
   partOfSpeech: partOfSpeechEnum.optional().nullable(),
+  // Per-part-of-speech pronunciation override (stress often shifts with
+  // word class) and a short Cambridge-style tag distinguishing senses
+  // within the same part of speech — both optional, see schema.prisma.
+  ipa: z.string().max(200).optional().nullable(),
+  label: z.string().max(60).optional().nullable(),
+  cefr: cefrEnum.optional().nullable(),
   definitionEn: z.string().max(2000).optional().nullable(),
   definitionTr: z.string().max(2000).optional().nullable(),
   examples: z.array(exampleSentenceInput).default([]),
@@ -55,7 +63,7 @@ export const settingsUpdateSchema = z.object({
 });
 
 export const aiFieldRequestSchema = z.object({
-  field: z.enum(['ipa', 'definitionEn', 'definitionTr', 'partOfSpeech', 'mnemonic', 'collocations', 'synonyms', 'antonyms', 'examples']),
+  field: z.enum(['ipa', 'definitionEn', 'definitionTr', 'partOfSpeech', 'label', 'cefr', 'mnemonic', 'collocations', 'synonyms', 'antonyms', 'examples']),
   word: z.string().trim().min(1),
   context: z
     .object({
