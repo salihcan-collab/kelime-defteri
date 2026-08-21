@@ -11,7 +11,7 @@ each with their own private login and notebook.
 | Layer | Choice | Why |
 |---|---|---|
 | Framework | **Next.js 15 (App Router) + TypeScript** | One deployable app for UI + API routes; React Server Components keep data fetching simple; trivial to deploy on Vercel, a Node server, or Docker. |
-| Database | **Postgres via Prisma ORM** | Works with any standard Postgres — Render's free managed database (see §5, "Deploying"), Supabase, Neon, or a local instance for development. No SQLite-specific behavior anywhere in the schema, so this is also a one-line `datasource` change away from other Postgres-compatible providers. |
+| Database | **Postgres via Prisma ORM** | Works with any standard Postgres — a free hosted instance (Neon, Supabase, Railway — see §5, "Deploying"), or a local instance for development. No SQLite-specific behavior anywhere in the schema, so this is also a one-line `datasource` change away from other Postgres-compatible providers. |
 | Accounts | **Custom email + password login, capped at 2 accounts** | See §2 below — deliberately minimal since this is a private notebook for you and one other person, not a public app. |
 | Styling | **Tailwind CSS + CSS custom properties** | Six notebook color palettes and four font stacks are implemented as CSS variable sets switched via `data-theme` / `data-font` attributes — no rebuild needed to re-theme, and it composes cleanly with Tailwind utilities. |
 | Client state | **Zustand (persisted)** | Theme/font/highlight-style/preferences painted instantly from `localStorage` (no flash of wrong theme) and mirrored to the `Settings` table so they survive across browsers too. |
@@ -25,7 +25,7 @@ need Supabase's auth, storage, or realtime layers — just a reliable place
 to persist "progress tracking" (retention data, streaks, mastered words,
 full review history) for at most two accounts. Plain Postgres via Prisma
 gets that with no extra product surface to learn, while still deploying
-for free on Render's managed database (see §5). Every table is already
+for free on a hosted Postgres like Neon (see §5). Every table is already
 keyed by `userId`, and the schema uses no Postgres-specific column types,
 so pointing `DATABASE_URL` at Supabase's own Postgres later — to pick up
 its auth/storage/realtime features — is a config change, not a rewrite.
@@ -177,12 +177,31 @@ quiz questions.
 
 ### Deploying so you can actually use it day-to-day
 
-Any Postgres-compatible host works (Railway, Fly.io, Supabase, a VPS with
-Postgres installed): provision a Postgres database, set `DATABASE_URL` to
-its connection string, set `AUTH_SECRET` (generate one with `openssl rand
--base64 32`) and optionally `OPENAI_API_KEY`, then run
-`npm run build && npm run start`. `npm run db:push` syncs the schema to
-whichever database `DATABASE_URL` points at.
+Any Postgres-compatible host works (Neon, Supabase, Railway, Fly.io, a VPS
+with Postgres installed): provision a Postgres database, set
+`DATABASE_URL` to its connection string, set `AUTH_SECRET` (generate one
+with `openssl rand -base64 32`) and optionally `OPENAI_API_KEY`, then run
+`npm run build && npm run start`. The `build` script runs `prisma db push`
+before `next build`, so the database schema is kept in sync with
+`prisma/schema.prisma` automatically on every deploy — no separate
+migration step needed.
+
+The easiest free combination for this app's size (2 accounts, low
+traffic): a **Neon** Postgres database + hosting on **Vercel**, which
+auto-deploys on every push to the connected branch. Steps:
+
+1. Create a free database at [neon.tech](https://neon.tech) and copy its
+   connection string (the **unpooled/direct** one, not the `-pooler`
+   hostname — this app is low-traffic enough that a connection pooler
+   isn't needed, and it keeps `prisma db push` simple).
+2. Create a project at [vercel.com](https://vercel.com), import this
+   GitHub repo, and set it to deploy the `claude/vocab-learning-app-ww31qa`
+   branch (or merge to your default branch first).
+3. In the Vercel project's Environment Variables, set `DATABASE_URL` (from
+   step 1), `AUTH_SECRET` (`openssl rand -base64 32`), and optionally
+   `OPENAI_API_KEY` / `OPENAI_MODEL`.
+4. Deploy. Every future push to that branch redeploys and re-syncs the
+   schema automatically.
 
 ### Scripts
 

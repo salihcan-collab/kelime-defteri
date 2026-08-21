@@ -5,7 +5,7 @@
   "description": "Kelime Defteri — a digital-notebook English vocabulary learning app with AI-assisted card creation, spaced repetition, and quizzes.",
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "prisma db push --accept-data-loss --skip-generate && next build",
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",

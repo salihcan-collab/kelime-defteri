@@ -1,7 +1,7 @@
 // Kelime Defteri — Prisma schema
-// Postgres-backed (works with Render's free managed Postgres, Supabase,
-// Neon, or any standard Postgres connection string in DATABASE_URL) so
-// the app can run on a host with no persistent local disk.
+// Postgres-backed (works with Neon, Supabase, Railway, or any standard
+// Postgres connection string in DATABASE_URL) so the app can run on a
+// host with no persistent local disk.
 //
 // Note: fields that are conceptually enums (PartOfSpeech, CardStatus,
 // ReviewRating, HighlightStyle) are still stored as validated String
