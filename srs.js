@@ -146,12 +146,13 @@ const SRS = {
     return (d / 365).toFixed(1) + 'y';
   },
 
-  /* Bucket used for stats and colour coding. */
+  /* How well a card is known — used for stats and colour coding.
+     new -> learning -> familiar -> mastered */
   bucket(srs) {
     if (srs.state === 'new') return 'new';
     if (srs.state === 'learning' || srs.state === 'relearning') return 'learning';
-    if ((srs.interval || 0) >= 21) return 'mature';
-    return 'young';
+    if ((srs.interval || 0) >= 21) return 'mastered';
+    return 'familiar';
   },
 
   /* Rough "how well do I know this" score, 0..1 — used for progress bars. */

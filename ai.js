@@ -133,21 +133,24 @@ const AI = {
   },
 
   /* Fresh, context-rich questions the offline generator cannot produce. */
-  async makeQuestions(cards, count) {
+  async makeQuestions(cards, count, choices) {
+    choices = clampChoices(choices);
     const lang = this.cfg.nativeLanguage || 'Turkish';
     const list = cards.map(c => '- ' + c.term + ' (' + (c.pos || '?') + '): ' + (c.definition || c.translation)).join('\n');
     const res = await this.json([
       { role: 'system', content: 'You are an English teacher writing exam questions. Answer only with JSON.' },
       { role: 'user', content:
         'Learner native language: ' + lang + '.\nTarget words:\n' + list + '\n\n' +
-        'Write ' + count + ' multiple-choice questions. Use a NEW sentence for each word (do not reuse the ' +
+        'Write ' + count + ' multiple-choice questions with exactly ' + choices + ' options each. ' +
+        'Use a NEW sentence for each word (do not reuse the ' +
         'definitions above word for word). Mix these question styles:\n' +
         '  • a sentence with a gap where only the target word fits\n' +
         '  • "which word means ...?"\n' +
         '  • choosing the correct usage in context\n' +
         'Distractors must be plausible but clearly wrong. Return JSON:\n' +
         '{"questions":[{"term":"the target word","prompt":"question text, use ____ for a gap",' +
-        '"options":["a","b","c","d"],"answer":"the exact correct option","explanation":"one short sentence"}]}' }
+        '"options":[' + Array.from({ length: choices }, (_, i) => '"option ' + (i + 1) + '"').join(',') + '],' +
+        '"answer":"the exact correct option","explanation":"one short sentence"}]}' }
     ], { temperature: 0.8, maxTokens: 2200 });
     return (res.questions || []).filter(q => q && q.prompt && Array.isArray(q.options) && q.answer);
   },
@@ -181,6 +184,8 @@ const AI = {
     ], { temperature: 0.6, maxTokens: 160 });
   }
 };
+
+function clampChoices(n) { return Math.max(2, Math.min(5, parseInt(n, 10) || 4)); }
 
 /* Models sometimes wrap JSON in prose or code fences — dig it out. */
 function parseLooseJSON(text) {

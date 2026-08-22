@@ -103,7 +103,7 @@ Yeni kelime eklemek için herhangi bir ekranda **N** tuşuna basman yeterli.
 | **Meaning → Word** | Anlamı görürsün, doğru kelimeyi seçersin |
 | **Type the word** | Anlamdan yola çıkıp kelimeyi yazarsın (tek harflik yazım hatası affedilir) |
 | **Fill in the blank** | Örnek cümledeki boşluğu doldurursun |
-| **Matching pairs** | Kelimelerle karşılıklarını eşleştirirsin |
+| **Matching pairs** | Kelimelerle karşılıklarını eşleştirirsin (en fazla 6'lık tahtalara bölünür) |
 | **Listening** | Kelime sesli okunur, duyduğunu yazarsın |
 | **AI quiz** | Yapay zekâ o kelimeler için yepyeni bağlam soruları yazar |
 | **Writing coach** | Kendi cümleni yazarsın, yapay zekâ puanlar ve düzeltir |
@@ -112,7 +112,30 @@ Yeni kelime eklemek için herhangi bir ekranda **N** tuşuna basman yeterli.
 başlamadıklarını çalışabilirsin. **Count towards scheduling** açıkken testte kaçırdığın
 kelime tekrar programında öne alınır.
 
+Tur uzunluğu (**Questions per practice round**) ve çoktan seçmeli sorulardaki şık sayısı
+(**Answer choices per question** — 4 veya 5) Settings → Study rules altından ayarlanır.
+Tur uzunluğu eşleştirme moduna da uygulanır: 12 kelime seçersen 6'şarlık iki tahta gelir.
+
+Bir turun sonunda **"Practise the N I missed"** düğmesi yalnızca kaçırdığın kelimeleri
+tekrar sorar; çeldirici şıklar arasında o turda kaçırdığın diğer kelimeler de yer alır,
+çünkü karıştırdığın kelimeler genelde onlardır.
+
 Seslendirme, bilgisayarında zaten yüklü olan sesleri kullanır — internet gerekmez, ücretsizdir.
+
+---
+
+### Kelime durumları
+
+Her kelime öğrenme sürecinde dört durumdan birinde olur:
+
+| Durum | Anlamı |
+|---|---|
+| **New** | Henüz hiç çalışılmadı |
+| **Learning** | Kısa aralıklarla (dakikalar–bir gün) tekrar ediliyor |
+| **Familiar** | Biliniyor ama henüz pekişmedi (aralık 21 günün altında) |
+| **Mastered** | 21 gün veya daha uzun aralıklarla hatırlanıyor |
+
+Zamanı gelen kartlar ayrıca **Due** olarak işaretlenir.
 
 ---
 

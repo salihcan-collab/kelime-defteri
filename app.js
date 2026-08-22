@@ -156,7 +156,7 @@ function stateChip(card) {
   if (card.srs.state === 'new') return chip('new', 'New');
   if (b === 'learning') return chip('learning', 'Learning');
   if (due) return chip('due', 'Due');
-  return chip('review', b === 'mature' ? 'Mature' : 'Young');
+  return chip('review', b === 'mastered' ? 'Mastered' : 'Familiar');
 }
 function dueText(card) {
   if (card.srs.state === 'new') return '—';
@@ -275,8 +275,8 @@ function deckProgressRow(deck) {
   const c = Store.counts(deck.id);
   const strength = cards.length ? cards.reduce((a, x) => a + SRS.strength(x.srs), 0) / cards.length : 0;
   const nw = cards.filter(x => x.srs.state === 'new').length;
-  const yg = c.young, mt = c.mature;
-  const lr = cards.length - nw - yg - mt;
+  const fam = c.familiar, mas = c.mastered;
+  const lr = cards.length - nw - fam - mas;
   const w = (n) => (cards.length ? 100 * n / cards.length : 0) + '%';
   return '<div style="padding:13px 0;border-bottom:1px solid var(--border-soft)">' +
     '<div class="row between" style="margin-bottom:8px">' +
@@ -285,8 +285,8 @@ function deckProgressRow(deck) {
       '<span class="faint">' + Math.round(strength * 100) + '% learned · ' + cards.length + ' words</span>' +
     '</div>' +
     '<div class="stack-bar">' +
-      '<i style="width:' + w(mt) + ';background:var(--good)"></i>' +
-      '<i style="width:' + w(yg) + ';background:color-mix(in srgb,var(--good) 45%,var(--surface-3))"></i>' +
+      '<i style="width:' + w(mas) + ';background:var(--good)"></i>' +
+      '<i style="width:' + w(fam) + ';background:color-mix(in srgb,var(--good) 45%,var(--surface-3))"></i>' +
       '<i style="width:' + w(lr) + ';background:var(--warn)"></i>' +
       '<i style="width:' + w(nw) + ';background:var(--surface-3)"></i>' +
     '</div></div>';
@@ -300,7 +300,7 @@ function renderDashboard(host) {
   const st = Store.streak();
   const today = Store.today();
   const all = Store.state.cards;
-  const known = all.filter(x => SRS.bucket(x.srs) === 'mature' || SRS.bucket(x.srs) === 'young').length;
+  const known = all.filter(x => SRS.bucket(x.srs) === 'mastered' || SRS.bucket(x.srs) === 'familiar').length;
   const ret = Store.retention(30);
   const goal = Store.state.settings.newPerDay + Math.min(Store.state.settings.reviewPerDay, 40);
   const pending = c.due + c.learning + c.new;
@@ -363,8 +363,8 @@ function renderDashboard(host) {
           ? Store.state.decks.map(deckProgressRow).join('')
           : '<div class="empty">' + ICONS.empty + '<h3>No decks yet</h3></div>') +
         '<div class="row" style="margin-top:14px;gap:14px;font-size:.72rem;color:var(--text-faint)">' +
-          '<span><i class="dot" style="background:var(--good)"></i>Mature</span>' +
-          '<span><i class="dot" style="background:color-mix(in srgb,var(--good) 45%,var(--surface-3))"></i>Young</span>' +
+          '<span><i class="dot" style="background:var(--good)"></i>Mastered</span>' +
+          '<span><i class="dot" style="background:color-mix(in srgb,var(--good) 45%,var(--surface-3))"></i>Familiar</span>' +
           '<span><i class="dot" style="background:var(--warn)"></i>Learning</span>' +
           '<span><i class="dot" style="background:var(--surface-3)"></i>New</span>' +
         '</div>' +
@@ -458,7 +458,7 @@ function renderDeckDetail(host, deck) {
       statTile('Words', cards.length, 'in this deck') +
       statTile('Due', c.due + c.learning, 'ready now', true) +
       statTile('New', c.newTotal, 'not started') +
-      statTile('Mature', c.mature, 'interval over 21 days') +
+      statTile('Mastered', c.mastered, 'recalled after 21+ days') +
     '</div>' +
     (deck.description ? '<p class="muted" style="margin-bottom:16px">' + esc(deck.description) + '</p>' : '') +
     (cards.length
@@ -957,7 +957,7 @@ const MODES = [
     icon:'<svg viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg>' },
   { id:'cloze', name:'Fill in the blank', desc:'Complete the example sentence with the missing word.',
     icon:'<svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h5M13 12h7M4 17h16"/></svg>' },
-  { id:'matching', name:'Matching pairs', desc:'Match words with their translations against the clock.',
+  { id:'matching', name:'Matching pairs', desc:'Pair words with their meanings on small boards.',
     icon:'<svg viewBox="0 0 24 24"><rect x="3" y="4" width="7" height="7" rx="1"/><rect x="14" y="4" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>' },
   { id:'listening', name:'Listening', desc:'Hear the word spoken, then type what you heard.',
     icon:'<svg viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg>', needsTTS:true },
@@ -971,6 +971,10 @@ let quiz = null;
 let quizSetup = { mode: 'mc-meaning', deckId: '', scope: 'all' };
 /* Round length lives in Settings → Study rules so both screens agree. */
 function roundLength() { return Store.state.settings.sessionLength || 12; }
+/* How many choices a multiple-choice question offers. */
+function optionCount() { return clamp(Store.state.settings.optionCount || 4, 2, 5); }
+/* Pairs shown on one matching board — more than this stops being playable. */
+const MATCH_BOARD_MAX = 6;
 
 function renderPractice(host) {
   if (quiz && quiz.finished) return drawQuizResults(host);
@@ -1051,38 +1055,61 @@ function practicePool(deckId, scope) {
 /* ---------- question generation ------------------------------------------- */
 function meaningOf(card) { return card.definition || card.translation; }
 
-function distractors(card, pool, key, n) {
-  const same = pool.filter(c => c.id !== card.id && c.pos && c.pos === card.pos && key(c));
-  const rest = pool.filter(c => c.id !== card.id && key(c));
+/* Wrong answers, in order of usefulness: words the learner just missed (they
+   are the ones being confused), then words of the same part of speech, then
+   anything else in the pool. */
+function distractors(card, pool, key, n, prefer) {
   const picked = [];
-  const seen = new Set([key(card).toLowerCase()]);
-  shuffle(same).concat(shuffle(rest)).forEach(c => {
+  const seen = new Set([String(key(card) || '').toLowerCase()]);
+  const take = (list) => shuffle(list).forEach(c => {
+    if (picked.length >= n || !c || c.id === card.id) return;
     const v = key(c);
-    if (picked.length < n && !seen.has(v.toLowerCase())) { picked.push(v); seen.add(v.toLowerCase()); }
+    if (!v || seen.has(v.toLowerCase())) return;
+    picked.push(v); seen.add(v.toLowerCase());
   });
+  take((prefer || []).filter(c => c.id !== card.id));
+  take(pool.filter(c => c.pos && c.pos === card.pos));
+  take(pool);
   return picked;
 }
 
-function buildQuestions(mode, pool, count) {
-  const chosen = quizSetup.scope === 'all' || quizSetup.scope === 'due'
-    ? sample(pool, Math.min(count, pool.length))
-    : pool.slice(0, count);
+function buildQuestions(mode, pool, count, opts) {
+  opts = opts || {};
+  const chosen = opts.cards ? opts.cards.slice(0, count)
+    : (quizSetup.scope === 'all' || quizSetup.scope === 'due'
+        ? sample(pool, Math.min(count, pool.length))
+        : pool.slice(0, count));
+  const prefer = opts.prefer || [];
+  const nOpts = optionCount() - 1;
 
-  if (mode === 'matching') return [{ type: 'matching', cards: sample(pool, Math.min(6, pool.length)) }];
+  /* Matching is split into playable boards so the round length still applies. */
+  if (mode === 'matching') {
+    const cards = chosen.filter(c => c.translation || c.definition);
+    if (!cards.length) return [];
+    const boards = Math.max(1, Math.ceil(cards.length / MATCH_BOARD_MAX));
+    const per = Math.ceil(cards.length / boards);
+    const out = [];
+    for (let i = 0; i < cards.length; i += per) out.push({ type: 'matching', cards: cards.slice(i, i + per) });
+    if (out.length > 1 && out[out.length - 1].cards.length < 2) {
+      const tail = out.pop();
+      out[out.length - 1].cards = out[out.length - 1].cards.concat(tail.cards);
+    }
+    return out;
+  }
 
   return chosen.map(card => {
     if (mode === 'mc-meaning') {
       const key = (c) => c.definition || c.translation;
-      const opts = shuffle([key(card)].concat(distractors(card, pool, key, 3)));
-      return { type: 'mc', card: card, prompt: card.term, sub: card.pos, options: opts, answer: key(card),
+      const choices = shuffle([key(card)].concat(distractors(card, pool, key, nOpts, prefer)));
+      return { type: 'mc', card: card, prompt: card.term, sub: card.pos, options: choices, answer: key(card),
                question: 'What does this word mean?' };
     }
     if (mode === 'mc-word') {
       const key = (c) => c.term;
-      const opts = shuffle([card.term].concat(distractors(card, pool, key, 3)));
+      const choices = shuffle([card.term].concat(distractors(card, pool, key, nOpts, prefer)));
       return { type: 'mc', card: card, prompt: meaningOf(card),
                sub: card.translation && card.definition ? card.translation : '',
-               options: opts, answer: card.term, question: 'Which word fits this meaning?' };
+               options: choices, answer: card.term, question: 'Which word fits this meaning?' };
     }
     if (mode === 'typing') {
       return { type: 'type', card: card, prompt: meaningOf(card), sub: card.translation !== meaningOf(card) ? card.translation : '',
@@ -1110,6 +1137,16 @@ function buildQuestions(mode, pool, count) {
 const NEEDS_OPTIONS = ['mc-meaning', 'mc-word', 'matching', 'ai-quiz'];
 function minWordsFor(mode) { return NEEDS_OPTIONS.indexOf(mode) !== -1 ? 2 : 1; }
 
+/* One place that knows how to set up a round, so matching's pair totals are
+   never forgotten. */
+function newQuiz(mode, items) {
+  const q = { mode: mode, i: 0, items: items, results: [], correct: 0,
+              startedAt: Date.now(), state: 'idle', match: null };
+  q.pairsTotal = items.reduce((n, it) => n + (it.type === 'matching' ? it.cards.length : 0), 0);
+  q.pairsDone = 0;
+  return q;
+}
+
 async function startQuiz() {
   const pool = practicePool(quizSetup.deckId, quizSetup.scope);
   const mode = quizSetup.mode;
@@ -1117,27 +1154,28 @@ async function startQuiz() {
     return toast(pool.length ? 'This drill needs at least two words' : 'No words match these filters', 'err');
   }
   const count = roundLength();
-  quiz = { mode: mode, i: 0, items: [], results: [], correct: 0, startedAt: Date.now(), state: 'idle' };
+  quiz = newQuiz(mode, []);
 
   if (mode === 'ai-quiz') {
     const cards = sample(pool, Math.min(count, pool.length, 12));
     $('#view-practice').innerHTML = '<div class="quiz-wrap"><div class="card"><div class="ai-thinking">' +
       ICONS.loader + 'The AI is writing ' + cards.length + ' questions…</div></div></div>';
     try {
-      const qs = await AI.makeQuestions(cards, cards.length);
+      const qs = await AI.makeQuestions(cards, cards.length, optionCount());
       quiz.items = qs.map(q => {
         const card = cards.find(c => c.term.toLowerCase() === String(q.term || '').toLowerCase()) || cards[0];
-        const opts = q.options.slice(0, 4);
+        const opts = q.options.slice(0, optionCount());
         if (opts.indexOf(q.answer) === -1) opts[0] = q.answer;
         return { type: 'mc', card: card, prompt: q.prompt, options: shuffle(opts), answer: q.answer,
                  explanation: q.explanation, question: 'AI question' };
       });
       if (!quiz.items.length) throw new Error('No questions came back.');
+      quiz = Object.assign(newQuiz(mode, quiz.items), { startedAt: quiz.startedAt });
     } catch (err) {
       quiz = null; toast(err.message, 'err'); return render('practice');
     }
   } else {
-    quiz.items = buildQuestions(mode, pool, count);
+    quiz = newQuiz(mode, buildQuestions(mode, pool, count));
   }
   if (!quiz.items.length) { quiz = null; toast('Could not build questions from these words', 'err'); return render('practice'); }
   render('practice');
@@ -1176,12 +1214,20 @@ function gradeTyped(input, answer) {
 /* ---------- item rendering -------------------------------------------------- */
 function drawQuizItem(host) {
   const item = quiz.items[quiz.i];
-  const progress = pct(quiz.i, quiz.items.length);
+  /* The bar tracks what is finished. For matching that is pairs solved across
+     every board; elsewhere it is questions answered, so landing on the last
+     question does not already read as 100 %. */
+  const matching = item.type === 'matching';
+  const doneCount = matching ? quiz.pairsDone : quiz.i + (quiz.state === 'answered' ? 1 : 0);
+  const totalCount = matching ? quiz.pairsTotal : quiz.items.length;
+  const progress = pct(doneCount, totalCount);
   const head =
     '<div class="study-head">' +
       '<button class="icon-btn" data-act="quit" title="End practice">' + ICONS.back + '</button>' +
       '<div class="bar" style="flex:1"><i style="width:' + progress + '%"></i></div>' +
-      '<div class="counts"><span class="c-due">' + (quiz.i + 1) + ' / ' + quiz.items.length + '</span>' +
+      '<div class="counts"><span class="c-due">' +
+        (matching ? doneCount + ' / ' + totalCount + ' matched'
+                  : (quiz.i + 1) + ' / ' + quiz.items.length) + '</span>' +
         '<span class="c-new">' + quiz.correct + ' correct</span></div>' +
     '</div>';
 
@@ -1295,16 +1341,25 @@ function matchingHTML(item) {
     quiz.match = {
       left: shuffle(item.cards.map(c => ({ id: c.id, text: c.term }))),
       right: shuffle(item.cards.map(c => ({ id: c.id, text: c.translation || c.definition }))),
-      sel: null, done: [], misses: 0
+      sel: null, done: [], misses: 0, flash: null
     };
   }
   const m = quiz.match;
+  const boards = quiz.items.length;
+  /* Flashes are keyed by side + id: on a miss the two tiles are different
+     words, and the same id also exists in the opposite column. */
+  const flashed = (side, id) => (m.flash && m.flash.keys.indexOf(side + id) !== -1) ? ' ' + m.flash.kind : '';
   const col = (rows, side) => '<div class="match-col">' + rows.map(r =>
     '<button class="match-item' + (m.done.indexOf(r.id) !== -1 ? ' done' : '') +
-      (m.sel && m.sel.side === side && m.sel.id === r.id ? ' sel' : '') +
+      (m.sel && m.sel.side === side && m.sel.id === r.id ? ' sel' : '') + flashed(side, r.id) +
       '" data-side="' + side + '" data-id="' + r.id + '">' + esc(r.text) + '</button>').join('') + '</div>';
-  return '<div class="card"><p class="muted" style="margin-bottom:14px">Match each word with its meaning · ' +
-    m.done.length + ' / ' + item.cards.length + ' matched' + (m.misses ? ' · ' + m.misses + ' misses' : '') + '</p>' +
+  return '<div class="card">' +
+    '<div class="row between" style="margin-bottom:14px">' +
+      '<p class="muted">Match each word with its meaning</p>' +
+      '<span class="faint">' + m.done.length + ' / ' + item.cards.length + ' on this board' +
+        (boards > 1 ? ' · board ' + (quiz.i + 1) + ' of ' + boards : '') +
+        (m.misses ? ' · ' + m.misses + ' miss' + (m.misses === 1 ? '' : 'es') : '') + '</span>' +
+    '</div>' +
     '<div class="match-grid">' + col(m.left, 'l') + col(m.right, 'r') + '</div></div>';
 }
 
@@ -1393,30 +1448,43 @@ async function explainWrong(item) {
 
 function matchClick(item, side, id) {
   const m = quiz.match;
-  if (m.done.indexOf(id) !== -1) return;
+  if (m.done.indexOf(id) !== -1 || m.flash) return;
   if (!m.sel) { m.sel = { side: side, id: id }; return render('practice'); }
   if (m.sel.side === side) { m.sel = { side: side, id: id }; return render('practice'); }
-  if (m.sel.id === id) {
+
+  const picked = m.sel;
+  if (picked.id === id) {
     m.done.push(id);
+    quiz.pairsDone++;
     const card = item.cards.find(c => c.id === id);
     if (card) Store.quizResult(card.id, true);
     quiz.correct++;
     quiz.results.push({ card: card, ok: true, given: '—', answer: card.term });
+    m.flash = { kind: 'hit', keys: ['l' + id, 'r' + id] };
   } else {
     m.misses++;
-    const card = item.cards.find(c => c.id === m.sel.id) || item.cards.find(c => c.id === id);
+    const card = item.cards.find(c => c.id === picked.id) || item.cards.find(c => c.id === id);
     if (card) Store.quizResult(card.id, false);
     quiz.results.push({ card: card, ok: false, given: 'mismatched', answer: card ? card.term : '' });
+    m.flash = { kind: 'miss', keys: [picked.side + picked.id, side + id] };
   }
   m.sel = null;
   refreshChrome();
-  if (m.done.length === item.cards.length) return setTimeout(finishQuiz, 380);
   render('practice');
+
+  const done = m.done.length === item.cards.length;
+  setTimeout(() => {
+    if (!quiz || quiz.match !== m) return;
+    m.flash = null;
+    if (done) return nextQuizItem();
+    render('practice');
+  }, m.flash.kind === 'hit' ? 420 : 620);
 }
 
 function nextQuizItem() {
   quiz.i++;
   quiz.state = 'idle'; quiz.given = ''; quiz.lastResult = null;
+  quiz.match = null;                 /* the next matching board starts fresh */
   if (quiz.i >= quiz.items.length) return finishQuiz();
   render('practice');
 }
@@ -1462,11 +1530,17 @@ function drawQuizResults(host) {
     if (e.target.closest('[data-act="back"]')) { quiz = null; return render('practice'); }
     if (e.target.closest('[data-act="again"]')) { quiz = null; return startQuiz(); }
     if (e.target.closest('[data-act="retry-wrong"]')) {
-      const ids = wrong.map(r => r.card.id);
-      quiz = null;
-      const pool = Store.state.cards.filter(c => ids.indexOf(c.id) !== -1);
-      quiz = { mode: quizSetup.mode, i: 0, results: [], correct: 0, startedAt: Date.now(), state: 'idle',
-               items: buildQuestions(quizSetup.mode === 'matching' ? 'mc-meaning' : quizSetup.mode, pool, pool.length) };
+      /* Ask only about the missed words, but draw the wrong answers from the
+         whole pool — with the other missed words first, since those are the
+         ones actually being confused. */
+      const seen = {};
+      const missed = wrong.map(r => r.card).filter(c => c && !seen[c.id] && (seen[c.id] = 1));
+      const wide = practicePool(quizSetup.deckId, quizSetup.scope);
+      const pool = wide.length >= 2 ? wide : missed;
+      let mode = quizSetup.mode;
+      if (mode === 'matching' && missed.length < 2) mode = 'mc-meaning';
+      quiz = newQuiz(mode, buildQuestions(mode, pool, missed.length, { cards: missed, prefer: missed }));
+      if (!quiz.items.length) { quiz = null; toast('Could not rebuild those questions', 'err'); }
       return render('practice');
     }
   };
@@ -1507,7 +1581,7 @@ function renderBrowse(host) {
       '</div>' +
       '<select id="bDeck">' + deckOptions(browseState.deck, 'All decks') + '</select>' +
       '<select id="bStatus">' +
-        [['', 'Any status'], ['new', 'New'], ['learning', 'Learning'], ['young', 'Young'], ['mature', 'Mature'], ['due', 'Due now']]
+        [['', 'Any status'], ['new', 'New'], ['learning', 'Learning'], ['familiar', 'Familiar'], ['mastered', 'Mastered'], ['due', 'Due now']]
           .map(o => '<option value="' + o[0] + '"' + (browseState.status === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') +
       '</select>' +
       '<select id="bCat"><option value="">Any category</option>' +
@@ -1555,7 +1629,7 @@ function renderStats(host) {
   const hist = Store.history(14);
   const fc = Store.forecast(14);
   const ret7 = Store.retention(7), ret30 = Store.retention(30);
-  const buckets = { new: 0, learning: 0, young: 0, mature: 0 };
+  const buckets = { new: 0, learning: 0, familiar: 0, mastered: 0 };
   all.forEach(c => buckets[SRS.bucket(c.srs)]++);
   const totalReviews = Object.values(Store.state.daily).reduce((a, d) => a + d.reviews, 0);
   const hardest = all.filter(c => c.stats.wrong > 0)
@@ -1576,15 +1650,15 @@ function renderStats(host) {
     '<div class="section-title"><h2>Knowledge breakdown</h2><span class="hint">' + all.length + ' words</span></div>' +
     '<div class="card">' +
       '<div class="stack-bar" style="height:14px">' +
-        '<i style="width:' + w(buckets.mature) + ';background:var(--good)"></i>' +
-        '<i style="width:' + w(buckets.young) + ';background:color-mix(in srgb,var(--good) 45%,var(--surface-3))"></i>' +
+        '<i style="width:' + w(buckets.mastered) + ';background:var(--good)"></i>' +
+        '<i style="width:' + w(buckets.familiar) + ';background:color-mix(in srgb,var(--good) 45%,var(--surface-3))"></i>' +
         '<i style="width:' + w(buckets.learning) + ';background:var(--warn)"></i>' +
         '<i style="width:' + w(buckets.new) + ';background:var(--surface-3)"></i>' +
       '</div>' +
       '<div class="grid g4" style="margin-top:16px">' +
-        miniStat('Mature', buckets.mature, 'interval 21 days or more', 'var(--good)') +
-        miniStat('Young', buckets.young, 'known, still consolidating', 'color-mix(in srgb,var(--good) 45%,var(--surface-3))') +
-        miniStat('Learning', buckets.learning, 'in short-term steps', 'var(--warn)') +
+        miniStat('Mastered', buckets.mastered, 'recalled after 21+ days', 'var(--good)') +
+        miniStat('Familiar', buckets.familiar, 'known, still settling in', 'color-mix(in srgb,var(--good) 45%,var(--surface-3))') +
+        miniStat('Learning', buckets.learning, 'in short-term repetition', 'var(--warn)') +
         miniStat('New', buckets.new, 'not started yet', 'var(--surface-3)') +
       '</div>' +
     '</div>' +
@@ -1697,8 +1771,14 @@ function renderSettings(host) {
          ['mixed', 'Mix both directions']].map(o =>
           '<option value="' + o[0] + '"' + (s.studyDirection === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') +
       '</select></div>' +
-      '<div class="field"><label>Questions per practice round</label>' +
-        '<input type="number" id="setLen" min="5" max="100" value="' + s.sessionLength + '"></div>' +
+      '<div class="inline-fields">' +
+        '<div class="field"><label>Questions per practice round</label>' +
+          '<input type="number" id="setLen" min="5" max="100" value="' + s.sessionLength + '"></div>' +
+        '<div class="field"><label>Answer choices per question</label><div class="seg">' +
+          [4, 5].map(n => '<button data-pick-opts="' + n + '" class="' +
+            (optionCount() === n ? 'sel' : '') + '">' + n + ' options</button>').join('') +
+        '</div><span class="help">Applies to the multiple-choice drills and AI quizzes.</span></div>' +
+      '</div>' +
       '<label class="switch"><input type="checkbox" id="setEx"' + (s.showExampleOnFront ? ' checked' : '') + '>' +
         '<span class="track"></span><span class="txt">Show the example sentence on the front' +
         '<small>The target word appears as a blank, giving you a context clue.</small></span></label>' +
@@ -1799,6 +1879,8 @@ function bindSettings(host) {
     const a = e.target.closest('[data-pick-accent]'); if (a) return set({ accent: a.dataset.pickAccent });
     const f = e.target.closest('[data-pick-font]');   if (f) return set({ font: f.dataset.pickFont });
     const z = e.target.closest('[data-pick-size]');   if (z) return set({ size: z.dataset.pickSize });
+    const o = e.target.closest('[data-pick-opts]');
+    if (o) { s.optionCount = parseInt(o.dataset.pickOpts, 10); Store.save(); return render('settings'); }
 
     const p = e.target.closest('[data-preset]');
     if (p) {

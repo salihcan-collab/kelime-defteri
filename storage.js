@@ -35,6 +35,7 @@ const Store = {
         autoSpeak: false,
         quizAffectsSrs: true,
         sessionLength: 12,              // questions per practice round
+        optionCount: 4,                 // answer choices in a multiple-choice question
         ai: {
           enabled: false,
           provider: 'openai',           // openai | compatible | gemini
@@ -325,8 +326,8 @@ const Store = {
       newTotal: pool.filter(c => c.srs.state === 'new').length,
       learning: pool.filter(c => (c.srs.state === 'learning' || c.srs.state === 'relearning') && c.srs.due <= now).length,
       due: pool.filter(c => c.srs.state === 'review' && c.srs.due <= now).length,
-      young: pool.filter(c => SRS.bucket(c.srs) === 'young').length,
-      mature: pool.filter(c => SRS.bucket(c.srs) === 'mature').length
+      familiar: pool.filter(c => SRS.bucket(c.srs) === 'familiar').length,
+      mastered: pool.filter(c => SRS.bucket(c.srs) === 'mastered').length
     };
   },
 
