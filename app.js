@@ -113,6 +113,9 @@ let currentView = 'dashboard';
 let viewParams = {};
 
 function go(view, params) {
+  /* Leaving a finished session behind: start clean next time. */
+  if (currentView === 'study' && view !== 'study' && session && session.finished) session = null;
+  if (currentView === 'practice' && view !== 'practice' && quiz && quiz.finished) quiz = null;
   currentView = view; viewParams = params || {};
   $$('.nav-item').forEach(b => b.classList.toggle('is-active', b.dataset.view === view));
   $$('.view').forEach(v => v.classList.add('hidden'));
@@ -121,6 +124,7 @@ function go(view, params) {
   $('#viewSub').textContent = VIEW_META[view][1];
   $('#app').classList.remove('menu-open');
   $('#scrollArea').scrollTop = 0;
+  $('#toTop').classList.remove('show');
   render(view);
   refreshChrome();
 }
@@ -653,8 +657,10 @@ function aiDeckDialog() {
 let session = null;
 
 function renderStudy(host) {
-  if (session && session.queue.length) return drawStudyCard(host);
+  /* finished wins: quitting early leaves cards in the queue but must still
+     show the summary rather than redrawing the card. */
   if (session && session.finished) return drawStudySummary(host);
+  if (session && session.queue.length) return drawStudyCard(host);
   drawStudySetup(host);
 }
 
@@ -910,7 +916,9 @@ const MODES = [
 ];
 
 let quiz = null;
-let quizSetup = { mode: 'mc-meaning', deckId: '', scope: 'all', count: 12 };
+let quizSetup = { mode: 'mc-meaning', deckId: '', scope: 'all' };
+/* Round length lives in Settings → Study rules so both screens agree. */
+function roundLength() { return Store.state.settings.sessionLength || 12; }
 
 function renderPractice(host) {
   if (quiz && quiz.finished) return drawQuizResults(host);
@@ -933,7 +941,7 @@ function drawPracticeSetup(host) {
       '</div>' +
       '<div class="card">' +
         '<div class="field"><label>Questions per round</label><select id="pCount">' +
-          [5, 10, 12, 20, 30, 50].map(n => '<option' + (n === quizSetup.count ? ' selected' : '') + '>' + n + '</option>').join('') +
+          [5, 10, 12, 20, 30, 50].map(n => '<option' + (n === roundLength() ? ' selected' : '') + '>' + n + '</option>').join('') +
         '</select></div>' +
         '<div class="row between" style="margin-top:4px">' +
           '<span class="muted">' + pool.length + ' word' + (pool.length === 1 ? '' : 's') + ' available</span>' +
@@ -972,7 +980,9 @@ function drawPracticeSetup(host) {
   };
   $('#pDeck').onchange = (e) => { quizSetup.deckId = e.target.value; render('practice'); };
   $('#pScope').onchange = (e) => { quizSetup.scope = e.target.value; render('practice'); };
-  $('#pCount').onchange = (e) => { quizSetup.count = parseInt(e.target.value, 10); };
+  $('#pCount').onchange = (e) => {
+    Store.state.settings.sessionLength = parseInt(e.target.value, 10) || 12; Store.save();
+  };
   $('#pSrs').onchange = (e) => { Store.state.settings.quizAffectsSrs = e.target.checked; Store.save(); };
 }
 
@@ -1061,10 +1071,11 @@ async function startQuiz() {
   if (pool.length < minWordsFor(mode)) {
     return toast(pool.length ? 'This drill needs at least two words' : 'No words match these filters', 'err');
   }
+  const count = roundLength();
   quiz = { mode: mode, i: 0, items: [], results: [], correct: 0, startedAt: Date.now(), state: 'idle' };
 
   if (mode === 'ai-quiz') {
-    const cards = sample(pool, Math.min(quizSetup.count, pool.length, 12));
+    const cards = sample(pool, Math.min(count, pool.length, 12));
     $('#view-practice').innerHTML = '<div class="quiz-wrap"><div class="card"><div class="ai-thinking">' +
       ICONS.loader + 'The AI is writing ' + cards.length + ' questions…</div></div></div>';
     try {
@@ -1081,7 +1092,7 @@ async function startQuiz() {
       quiz = null; toast(err.message, 'err'); return render('practice');
     }
   } else {
-    quiz.items = buildQuestions(mode, pool, quizSetup.count);
+    quiz.items = buildQuestions(mode, pool, count);
   }
   if (!quiz.items.length) { quiz = null; toast('Could not build questions from these words', 'err'); return render('practice'); }
   render('practice');
@@ -1895,6 +1906,17 @@ function boot() {
   };
   $('#modalHost').onclick = (e) => { if (e.target.closest('[data-close]')) closeModal(); };
 
+  const sa = $('#scrollArea'), toTop = $('#toTop');
+  sa.addEventListener('scroll', () => {
+    toTop.classList.toggle('show', sa.scrollTop > 420);
+  }, { passive: true });
+  toTop.onclick = () => {
+    /* focus() must come first and skip its own scroll, otherwise it aborts
+       the smooth scroll we are about to start. */
+    try { sa.focus({ preventScroll: true }); } catch (e) { }
+    sa.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   document.addEventListener('keydown', onKey);
   window.addEventListener('beforeunload', () => Store.saveNow());
 
@@ -1908,6 +1930,29 @@ function boot() {
   if (Store.state.log.length > 60 && age > 21 * 86400000) {
     setTimeout(() => toast('It has been a while since your last backup — Settings → Download backup.', 'info'), 3000);
   }
+}
+
+/* The scrollable region is a div, so Page Up/Down, Home/End, the arrows and
+   the space bar have to be wired up by hand — the browser only does this for
+   the document itself. */
+function scrollByKey(e) {
+  const sa = $('#scrollArea');
+  if (!sa || sa.scrollHeight <= sa.clientHeight) return false;
+  const page = Math.max(140, sa.clientHeight - 70);
+  let delta;
+  switch (e.key) {
+    case 'PageDown': delta = page; break;
+    case 'PageUp': delta = -page; break;
+    case 'ArrowDown': delta = 90; break;
+    case 'ArrowUp': delta = -90; break;
+    case ' ': delta = e.shiftKey ? -page : page; break;
+    case 'Home': sa.scrollTop = 0; e.preventDefault(); return true;
+    case 'End': sa.scrollTop = sa.scrollHeight; e.preventDefault(); return true;
+    default: return false;
+  }
+  sa.scrollTop += delta;
+  e.preventDefault();
+  return true;
 }
 
 function onKey(e) {
@@ -1950,6 +1995,7 @@ function onKey(e) {
     return;
   }
 
+  if (scrollByKey(e)) return;
   if (e.key.toLowerCase() === 'n') { e.preventDefault(); return cardEditor(null); }
   const jump = { d: 'dashboard', k: 'decks', s: 'study', p: 'practice', b: 'browse', g: 'stats', ',': 'settings' }[e.key.toLowerCase()];
   if (jump) go(jump, {});

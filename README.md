@@ -195,6 +195,12 @@ Yine de bu dosyaları başkasıyla paylaşacaksan anahtarını önce Settings'te
 | `N` | Yeni kelime ekle |
 | `Esc` | Pencereyi kapat / seansı bitir |
 | `D` `K` `S` `P` `B` `G` | Ekranlar arası geçiş |
+| `PageUp` `PageDown` | Sayfayı yukarı/aşağı kaydır |
+| `Home` `End` | Sayfanın başına/sonuna git |
+| `↑` `↓` | Satır satır kaydır |
+
+Uzun sayfalarda sağda kaydırma çubuğu çıkar; aşağı indiğinde sağ altta
+başa dönmek için yuvarlak bir düğme belirir.
 
 ---
 

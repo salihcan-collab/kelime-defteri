@@ -107,17 +107,25 @@ svg{ width:20px; height:20px; fill:none; stroke:currentColor; stroke-width:1.75;
 ::selection{ background:var(--accent-soft); }
 
 /* Scrollbars */
-*::-webkit-scrollbar{ width:10px; height:10px; }
-*::-webkit-scrollbar-thumb{ background:var(--surface-3); border-radius:10px; border:3px solid transparent; background-clip:content-box; }
-*::-webkit-scrollbar-thumb:hover{ background:var(--text-faint); background-clip:content-box; }
+/* Chrome honours the standard properties and ignores ::-webkit-scrollbar once
+   they are set, so the standard ones carry the design and the webkit rules are
+   only a fallback for older browsers. The thumb has to contrast with the page
+   background or it reads as "there is no scrollbar". */
+*{ scrollbar-width:thin; scrollbar-color:var(--text-faint) transparent; }
+*::-webkit-scrollbar{ width:12px; height:12px; }
+*::-webkit-scrollbar-thumb{ background:var(--text-faint); border-radius:10px;
+  border:3px solid transparent; background-clip:content-box; min-height:48px; }
+*::-webkit-scrollbar-thumb:hover{ background:var(--text-dim); background-clip:content-box; }
 *::-webkit-scrollbar-track{ background:transparent; }
 
 /* ---------- Layout ------------------------------------------------------ */
-.app{ display:grid; grid-template-columns:248px 1fr; height:100vh; height:100dvh; }
+.app{ display:grid; grid-template-columns:248px 1fr; height:100vh; height:100dvh;
+  min-height:0; overflow:hidden; }
 
 .sidebar{
   display:flex; flex-direction:column; gap:6px; padding:18px 14px;
-  background:var(--surface); border-right:1px solid var(--border-soft); min-width:0;
+  background:var(--surface); border-right:1px solid var(--border-soft);
+  min-width:0; min-height:0; overflow-y:auto; overflow-x:hidden;
 }
 .brand{ display:flex; align-items:center; gap:11px; padding:6px 8px 18px; }
 .brand-mark{
@@ -154,9 +162,9 @@ svg{ width:20px; height:20px; fill:none; stroke:currentColor; stroke-width:1.75;
 .streak-chip svg{ width:16px; height:16px; color:var(--warn); }
 .streak-chip b{ color:var(--text); }
 
-.main{ display:flex; flex-direction:column; min-width:0; background:var(--bg); }
+.main{ display:flex; flex-direction:column; min-width:0; min-height:0; background:var(--bg); }
 .topbar{
-  display:flex; align-items:center; gap:14px; padding:16px 26px;
+  display:flex; align-items:center; gap:14px; padding:16px 26px; flex:none;
   border-bottom:1px solid var(--border-soft); background:var(--bg);
 }
 .topbar-title{ min-width:0; flex:1; }
@@ -164,8 +172,10 @@ svg{ width:20px; height:20px; fill:none; stroke:currentColor; stroke-width:1.75;
 .topbar-title p{ font-size:.8rem; color:var(--text-faint); margin-top:2px; }
 .topbar-actions{ display:flex; align-items:center; gap:9px; }
 
-.scroll-area{ flex:1; overflow-y:auto; overflow-x:hidden; scroll-behavior:smooth; }
-.view{ padding:26px; max-width:1180px; margin:0 auto; animation:fade .28s ease; }
+.scroll-area{ flex:1 1 0; min-height:0; overflow-y:scroll; overflow-x:hidden;
+  overscroll-behavior:contain; -webkit-overflow-scrolling:touch;
+  scrollbar-gutter:stable; outline:none; }
+.view{ padding:26px 26px 48px; max-width:1180px; margin:0 auto; animation:fade .28s ease; }
 @keyframes fade{ from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:none;} }
 
 /* ---------- Buttons ----------------------------------------------------- */
@@ -476,7 +486,16 @@ select{ cursor:pointer; appearance:none;
 .modal-foot{ display:flex; justify-content:flex-end; gap:9px; padding:14px 20px; border-top:1px solid var(--border-soft); flex-wrap:wrap; }
 .modal-foot:empty{ display:none; }
 
-.toast-wrap{ position:fixed; bottom:22px; right:22px; z-index:80; display:flex; flex-direction:column; gap:9px; align-items:flex-end; }
+.to-top{
+  position:fixed; right:22px; bottom:22px; z-index:70; width:42px; height:42px; border-radius:50%;
+  display:grid; place-items:center; cursor:pointer; border:1px solid var(--border);
+  background:var(--surface); color:var(--text-dim); box-shadow:var(--shadow-lg);
+  opacity:0; transform:translateY(12px) scale(.9); pointer-events:none; transition:.2s;
+}
+.to-top.show{ opacity:1; transform:none; pointer-events:auto; }
+.to-top:hover{ color:var(--accent); border-color:var(--accent); }
+
+.toast-wrap{ position:fixed; bottom:22px; right:80px; z-index:80; display:flex; flex-direction:column; gap:9px; align-items:flex-end; }
 .toast{
   display:flex; align-items:center; gap:10px; padding:11px 16px; border-radius:12px;
   background:var(--surface); border:1px solid var(--border); box-shadow:var(--shadow-lg);
@@ -509,7 +528,7 @@ kbd{
   .app.menu-open .sidebar{ transform:none; }
   .app.menu-open ~ .scrim{ display:block; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:45; }
   .only-mobile{ display:grid; }
-  .view{ padding:18px 15px; }
+  .view{ padding:18px 15px 40px; }
   .topbar{ padding:13px 15px; }
   .topbar-actions .primary-btn span{ display:none; }
   .topbar-actions .primary-btn{ padding:9px 11px; }
@@ -519,7 +538,8 @@ kbd{
   .flashcard{ padding:26px 20px; min-height:280px; }
   .fc-term{ font-size:1.85rem; }
   .rate-row{ grid-template-columns:repeat(2,1fr); }
-  .toast-wrap{ left:15px; right:15px; bottom:15px; align-items:stretch; }
+  .toast-wrap{ left:15px; right:15px; bottom:72px; align-items:stretch; }
+  .to-top{ right:15px; bottom:15px; }
   .toast{ max-width:none; }
 }
 @media (prefers-reduced-motion:reduce){

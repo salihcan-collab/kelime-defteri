@@ -83,7 +83,7 @@
       </div>
     </header>
 
-    <div class="scroll-area" id="scrollArea">
+    <div class="scroll-area" id="scrollArea" tabindex="0" role="region" aria-label="Page content">
       <section class="view" id="view-dashboard"></section>
       <section class="view hidden" id="view-decks"></section>
       <section class="view hidden" id="view-study"></section>
@@ -111,6 +111,10 @@
     <footer class="modal-foot" id="modalFoot"></footer>
   </div>
 </div>
+
+<button class="to-top" id="toTop" aria-label="Back to top" title="Back to top">
+  <svg viewBox="0 0 24 24"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg>
+</button>
 
 <div class="toast-wrap" id="toastWrap"></div>
 
