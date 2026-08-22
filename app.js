@@ -155,7 +155,7 @@ function render(view) {
 
 function refreshChrome() {
   const c = Store.counts();
-  const total = c.due + c.learning + c.new;
+  const total = c.ready;
   const badge = $('#navDue');
   badge.textContent = total > 999 ? '999+' : total;
   badge.dataset.zero = total === 0 ? '1' : '0';
@@ -165,21 +165,32 @@ function refreshChrome() {
 }
 
 /* ---------- shared bits ------------------------------------------------------ */
-/* A coloured dot keeps the status apart from a category that happens to be
-   called "Learning" or "New". */
-function stateChip(card) {
-  const b = SRS.bucket(card.srs);
-  const due = SRS.isDue(card.srs) && card.srs.state !== 'new';
-  const chip = (cls, label) => '<span class="chip ' + cls + '"><i class="dot"></i>' + label + '</span>';
-  if (card.srs.state === 'new') return chip('new', 'New');
-  if (b === 'learning') return chip('learning', 'Learning');
-  if (due) return chip('due', 'Due');
-  return chip('review', b === 'mastered' ? 'Mastered' : 'Familiar');
+/* How well the word is known. Every card has exactly one level, and it says
+   nothing about whether a review is due — that is shown separately, because
+   a Learning card can be due or not, and so can a Mastered one. The coloured
+   dot also keeps it apart from a category named "Learning" or "New". */
+const LEVELS = {
+  new:      { label: 'New',      cls: 'new' },
+  learning: { label: 'Learning', cls: 'learning' },
+  familiar: { label: 'Familiar', cls: 'review' },
+  mastered: { label: 'Mastered', cls: 'review' }
+};
+function levelChip(card) {
+  const l = LEVELS[SRS.bucket(card.srs)] || LEVELS.new;
+  return '<span class="chip ' + l.cls + '"><i class="dot"></i>' + l.label + '</span>';
 }
+
+/* When the next review falls — the other half of the picture. */
+function isDueNow(card) { return card.srs.state !== 'new' && SRS.isDue(card.srs); }
 function dueText(card) {
-  if (card.srs.state === 'new') return '—';
+  if (card.srs.state === 'new') return 'not started';
   const diff = card.srs.due - Date.now();
-  return diff <= 0 ? 'now' : 'in ' + SRS.humanDelay(diff);
+  return diff <= 0 ? 'due now' : 'in ' + SRS.humanDelay(diff);
+}
+function dueCell(card) {
+  return isDueNow(card)
+    ? '<span class="due-now">due now</span>'
+    : '<span class="faint">' + dueText(card) + '</span>';
 }
 function deckOptions(selected, allLabel) {
   return (allLabel ? '<option value="">' + esc(allLabel) + '</option>' : '') +
@@ -299,7 +310,7 @@ function deckProgressRow(deck) {
   return '<div style="padding:13px 0;border-bottom:1px solid var(--border-soft)">' +
     '<div class="row between" style="margin-bottom:8px">' +
       '<div class="row" style="gap:8px"><span>' + esc(deck.emoji) + '</span><b style="font-size:.9rem">' + esc(deck.name) + '</b>' +
-      (c.due + c.learning ? '<span class="chip due">' + (c.due + c.learning) + ' due</span>' : '') + '</div>' +
+      (c.due ? '<span class="chip due">' + c.due + ' due</span>' : '') + '</div>' +
       '<span class="faint">' + Math.round(strength * 100) + '% learned · ' + cards.length + ' words</span>' +
     '</div>' +
     '<div class="stack-bar">' +
@@ -321,7 +332,7 @@ function renderDashboard(host) {
   const known = all.filter(x => SRS.bucket(x.srs) === 'mastered' || SRS.bucket(x.srs) === 'familiar').length;
   const ret = Store.retention(30);
   const goal = Store.state.settings.newPerDay + Math.min(Store.state.settings.reviewPerDay, 40);
-  const pending = c.due + c.learning + c.new;
+  const pending = c.ready;
   const hour = new Date().getHours();
   const greet = hour < 5 ? 'Still up' : hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
 
@@ -335,7 +346,7 @@ function renderDashboard(host) {
           '</h2>' +
           '<p class="muted" style="margin-top:6px">' +
             (pending
-              ? c.due + ' due · ' + c.learning + ' in learning · ' + c.new + ' new'
+              ? c.due + ' due now · ' + c.newAvailable + ' new word' + (c.newAvailable === 1 ? '' : 's') + ' to start'
               : 'Nothing is due right now. Practice freely or add new words.') +
           '</p>' +
           '<div class="row" style="margin-top:16px">' +
@@ -353,8 +364,8 @@ function renderDashboard(host) {
     '</div>' +
 
     '<div class="grid g4">' +
-      statTile('Due now', c.due + c.learning, c.due + c.learning ? 'ready to review' : 'nothing pending', true) +
-      statTile('New available', c.new, 'daily cap ' + Store.state.settings.newPerDay) +
+      statTile('Due now', c.due, c.due ? 'their review time has come' : 'nothing pending', true) +
+      statTile('New to start', c.newAvailable, 'of ' + c.new + ' unseen · daily cap ' + Store.state.settings.newPerDay) +
       statTile('Words learned', known, 'of ' + all.length + ' total') +
       statTile('30-day recall', ret == null ? '—' : ret + '%', ret == null ? 'no data yet' : 'answers correct') +
     '</div>' +
@@ -441,8 +452,8 @@ function renderDecks(host) {
           '<div class="bar thin"><i style="width:' + Math.round(strength * 100) + '%"></i></div>' +
           '<div class="deck-meta">' +
             '<span><b>' + cards.length + '</b> words</span>' +
-            '<span><b style="color:' + (c.due + c.learning ? 'var(--bad)' : 'inherit') + '">' + (c.due + c.learning) + '</b> due</span>' +
-            '<span><b>' + c.newTotal + '</b> new</span>' +
+            '<span><b style="color:' + (c.due ? 'var(--bad)' : 'inherit') + '">' + c.due + '</b> due</span>' +
+            '<span><b>' + c.new + '</b> new</span>' +
           '</div></div>';
       }).join('') + '</div>'
       : '<div class="card"><div class="empty">' + ICONS.empty +
@@ -461,7 +472,7 @@ function renderDeckDetail(host, deck) {
   const cards = Store.cardsOf(deck.id);
   const c = Store.counts(deck.id);
   $('#viewTitle').textContent = deck.emoji + ' ' + deck.name;
-  $('#viewSub').textContent = cards.length + ' words · ' + (c.due + c.learning) + ' due · ' + c.newTotal + ' new';
+  $('#viewSub').textContent = cards.length + ' words · ' + c.due + ' due now · ' + c.new + ' not started';
 
   host.innerHTML =
     '<div class="row between" style="margin-bottom:18px">' +
@@ -474,8 +485,8 @@ function renderDeckDetail(host, deck) {
     '</div>' +
     '<div class="grid g4" style="margin-bottom:18px">' +
       statTile('Words', cards.length, 'in this deck') +
-      statTile('Due', c.due + c.learning, 'ready now', true) +
-      statTile('New', c.newTotal, 'not started') +
+      statTile('Due now', c.due, 'their review time has come', true) +
+      statTile('New', c.new, 'not started yet') +
       statTile('Mastered', c.mastered, 'recalled after 21+ days') +
     '</div>' +
     (deck.description ? '<p class="muted" style="margin-bottom:16px">' + esc(deck.description) + '</p>' : '') +
@@ -495,7 +506,7 @@ function renderDeckDetail(host, deck) {
 
 function cardTable(cards) {
   return '<table class="table"><thead><tr>' +
-    '<th>Word</th><th>Type</th><th>Meaning</th><th>Translation</th><th>Category</th><th>Status</th><th>Next</th><th></th>' +
+    '<th>Word</th><th>Type</th><th>Meaning</th><th>Translation</th><th>Category</th><th>Level</th><th>Next review</th><th></th>' +
     '</tr></thead><tbody>' +
     cards.map(c =>
       '<tr data-card="' + c.id + '">' +
@@ -504,8 +515,8 @@ function cardTable(cards) {
         '<td class="muted" style="max-width:280px">' + esc((c.definition || '').slice(0, 90)) + '</td>' +
         '<td>' + esc(c.translation) + '</td>' +
         '<td>' + (c.category ? '<span class="chip cat">' + esc(c.category) + '</span>' : '') + '</td>' +
-        '<td>' + stateChip(c) + '</td>' +
-        '<td class="faint">' + dueText(c) + '</td>' +
+        '<td>' + levelChip(c) + '</td>' +
+        '<td>' + dueCell(c) + '</td>' +
         '<td><div class="tr-actions">' +
           '<button class="icon-btn" data-edit="' + c.id + '" title="Edit">' + ICONS.edit + '</button>' +
           '<button class="icon-btn" data-del="' + c.id + '" title="Delete">' + ICONS.trash + '</button>' +
@@ -819,7 +830,7 @@ function renderStudy(host) {
 function drawStudySetup(host) {
   const deckId = viewParams.deckId || '';
   const c = Store.counts(deckId || null);
-  const ready = c.due + c.learning + c.new;
+  const ready = c.ready;
   const deck = deckId ? Store.deck(deckId) : null;
 
   host.innerHTML =
@@ -832,11 +843,14 @@ function drawStudySetup(host) {
             ? 'This session has ' + ready + ' card' + (ready === 1 ? '' : 's') + '. Rate how well you remembered each one and Lexio schedules the next review for you.'
             : 'Every card is scheduled for a later date. Studying ahead brings the next ones forward anyway — useful before an exam, though it does not help your long-term memory as much as waiting.') +
         '</p>' +
-        '<div class="counts" style="justify-content:center;margin:20px 0">' +
-          '<span class="c-new">' + c.new + ' new</span>' +
-          '<span class="c-learn">' + c.learning + ' learning</span>' +
-          '<span class="c-due">' + c.due + ' due</span>' +
+        '<div class="counts" style="justify-content:center;margin:20px 0 8px">' +
+          '<span class="c-due">' + c.due + ' due now</span>' +
+          '<span class="c-new">' + c.newAvailable + ' new</span>' +
         '</div>' +
+        (c.dueLearning
+          ? '<p class="faint" style="margin-bottom:14px">' + c.dueLearning + ' of them ' +
+            (c.dueLearning === 1 ? 'is' : 'are') + ' still in short-term learning steps</p>'
+          : '<div style="height:12px"></div>') +
         '<div class="field" style="max-width:320px;margin:0 auto 16px;text-align:left">' +
           '<label>Deck</label><select id="sDeck">' + deckOptions(deckId, 'All decks') + '</select></div>' +
         '<div class="row" style="justify-content:center">' +
@@ -935,7 +949,7 @@ function drawStudyCard(host) {
 
       '<div class="flashcard">' +
         '<div class="fc-top">' +
-          stateChip(card) +
+          levelChip(card) +
           (card.pos ? '<span class="chip pos">' + esc(card.pos) + '</span>' : '') +
           (card.category ? '<span class="chip cat">' + esc(card.category) + '</span>' : '') +
           '<div class="spacer"></div>' +
@@ -1032,7 +1046,7 @@ function drawStudySummary(host) {
   const acc = session.done ? clamp(pct(session.good, session.done), 0, 100) : 0;
   const words = Object.keys(session.counts || {}).length;
   const c = Store.counts(session.deckId);
-  const left = c.due + c.learning + c.new;
+  const left = c.ready;
   host.innerHTML =
     '<div class="study-wrap">' +
       '<div class="card" style="text-align:center;padding:36px 26px">' +
@@ -1701,9 +1715,9 @@ function renderBrowse(host) {
   if (browseState.deck) rows = rows.filter(c => c.deckId === browseState.deck);
   if (browseState.category) rows = rows.filter(c => c.category === browseState.category);
   if (browseState.status) rows = rows.filter(c => {
-    const b = SRS.bucket(c.srs);
-    if (browseState.status === 'due') return SRS.isDue(c.srs) && c.srs.state !== 'new';
-    return b === browseState.status;
+    if (browseState.status === 'due') return isDueNow(c);
+    if (browseState.status === 'later') return c.srs.state !== 'new' && !isDueNow(c);
+    return SRS.bucket(c.srs) === browseState.status;   /* a knowledge level */
   });
   const sorters = {
     recent: (a, b) => b.createdAt - a.createdAt,
@@ -1722,8 +1736,15 @@ function renderBrowse(host) {
       '</div>' +
       '<select id="bDeck">' + deckOptions(browseState.deck, 'All decks') + '</select>' +
       '<select id="bStatus">' +
-        [['', 'Any status'], ['new', 'New'], ['learning', 'Learning'], ['familiar', 'Familiar'], ['mastered', 'Mastered'], ['due', 'Due now']]
-          .map(o => '<option value="' + o[0] + '"' + (browseState.status === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') +
+        '<option value=""' + (browseState.status === '' ? ' selected' : '') + '>Any word</option>' +
+        '<optgroup label="How well I know it">' +
+          [['new', 'New'], ['learning', 'Learning'], ['familiar', 'Familiar'], ['mastered', 'Mastered']]
+            .map(o => '<option value="' + o[0] + '"' + (browseState.status === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') +
+        '</optgroup>' +
+        '<optgroup label="When it comes up">' +
+          [['due', 'Due now'], ['later', 'Scheduled for later']]
+            .map(o => '<option value="' + o[0] + '"' + (browseState.status === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') +
+        '</optgroup>' +
       '</select>' +
       '<select id="bCat"><option value="">Any category</option>' +
         cats.map(c => '<option' + (browseState.category === c ? ' selected' : '') + '>' + esc(c) + '</option>').join('') +
@@ -1802,6 +1823,10 @@ function renderStats(host) {
         miniStat('Learning', buckets.learning, 'in short-term repetition', 'var(--warn)') +
         miniStat('New', buckets.new, 'not started yet', 'var(--surface-3)') +
       '</div>' +
+      '<p class="faint" style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border-soft);line-height:1.65">' +
+        'These four describe <b>how well you know a word</b> — every word is in exactly one of them. ' +
+        'Whether a word is <b>due</b> is a separate question: it only means its next review time has arrived. ' +
+        'A word can be Familiar and due today, or Familiar and not due for another week.</p>' +
     '</div>' +
 
     '<div class="grid g2" style="margin-top:16px;align-items:start">' +

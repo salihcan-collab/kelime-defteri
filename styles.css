@@ -275,6 +275,7 @@ button:disabled{ opacity:.45; cursor:not-allowed; transform:none !important; }
 .chip.pos{ background:var(--accent-soft); color:var(--accent); border-color:transparent; font-style:italic; }
 .chip.cat{ background:transparent; }
 .chip .dot{ width:6px; height:6px; margin:0; background:currentColor; }
+.due-now{ color:var(--bad); font-weight:650; font-size:.82rem; white-space:nowrap; }
 .chip.new{ color:var(--info); }
 .chip.learning{ color:var(--warn); }
 .chip.review{ color:var(--good); }

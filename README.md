@@ -141,18 +141,32 @@ Seslendirme, bilgisayarında zaten yüklü olan sesleri kullanır — internet g
 
 ---
 
-### Kelime durumları
+### İki ayrı kavram: seviye ve zamanlama
 
-Her kelime öğrenme sürecinde dört durumdan birinde olur:
+Uygulamada birbirinden bağımsız iki şey var. Karıştırmamak önemli:
 
-| Durum | Anlamı |
+**1. Bilgi seviyesi (Level)** — kelimeyi ne kadar bildiğin. Her kelime tam olarak
+bunlardan birindedir:
+
+| Seviye | Anlamı |
 |---|---|
 | **New** | Henüz hiç çalışılmadı |
 | **Learning** | Kısa aralıklarla (dakikalar–bir gün) tekrar ediliyor |
 | **Familiar** | Biliniyor ama henüz pekişmedi (aralık 21 günün altında) |
 | **Mastered** | 21 gün veya daha uzun aralıklarla hatırlanıyor |
 
-Zamanı gelen kartlar ayrıca **Due** olarak işaretlenir.
+**2. Zamanlama (Next review)** — o kelimenin sırasının gelip gelmediği.
+**Due now** = tekrar vakti geldi. Bu bir seviye değildir; her seviyeden kelime
+"due" olabilir. Bir kelime aynı anda hem *Familiar* hem *due now* olabilir,
+ya da *Familiar* olup tekrarı bir hafta sonraya planlanmış olabilir.
+
+Browse ekranındaki filtre bu yüzden iki gruba ayrılmıştır: **"How well I know it"**
+(seviye) ve **"When it comes up"** (zamanlama). Tablodaki **LEVEL** sütunu seviyeyi,
+**NEXT REVIEW** sütunu zamanlamayı gösterir.
+
+Dashboard'daki **"Due now"** kutusu, kenar çubuğundaki rozet ve Study ekranındaki
+"due now" sayısı aynı şeyi sayar: sırası gelmiş kelimeler. Bunların kaçının kısa vadeli
+öğrenme adımlarında olduğu Study ekranında ayrıca yazar.
 
 ---
 

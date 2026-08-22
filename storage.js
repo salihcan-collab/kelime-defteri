@@ -330,18 +330,39 @@ const Store = {
     return mixed;
   },
 
+  /* Two independent things, never mixed:
+
+       knowledge level — new / learning / familiar / mastered.
+                         Every card sits in exactly one of these.
+       scheduling      — is this card's next review time here yet?
+                         Only cards that have been started can be "due".
+
+     A card can be Learning and due, or Learning and not due yet; the same
+     goes for Familiar and Mastered. `ready` is what a session would contain
+     right now: everything due, plus the new cards today's cap still allows. */
   counts(deckId) {
     const now = Date.now();
     const pool = this.cardsOf(deckId).filter(c => c.term);
-    const limitNew = Math.max(0, (this.state.settings.newPerDay || 0) - this.today().new);
+    const level = (name) => pool.filter(c => SRS.bucket(c.srs) === name).length;
+    const started = pool.filter(c => c.srs.state !== 'new');
+    const dueNow = started.filter(c => c.srs.due <= now);
+    const newTotal = level('new');
+    const newAvailable = Math.min(
+      Math.max(0, (this.state.settings.newPerDay || 0) - this.today().new), newTotal);
+
     return {
       total: pool.length,
-      new: Math.min(limitNew, pool.filter(c => c.srs.state === 'new').length),
-      newTotal: pool.filter(c => c.srs.state === 'new').length,
-      learning: pool.filter(c => (c.srs.state === 'learning' || c.srs.state === 'relearning') && c.srs.due <= now).length,
-      due: pool.filter(c => c.srs.state === 'review' && c.srs.due <= now).length,
-      familiar: pool.filter(c => SRS.bucket(c.srs) === 'familiar').length,
-      mastered: pool.filter(c => SRS.bucket(c.srs) === 'mastered').length
+      /* knowledge levels */
+      new: newTotal,
+      learning: level('learning'),
+      familiar: level('familiar'),
+      mastered: level('mastered'),
+      /* scheduling */
+      due: dueNow.length,
+      dueLearning: dueNow.filter(c => SRS.bucket(c.srs) === 'learning').length,
+      later: started.length - dueNow.length,
+      newAvailable: newAvailable,
+      ready: dueNow.length + newAvailable
     };
   },
 
