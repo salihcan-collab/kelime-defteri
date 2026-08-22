@@ -34,7 +34,21 @@ const ICONS = {
 };
 
 /* ---------- toast ---------------------------------------------------------- */
+/* Keep the stack clear of a dialog's buttons: dialogs vary in height, so the
+   offset is measured rather than guessed. */
+function positionToasts() {
+  const wrap = $('#toastWrap');
+  if (!wrap) return;
+  if ($('#modalHost').classList.contains('hidden')) { wrap.style.bottom = ''; return; }
+  const foot = $('#modalFoot');
+  const anchor = (foot && foot.offsetHeight) ? foot : $('.modal');
+  if (!anchor) { wrap.style.bottom = ''; return; }
+  const top = anchor.getBoundingClientRect().top;
+  wrap.style.bottom = clamp(Math.round(window.innerHeight - top + 12), 22, window.innerHeight - 130) + 'px';
+}
+
 function toast(msg, type) {
+  positionToasts();
   const t = document.createElement('div');
   t.className = 'toast ' + (type || 'info');
   t.innerHTML = (type === 'ok' ? ICONS.check : type === 'err' ? ICONS.x : ICONS.info) + '<span>' + esc(msg) + '</span>';
@@ -50,13 +64,17 @@ function openModal(opts) {
   $('#modalFoot').innerHTML = opts.foot || '';
   $('.modal').classList.toggle('wide', !!opts.wide);
   $('#modalHost').classList.remove('hidden');
+  document.body.classList.add('modal-open');
   modalOnClose = opts.onClose || null;
   if (opts.onMount) opts.onMount($('#modalBody'), $('#modalFoot'));
+  positionToasts();
   const first = $('#modalBody input, #modalBody textarea, #modalBody select');
   if (first && !opts.noFocus) setTimeout(() => first.focus(), 60);
 }
 function closeModal() {
   $('#modalHost').classList.add('hidden');
+  document.body.classList.remove('modal-open');
+  positionToasts();
   $('#modalBody').innerHTML = '';
   if (modalOnClose) { const f = modalOnClose; modalOnClose = null; f(); }
 }
@@ -557,9 +575,10 @@ function cardEditor(card, presetDeck) {
     title: isNew ? 'Add a word' : 'Edit word',
     body:
       '<div class="inline-fields">' +
-        '<div class="field"><label>Word or phrase</label>' +
-          '<input type="text" id="cTerm" value="' + esc(card ? card.term : '') + '" placeholder="e.g. reliable"></div>' +
-        '<div class="field"><label>Part of speech</label><select id="cPos">' +
+        '<div class="field"><label>Word or phrase <em class="req">required</em></label>' +
+          '<input type="text" id="cTerm" value="' + esc(card ? card.term : '') + '" placeholder="e.g. reliable">' +
+          '<span class="help" id="dupHint"></span></div>' +
+        '<div class="field"><label>Part of speech <em class="req">required</em></label><select id="cPos">' +
           '<option value="">—</option>' +
           PARTS_OF_SPEECH.map(p => '<option' + (card && card.pos === p ? ' selected' : '') + '>' + p + '</option>').join('') +
         '</select></div>' +
@@ -567,7 +586,7 @@ function cardEditor(card, presetDeck) {
       (AI.available()
         ? '<button class="ghost-btn tiny" id="aiFill" style="margin:-4px 0 14px">' + ICONS.spark + 'Auto-fill the rest with AI</button>'
         : '<p class="faint" style="margin:-4px 0 14px">Tip: connect an AI assistant in Settings to fill these fields automatically.</p>') +
-      '<div class="field"><label>Meaning (English definition)</label>' +
+      '<div class="field"><label>Meaning (English definition) <em class="req">required</em></label>' +
         '<textarea id="cDef" placeholder="A clear, short definition">' + esc(card ? card.definition : '') + '</textarea></div>' +
       '<div class="field"><label>Example sentence</label>' +
         '<textarea id="cEx" placeholder="A natural sentence that contains the word">' + esc(card ? card.example : '') + '</textarea>' +
@@ -586,7 +605,8 @@ function cardEditor(card, presetDeck) {
           '<input type="text" id="cNote" value="' + esc(card ? card.notes : '') + '" placeholder="A memory hook, a false friend…"></div>' +
       '</div>' +
       (card ? '<p class="faint">Status: ' + card.srs.state + ' · seen ' + card.stats.seen + ' times · ' +
-        card.stats.correct + ' correct / ' + card.stats.wrong + ' wrong · next ' + dueText(card) + '</p>' : ''),
+        card.stats.correct + ' correct / ' + card.stats.wrong + ' wrong · next ' + dueText(card) + '</p>' : '') +
+      '<div id="dupWarn"></div>',
     foot:
       (isNew ? '' : '<button class="danger-btn" data-act="del">Delete</button>') +
       '<div class="spacer"></div>' +
@@ -599,9 +619,75 @@ function cardEditor(card, presetDeck) {
         example: $('#cEx').value.trim(), translation: $('#cTr').value.trim(),
         category: $('#cCat').value.trim(), deckId: $('#cDeck').value, notes: $('#cNote').value.trim()
       });
+      /* A card is only useful if it has the word, what kind of word it is and
+         what it means — the drills need all three. */
+      const missingFields = (data) => {
+        const missing = [];
+        if (!data.term) missing.push(['cTerm', 'the word']);
+        if (!data.pos) missing.push(['cPos', 'a part of speech']);
+        if (!data.definition) missing.push(['cDef', 'a meaning']);
+        return missing;
+      };
+
+      const markMissing = (missing) => {
+        ['cTerm', 'cPos', 'cDef'].forEach(id => {
+          const el = $('#' + id);
+          if (el) el.classList.toggle('invalid', missing.some(m => m[0] === id));
+        });
+        if (missing.length) $('#' + missing[0][0]).focus();
+      };
+
+      /* Duplicates are allowed on purpose — the same spelling can be a
+         different part of speech — but never silently: the first save shows
+         what is already there and only a second, deliberate click goes through. */
+      let dupAcknowledged = false;
+
+      const showDuplicateWarning = (dupes) => {
+        const rows = dupes.slice(0, 4).map(d => {
+          const deck = Store.deck(d.deckId);
+          return '<div class="row between" style="padding:7px 0;border-top:1px solid var(--border-soft)">' +
+            '<div style="min-width:0"><b>' + esc(d.term) + '</b>' +
+              (d.pos ? ' <span class="chip pos">' + esc(d.pos) + '</span>' : '') +
+              '<div class="faint">' + esc(d.definition || d.translation || 'no meaning saved') + '</div></div>' +
+            '<span class="faint">' + esc(deck ? deck.emoji + ' ' + deck.name : 'no deck') + '</span></div>';
+        }).join('');
+        $('#dupWarn').innerHTML =
+          '<div class="feedback no" style="margin-top:4px">' +
+            '<b>You already have this word.</b> Saving it again splits its review history ' +
+            'across two cards — keep both only if they are genuinely different.' +
+            rows +
+            '<div class="row end" style="margin-top:10px">' +
+              '<button class="soft-btn tiny" data-act="open-dup">Open the existing word</button>' +
+            '</div>' +
+          '</div>';
+        const open = $('#dupWarn [data-act="open-dup"]');
+        if (open) open.onclick = () => { closeModal(); setTimeout(() => cardEditor(dupes[0]), 60); };
+        $('#dupWarn').scrollIntoView({ block: 'nearest' });
+      };
+
+      const setSaveLabel = (text) => {
+        const btn = f.querySelector('[data-act="save"]');
+        if (btn) btn.textContent = text;
+      };
+
+      /* Returns true when saving may go ahead. */
       const persist = () => {
         const data = read();
-        if (!data.term) { toast('Enter the word first', 'err'); return false; }
+        const missing = missingFields(data);
+        if (missing.length) {
+          markMissing(missing);
+          toast('Still needs ' + missing.map(m => m[1]).join(' and '), 'err');
+          return false;
+        }
+        markMissing([]);
+        const dupes = Store.findDuplicates(data.term, card && card.id);
+        if (dupes.length && !dupAcknowledged) {
+          dupAcknowledged = true;
+          showDuplicateWarning(dupes);
+          setSaveLabel('Save anyway');
+          toast('"' + data.term + '" is already saved — check below', 'err');
+          return false;
+        }
         if (isNew) Store.addCard(data); else Store.updateCard(card.id, data);
         return true;
       };
@@ -612,9 +698,9 @@ function cardEditor(card, presetDeck) {
       };
       const more = f.querySelector('[data-act="save-more"]');
       if (more) more.onclick = () => {
+        const deckId = $('#cDeck').value;
         if (!persist()) return;
         toast('Word added', 'ok'); refreshChrome();
-        const deckId = $('#cDeck').value;
         closeModal(); cardEditor(null, deckId);
       };
       const del = f.querySelector('[data-act="del"]');
@@ -640,8 +726,31 @@ function cardEditor(card, presetDeck) {
         } catch (err) { toast(err.message, 'err'); }
         fill.disabled = false; fill.innerHTML = original;
       };
+      const hint = $('#dupHint');
+      const checkDuplicate = () => {
+        const dupes = Store.findDuplicates($('#cTerm').value, card && card.id);
+        if (!dupes.length) { hint.textContent = ''; hint.classList.remove('warn'); return; }
+        const deck = Store.deck(dupes[0].deckId);
+        hint.textContent = 'Already saved' + (deck ? ' in ' + deck.name : '') +
+          (dupes.length > 1 ? ' and ' + (dupes.length - 1) + ' other deck(s)' : '') + '.';
+        hint.classList.add('warn');
+      };
+      ['cTerm', 'cPos', 'cDef'].forEach(id => {
+        const el = $('#' + id);
+        if (el) el.addEventListener('input', () => el.classList.remove('invalid'));
+        if (el && el.tagName === 'SELECT') el.addEventListener('change', () => el.classList.remove('invalid'));
+      });
       const t = $('#cTerm');
-      if (t) t.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); const a = $('#aiFill'); if (a) a.click(); } };
+      if (t) {
+        t.addEventListener('input', () => {
+          dupAcknowledged = false;
+          $('#dupWarn').innerHTML = '';
+          setSaveLabel('Save');
+          checkDuplicate();
+        });
+        t.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); const a = $('#aiFill'); if (a) a.click(); } };
+      }
+      checkDuplicate();
     }
   });
 }
@@ -721,7 +830,7 @@ function drawStudySetup(host) {
         '<p class="muted" style="margin-top:8px;max-width:420px;margin-inline:auto">' +
           (ready
             ? 'This session has ' + ready + ' card' + (ready === 1 ? '' : 's') + '. Rate how well you remembered each one and Lexio schedules the next review for you.'
-            : 'Every card is scheduled for a later date. You can still practise freely, or study ahead.') +
+            : 'Every card is scheduled for a later date. Studying ahead brings the next ones forward anyway — useful before an exam, though it does not help your long-term memory as much as waiting.') +
         '</p>' +
         '<div class="counts" style="justify-content:center;margin:20px 0">' +
           '<span class="c-new">' + c.new + ' new</span>' +
@@ -755,11 +864,15 @@ function drawStudySetup(host) {
   if (sel) sel.onchange = () => go('study', { deckId: sel.value });
 }
 
-function startSession(deckId, ignoreLimits) {
-  const queue = Store.queue(deckId, { ignoreLimits: ignoreLimits });
-  if (!queue.length) return toast('No cards to study in this deck', 'err');
+function startSession(deckId, ahead) {
+  const queue = Store.queue(deckId, { ahead: ahead });
+  if (!queue.length) {
+    return toast(Store.cardsOf(deckId).length
+      ? 'Every word in this deck is already scheduled — nothing left to bring forward'
+      : 'This deck has no words yet', 'err');
+  }
   session = {
-    deckId: deckId, queue: queue.slice(0, ignoreLimits ? 60 : queue.length),
+    deckId: deckId, ahead: !!ahead, queue: queue.slice(0, ahead ? 60 : queue.length),
     total: 0, done: 0, again: 0, good: 0, revealed: false,
     startedAt: Date.now(), undo: null, counts: {}
   };
@@ -815,7 +928,8 @@ function drawStudyCard(host) {
       '<div class="study-head">' +
         '<button class="icon-btn" data-act="quit" title="End session">' + ICONS.back + '</button>' +
         '<div class="bar" style="flex:1"><i style="width:' + progress + '%"></i></div>' +
-        '<div class="counts"><span class="c-due">' + remaining + ' left</span></div>' +
+        '<div class="counts"><span class="c-due">' + remaining + ' left</span>' +
+          (session.ahead ? '<span class="c-new">ahead of schedule</span>' : '') + '</div>' +
         (session.undo && Store.canUndo() ? '<button class="soft-btn tiny" data-act="undo">Undo</button>' : '') +
       '</div>' +
 
@@ -969,8 +1083,13 @@ const MODES = [
 
 let quiz = null;
 let quizSetup = { mode: 'mc-meaning', deckId: '', scope: 'all' };
-/* Round length lives in Settings → Study rules so both screens agree. */
-function roundLength() { return Store.state.settings.sessionLength || 12; }
+/* Round length is a share of the words the current filters make available,
+   so it means the same thing whether a deck holds 20 words or 2,000. */
+function roundPercent() { return clamp(Store.state.settings.roundPercent || 20, 10, 100); }
+function roundLength(poolSize) {
+  if (!poolSize) return 0;
+  return Math.max(1, Math.round(poolSize * roundPercent() / 100));
+}
 /* How many choices a multiple-choice question offers. */
 function optionCount() { return clamp(Store.state.settings.optionCount || 4, 2, 5); }
 /* Pairs shown on one matching board — more than this stops being playable. */
@@ -996,9 +1115,13 @@ function drawPracticeSetup(host) {
         '</select></div>' +
       '</div>' +
       '<div class="card">' +
-        '<div class="field"><label>Questions per round</label><select id="pCount">' +
-          [5, 10, 12, 20, 30, 50].map(n => '<option' + (n === roundLength() ? ' selected' : '') + '>' + n + '</option>').join('') +
-        '</select></div>' +
+        '<div class="field" style="margin-bottom:10px">' +
+          '<div class="row between"><label style="margin:0">Round length</label>' +
+            '<b id="pCountOut" style="font-size:.88rem">' + roundLabel(pool.length) + '</b></div>' +
+          '<input type="range" id="pPct" min="10" max="100" step="10" value="' + roundPercent() + '"' +
+            ' style="--fill:' + ((roundPercent() - 10) / 90 * 100) + '%">' +
+          '<div class="row between"><span class="faint">10%</span><span class="faint">100%</span></div>' +
+        '</div>' +
         '<div class="row between" style="margin-top:4px">' +
           '<span class="muted">' + pool.length + ' word' + (pool.length === 1 ? '' : 's') + ' available</span>' +
           '<label class="switch" style="padding:0"><input type="checkbox" id="pSrs"' +
@@ -1036,10 +1159,28 @@ function drawPracticeSetup(host) {
   };
   $('#pDeck').onchange = (e) => { quizSetup.deckId = e.target.value; render('practice'); };
   $('#pScope').onchange = (e) => { quizSetup.scope = e.target.value; render('practice'); };
-  $('#pCount').onchange = (e) => {
-    Store.state.settings.sessionLength = parseInt(e.target.value, 10) || 12; Store.save();
-  };
+  const slider = $('#pPct');
+  if (slider) {
+    const paint = () => {
+      const v = parseInt(slider.value, 10);
+      $('#pCountOut').textContent = roundLabel(pool.length, v);
+      /* Colour the travelled part of the track (Chrome has no ::-moz-range-progress). */
+      slider.style.setProperty('--fill', ((v - 10) / 90 * 100) + '%');
+    };
+    slider.oninput = paint;
+    slider.onchange = () => {
+      Store.state.settings.roundPercent = clamp(parseInt(slider.value, 10) || 20, 10, 100);
+      Store.save(); paint();
+    };
+  }
   $('#pSrs').onchange = (e) => { Store.state.settings.quizAffectsSrs = e.target.checked; Store.save(); };
+}
+
+/* "40 % · 26 of 66 words" — shows both the share and what it works out to. */
+function roundLabel(poolSize, percent) {
+  const p = percent == null ? roundPercent() : percent;
+  const n = poolSize ? Math.max(1, Math.round(poolSize * p / 100)) : 0;
+  return p + '% · ' + n + ' of ' + poolSize + ' word' + (poolSize === 1 ? '' : 's');
 }
 
 function practicePool(deckId, scope) {
@@ -1153,7 +1294,7 @@ async function startQuiz() {
   if (pool.length < minWordsFor(mode)) {
     return toast(pool.length ? 'This drill needs at least two words' : 'No words match these filters', 'err');
   }
-  const count = roundLength();
+  const count = roundLength(pool.length);
   quiz = newQuiz(mode, []);
 
   if (mode === 'ai-quiz') {
@@ -1771,14 +1912,11 @@ function renderSettings(host) {
          ['mixed', 'Mix both directions']].map(o =>
           '<option value="' + o[0] + '"' + (s.studyDirection === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') +
       '</select></div>' +
-      '<div class="inline-fields">' +
-        '<div class="field"><label>Questions per practice round</label>' +
-          '<input type="number" id="setLen" min="5" max="100" value="' + s.sessionLength + '"></div>' +
-        '<div class="field"><label>Answer choices per question</label><div class="seg">' +
-          [4, 5].map(n => '<button data-pick-opts="' + n + '" class="' +
-            (optionCount() === n ? 'sel' : '') + '">' + n + ' options</button>').join('') +
-        '</div><span class="help">Applies to the multiple-choice drills and AI quizzes.</span></div>' +
-      '</div>' +
+      '<div class="field"><label>Answer choices per question</label><div class="seg">' +
+        [4, 5].map(n => '<button data-pick-opts="' + n + '" class="' +
+          (optionCount() === n ? 'sel' : '') + '">' + n + ' options</button>').join('') +
+      '</div><span class="help">Applies to the multiple-choice drills and AI quizzes. ' +
+      'How long a round is set on the Practice screen itself.</span></div>' +
       '<label class="switch"><input type="checkbox" id="setEx"' + (s.showExampleOnFront ? ' checked' : '') + '>' +
         '<span class="track"></span><span class="txt">Show the example sentence on the front' +
         '<small>The target word appears as a blank, giving you a context clue.</small></span></label>' +
@@ -1924,7 +2062,6 @@ function bindSettings(host) {
   };
   num('setNew', 'newPerDay', 0, 200);
   num('setRev', 'reviewPerDay', 5, 999);
-  num('setLen', 'sessionLength', 5, 100);
   const dir = $('#setDir'); if (dir) dir.onchange = () => { s.studyDirection = dir.value; Store.save(); };
   const chk = (id, key) => { const el = $('#' + id); if (el) el.onchange = () => { s[key] = el.checked; Store.save(); }; };
   chk('setEx', 'showExampleOnFront'); chk('setSpeak', 'autoSpeak'); chk('setQuizSrs', 'quizAffectsSrs');
@@ -1969,8 +2106,12 @@ function importDialog() {
         let deckId = $('#impDeck').value;
         if (!deckId) deckId = Store.addDeck({ name: 'Imported ' + new Date().toLocaleDateString(), emoji: '📥' }).id;
         try {
-          const n = Store.importCSV(text, deckId);
-          closeModal(); toast(n + ' words imported', 'ok'); go('decks', { deckId: deckId });
+          const r = Store.importCSV(text, deckId);
+          closeModal();
+          toast(r.added + ' word' + (r.added === 1 ? '' : 's') + ' imported' +
+                (r.skipped ? ' · ' + r.skipped + ' duplicate' + (r.skipped === 1 ? '' : 's') + ' skipped' : ''),
+                r.added ? 'ok' : 'info');
+          go('decks', { deckId: deckId });
         } catch (err) { toast('Could not read that file: ' + err.message, 'err'); }
       };
     }

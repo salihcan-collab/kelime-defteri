@@ -34,7 +34,7 @@ const Store = {
         showExampleOnFront: false,
         autoSpeak: false,
         quizAffectsSrs: true,
-        sessionLength: 12,              // questions per practice round
+        roundPercent: 20,               // share of the available words used in a practice round
         optionCount: 4,                 // answer choices in a multiple-choice question
         ai: {
           enabled: false,
@@ -180,6 +180,16 @@ const Store = {
 
   card(id) { return this.state.cards.find(c => c.id === id); },
 
+  /* Cards that already use this term, ignoring case and surrounding spaces. */
+  findDuplicates(term, exceptId, deckId) {
+    const key = String(term || '').trim().toLowerCase();
+    if (!key) return [];
+    return this.state.cards.filter(c =>
+      c.id !== exceptId &&
+      (!deckId || c.deckId === deckId) &&
+      String(c.term || '').trim().toLowerCase() === key);
+  },
+
   cardsOf(deckId) {
     return deckId ? this.state.cards.filter(c => c.deckId === deckId) : this.state.cards.slice();
   },
@@ -287,16 +297,20 @@ const Store = {
 
   /* ---------- queue ------------------------------------------------------- */
   /* Cards to study now: due reviews + learning cards + a capped number of new ones. */
+  /* opts.ahead: study ahead of schedule — take the cards whose turn is
+     nearest even though it has not come yet, and ignore the daily caps. */
   queue(deckId, opts) {
     opts = opts || {};
+    const ahead = !!opts.ahead;
     const now = Date.now();
     const pool = this.cardsOf(deckId).filter(c => c.term);
-    const limitNew = opts.ignoreLimits ? Infinity
+    const limitNew = ahead ? Infinity
       : Math.max(0, (this.state.settings.newPerDay || 0) - this.today().new);
-    const limitRev = opts.ignoreLimits ? Infinity : (this.state.settings.reviewPerDay || 9999);
+    const limitRev = ahead ? Infinity : (this.state.settings.reviewPerDay || 9999);
+    const ready = (c) => ahead || c.srs.due <= now;
 
-    const learning = pool.filter(c => (c.srs.state === 'learning' || c.srs.state === 'relearning') && c.srs.due <= now);
-    const due      = pool.filter(c => c.srs.state === 'review' && c.srs.due <= now)
+    const learning = pool.filter(c => (c.srs.state === 'learning' || c.srs.state === 'relearning') && ready(c));
+    const due      = pool.filter(c => c.srs.state === 'review' && ready(c))
                          .sort((a, b) => a.srs.due - b.srs.due).slice(0, limitRev);
     const fresh    = pool.filter(c => c.srs.state === 'new')
                          .sort((a, b) => a.createdAt - b.createdAt).slice(0, limitNew);
@@ -446,19 +460,24 @@ const Store = {
     const iTr   = start ? idx(['translation', 'turkish', 'çeviri'], 4) : 4;
     const iCat  = start ? idx(['category', 'topic', 'tag'], 5) : 5;
 
-    let n = 0;
+    let added = 0, skipped = 0;
+    const seen = {};
+    this.cardsOf(deckId).forEach(c => { seen[String(c.term).trim().toLowerCase()] = 1; });
     for (let r = start; r < rows.length; r++) {
       const row = rows[r];
       if (!row || !row[iTerm] || !String(row[iTerm]).trim()) continue;
+      const key = String(row[iTerm]).trim().toLowerCase();
+      if (seen[key]) { skipped++; continue; }
+      seen[key] = 1;
       this.addCard({
         deckId: deckId,
         term: row[iTerm], pos: row[iPos] || '', definition: row[iDef] || '',
         example: row[iEx] || '', translation: row[iTr] || '', category: row[iCat] || ''
       }, true);
-      n++;
+      added++;
     }
     this.saveNow();
-    return n;
+    return { added: added, skipped: skipped };
   },
 
   wipe() {

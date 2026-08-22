@@ -68,6 +68,10 @@ Her kartı gördüğünde dört seçenekten birini işaretlersin:
 | **Easy** (4) | Çok kolaydı | Aralık belirgin şekilde uzar |
 
 Düğmelerin altında bir sonraki tekrarın ne zaman olacağı yazar (`10m`, `1d`, `2mo` gibi).
+Zamanı gelen kart kalmadığında **"Study ahead anyway"** ile sırası henüz gelmemiş
+kartları öne çekebilirsin (sınav öncesi işe yarar; ama beklemek uzun vadeli hafıza için
+daha iyidir). Bu seansta başlıkta "ahead of schedule" yazar.
+
 Sistem SM-2 algoritmasının Anki'de kullanılan sürümüne dayanır: yeni kartlar 1 dakika →
 10 dakika → 1 gün adımlarıyla başlar, sonra her başarılı tekrarda aralık kendi
 "kolaylık katsayısı" kadar çarpılarak uzar. Unuttuğun kart otomatik olarak başa döner.
@@ -91,6 +95,15 @@ kelime sürdürülebilir bir tempodur.
 Örnek cümlenin kelimeyi **içermesi** önemlidir: "Fill in the blank" alıştırması cümledeki
 kelimeyi boşluğa çevirerek soru üretir.
 
+**Zorunlu alanlar:** kelime, sözcük türü ve anlam. Bu üçü olmadan kart kaydedilmez —
+alıştırmalar üçüne de ihtiyaç duyar. Eksik alanlar kırmızı çerçeveyle işaretlenir.
+Çeviri, kategori, örnek cümle ve not isteğe bağlıdır.
+
+**Aynı kelimeyi ikinci kez eklersen** uygulama uyarır ve kelimenin hâlihazırda hangi destede
+olduğunu gösterir. İstersen mevcut kartı açabilir, istersen "Save anyway" ile yine de
+kaydedebilirsin — aynı yazılışın farklı sözcük türleri olabilir. Kaydetmen için ikinci kez
+onaylaman gerekir, yani yanlışlıkla kopya oluşturamazsın.
+
 Yeni kelime eklemek için herhangi bir ekranda **N** tuşuna basman yeterli.
 
 ---
@@ -112,9 +125,13 @@ Yeni kelime eklemek için herhangi bir ekranda **N** tuşuna basman yeterli.
 başlamadıklarını çalışabilirsin. **Count towards scheduling** açıkken testte kaçırdığın
 kelime tekrar programında öne alınır.
 
-Tur uzunluğu (**Questions per practice round**) ve çoktan seçmeli sorulardaki şık sayısı
-(**Answer choices per question** — 4 veya 5) Settings → Study rules altından ayarlanır.
-Tur uzunluğu eşleştirme moduna da uygulanır: 12 kelime seçersen 6'şarlık iki tahta gelir.
+**Tur uzunluğu** doğrudan Practice ekranındaki kaydırma çubuğuyla ayarlanır: seçtiğin
+filtrelerde kaç kelime varsa onun **yüzdesi** olarak (%10'luk adımlarla). Çubuğun yanında
+karşılığı da yazar — "40% · 26 of 66 words" gibi. Böylece 20 kelimelik bir destede de
+2000 kelimelik bir destede de aynı ayar anlamlı olur. Eşleştirme modunda da geçerlidir:
+%20 ile 13 kelime seçilirse en fazla 6'lık tahtalara bölünür.
+
+Çoktan seçmeli sorulardaki **şık sayısı** (4 veya 5) Settings → Study rules altındadır.
 
 Bir turun sonunda **"Practise the N I missed"** düğmesi yalnızca kaçırdığın kelimeleri
 tekrar sorar; çeldirici şıklar arasında o turda kaçırdığın diğer kelimeler de yer alır,
@@ -202,6 +219,7 @@ Yine de bu dosyaları başkasıyla paylaşacaksan anahtarını önce Settings'te
 - **CSV içe aktarma:** Browse → **Import**. Sütun sırası:
   `term, part of speech, definition, example, translation, category`.
   Başlık satırı varsa otomatik algılanır. Dosya seçebilir veya satırları yapıştırabilirsin.
+  Hedef destede zaten bulunan kelimeler atlanır ve kaç tanesinin atlandığı bildirilir.
 - **CSV dışa aktarma:** Browse → **Export CSV** (Excel'de açılır).
 - **Tam yedek:** Settings → **Download backup (.json)** — istatistikler dahil her şey.
 
