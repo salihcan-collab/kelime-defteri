@@ -147,13 +147,16 @@ function refreshChrome() {
 }
 
 /* ---------- shared bits ------------------------------------------------------ */
+/* A coloured dot keeps the status apart from a category that happens to be
+   called "Learning" or "New". */
 function stateChip(card) {
   const b = SRS.bucket(card.srs);
   const due = SRS.isDue(card.srs) && card.srs.state !== 'new';
-  if (card.srs.state === 'new') return '<span class="chip new">New</span>';
-  if (b === 'learning') return '<span class="chip learning">Learning</span>';
-  if (due) return '<span class="chip due">Due</span>';
-  return '<span class="chip review">' + (b === 'mature' ? 'Mature' : 'Young') + '</span>';
+  const chip = (cls, label) => '<span class="chip ' + cls + '"><i class="dot"></i>' + label + '</span>';
+  if (card.srs.state === 'new') return chip('new', 'New');
+  if (b === 'learning') return chip('learning', 'Learning');
+  if (due) return chip('due', 'Due');
+  return chip('review', b === 'mature' ? 'Mature' : 'Young');
 }
 function dueText(card) {
   if (card.srs.state === 'new') return '—';
@@ -165,14 +168,54 @@ function deckOptions(selected, allLabel) {
     Store.state.decks.map(d => '<option value="' + d.id + '"' + (d.id === selected ? ' selected' : '') + '>' +
       esc(d.emoji + ' ' + d.name) + '</option>').join('');
 }
+/* ---------- finding a term inside its example sentence -------------------
+   The term is often a phrase ("a piece of cake") and the sentence often
+   inflects it ("put off" -> "putting off", "come up with" -> "came up with").
+   Match the whole phrase, allowing a suffix on the first and last words only;
+   if that fails on a phrase, allow any single word in first position so
+   irregular verbs still line up. Returns [start, end] or null.
+   -------------------------------------------------------------------------- */
+function reEscape(s) { return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+
+function termMatch(sentence, term) {
+  if (!sentence || !term) return null;
+  const words = String(term).trim().split(/\s+/).filter(Boolean);
+  if (!words.length) return null;
+
+  const pattern = (fuzzyFirst) => words.map((w, i) => {
+    if (i === 0 && fuzzyFirst) return "[A-Za-z\u00C0-\u024F']+";
+    const tail = (i === 0 || i === words.length - 1) ? '\\w*' : '';
+    return reEscape(w) + tail;
+  }).join('\\s+');
+
+  const attempts = words.length > 1 ? [false, true] : [false];
+  for (let i = 0; i < attempts.length; i++) {
+    try {
+      const m = new RegExp('\\b' + pattern(attempts[i]) + '\\b', 'i').exec(sentence);
+      if (m) return [m.index, m.index + m[0].length];
+    } catch (e) { return null; }
+  }
+  return null;
+}
+
 function highlightTerm(sentence, term) {
   if (!sentence) return '';
-  const safe = esc(sentence);
-  if (!term) return safe;
-  const stem = term.split(/\s+/)[0].replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  try {
-    return safe.replace(new RegExp('(' + stem + '\\w*)', 'ig'), '<b>$1</b>');
-  } catch (e) { return safe; }
+  const at = termMatch(sentence, term);
+  if (!at) return esc(sentence);
+  return esc(sentence.slice(0, at[0])) +
+         '<b>' + esc(sentence.slice(at[0], at[1])) + '</b>' +
+         esc(sentence.slice(at[1]));
+}
+
+/* Replace the term with a gap. Returns { text, surface } — surface is the
+   exact wording that was removed, which is also accepted as an answer. */
+function blankOut(sentence, term) {
+  const at = termMatch(sentence, term);
+  if (!at) return { text: sentence + '  (____)', surface: null };
+  return {
+    text: sentence.slice(0, at[0]) + '____' + sentence.slice(at[1]),
+    surface: sentence.slice(at[0], at[1])
+  };
 }
 function download(filename, text, mime) {
   const blob = new Blob([text], { type: mime || 'application/json' });
@@ -718,7 +761,7 @@ function startSession(deckId, ignoreLimits) {
   session = {
     deckId: deckId, queue: queue.slice(0, ignoreLimits ? 60 : queue.length),
     total: 0, done: 0, again: 0, good: 0, revealed: false,
-    startedAt: Date.now(), undo: null, seen: new Set()
+    startedAt: Date.now(), undo: null, counts: {}
   };
   session.total = session.queue.length;
   render('study');
@@ -751,7 +794,7 @@ function drawStudyCard(host) {
       '</div>' +
       (s.showExampleOnFront && card.example
         ? '<p class="fc-example" style="margin-top:16px">' +
-          esc(card.example.replace(new RegExp(card.term.split(/\s+/)[0], 'ig'), '____')) + '</p>' : '');
+          esc(blankOut(card.example, card.term).text) + '</p>' : '');
 
   const back =
     '<div class="fc-body">' +
@@ -773,7 +816,7 @@ function drawStudyCard(host) {
         '<button class="icon-btn" data-act="quit" title="End session">' + ICONS.back + '</button>' +
         '<div class="bar" style="flex:1"><i style="width:' + progress + '%"></i></div>' +
         '<div class="counts"><span class="c-due">' + remaining + ' left</span></div>' +
-        (session.undo ? '<button class="soft-btn tiny" data-act="undo">Undo</button>' : '') +
+        (session.undo && Store.canUndo() ? '<button class="soft-btn tiny" data-act="undo">Undo</button>' : '') +
       '</div>' +
 
       '<div class="flashcard">' +
@@ -830,9 +873,10 @@ function revealCard() {
 function rateCard(rating) {
   if (!session || !session.revealed) return;
   const card = session.queue[0];
-  session.undo = { cardId: card.id, srs: JSON.parse(JSON.stringify(card.srs)), stats: Object.assign({}, card.stats) };
   Store.review(card.id, rating, 'review');
+  session.undo = { cardId: card.id, rating: rating };
   session.done++;
+  session.counts[card.id] = (session.counts[card.id] || 0) + 1;
   if (rating === 1) session.again++; else session.good++;
   session.revealed = false; session.spoke = false;
   session.queue.shift();
@@ -849,23 +893,30 @@ function rateCard(rating) {
 
 function undoAnswer() {
   if (!session || !session.undo) return;
-  const u = session.undo;
-  const card = Store.card(u.cardId);
-  if (!card) return;
-  card.srs = u.srs; card.stats = u.stats;
-  const d = Store.today(); d.reviews = Math.max(0, d.reviews - 1);
-  Store.state.log.pop();
-  Store.save();
-  session.queue = [card].concat(session.queue.filter(c => c.id !== card.id));
+  const rating = session.undo.rating;
+  const undone = Store.undoReview();
+  session.undo = null;
+  if (!undone) return;
+  const card = undone.card;
+
+  /* Roll back the session tally as well, or the summary reports more
+     answers remembered than answers given. */
   session.done = Math.max(0, session.done - 1);
-  session.undo = null; session.revealed = true;
+  if (rating === 1) session.again = Math.max(0, session.again - 1);
+  else session.good = Math.max(0, session.good - 1);
+  session.counts[card.id] = (session.counts[card.id] || 1) - 1;
+  if (session.counts[card.id] <= 0) delete session.counts[card.id];
+
+  session.queue = [card].concat(session.queue.filter(c => c.id !== card.id));
+  session.revealed = true;
   render('study'); refreshChrome();
   toast('Last answer undone', 'ok');
 }
 
 function drawStudySummary(host) {
   const mins = Math.max(1, Math.round((Date.now() - session.startedAt) / 60000));
-  const acc = session.done ? pct(session.good, session.done) : 0;
+  const acc = session.done ? clamp(pct(session.good, session.done), 0, 100) : 0;
+  const words = Object.keys(session.counts || {}).length;
   const c = Store.counts(session.deckId);
   const left = c.due + c.learning + c.new;
   host.innerHTML =
@@ -873,9 +924,10 @@ function drawStudySummary(host) {
       '<div class="card" style="text-align:center;padding:36px 26px">' +
         '<div style="font-size:2.8rem">' + (acc >= 80 ? '🏆' : acc >= 60 ? '👏' : '💪') + '</div>' +
         '<h2 style="font-size:1.4rem;margin-top:6px">Session complete</h2>' +
-        '<p class="muted" style="margin-top:6px">' + session.done + ' cards in ' + mins + ' minute' + (mins === 1 ? '' : 's') + '</p>' +
+        '<p class="muted" style="margin-top:6px">' + session.done + ' answer' + (session.done === 1 ? '' : 's') +
+          ' across ' + words + ' word' + (words === 1 ? '' : 's') + ' in ' + mins + ' minute' + (mins === 1 ? '' : 's') + '</p>' +
         '<div class="grid g3" style="margin-top:22px">' +
-          statTile('Answered', session.done, 'cards') +
+          statTile('Answered', session.done, words + ' different word' + (words === 1 ? '' : 's')) +
           statTile('Remembered', acc + '%', session.good + ' of ' + session.done) +
           statTile('Still due', left, left ? 'in this deck' : 'all clear') +
         '</div>' +
@@ -1042,23 +1094,16 @@ function buildQuestions(mode, pool, count) {
     }
     if (mode === 'cloze') {
       const sentence = card.example || (card.term + ' — ' + meaningOf(card));
-      return { type: 'type', card: card, cloze: blankOut(sentence, card.term), answer: card.term,
-               sub: meaningOf(card), question: 'Complete the sentence' };
+      const gap = blankOut(sentence, card.term);
+      return { type: 'type', card: card, cloze: gap.text, answer: card.term,
+               /* the sentence may inflect the word — accept what it actually removed */
+               alt: gap.surface, sub: meaningOf(card), question: 'Complete the sentence' };
     }
     if (mode === 'ai-writing') {
       return { type: 'write', card: card, question: 'Write a sentence using this word' };
     }
     return null;
   }).filter(Boolean);
-}
-
-function blankOut(sentence, term) {
-  const first = term.split(/\s+/)[0].replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  try {
-    const re = new RegExp('\\b' + first + '\\w*', 'i');
-    if (re.test(sentence)) return sentence.replace(re, '____');
-  } catch (e) {}
-  return sentence + '  (____)';
 }
 
 /* Multiple-choice drills need other words to build plausible options from. */
@@ -1297,8 +1342,12 @@ function checkAnswer(item) {
   if (item.type === 'write') return gradeWriting(item);
   const input = $('#qInput');
   const val = input ? input.value : '';
-  const g = gradeTyped(val, item.answer);
+  let g = gradeTyped(val, item.answer);
   if (g === 'empty') return toast('Type something first', 'err');
+  if (g === 'wrong' && item.alt) {
+    const alt = gradeTyped(val, item.alt);
+    if (alt !== 'wrong') g = alt;
+  }
   quiz.given = val;
   recordAnswer(item, g === 'exact' || g === 'close', val, g === 'close');
   render('practice');

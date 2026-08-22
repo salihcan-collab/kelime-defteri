@@ -198,26 +198,68 @@ const Store = {
     const card = this.card(cardId);
     if (!card) return null;
     const wasNew = card.srs.state === 'new';
+    const before = {
+      srs: JSON.parse(JSON.stringify(card.srs)),
+      stats: Object.assign({}, card.stats),
+      updatedAt: card.updatedAt
+    };
+
     card.srs = SRS.answer(card.srs, rating);
     card.stats.seen++;
     if (rating === 1) card.stats.wrong++; else card.stats.correct++;
     card.updatedAt = Date.now();
 
+    const dayKey = todayKey();
     const d = this.today();
     d.reviews++;
     if (wasNew) d.new++;
     if (rating > 1) d.correct++;
 
-    this.state.log.push({ ts: Date.now(), cardId, rating, correct: rating > 1, mode: mode || 'review' });
+    const entry = { ts: Date.now(), cardId, rating, correct: rating > 1, mode: mode || 'review' };
+    this.state.log.push(entry);
     if (this.state.log.length > 8000) this.state.log = this.state.log.slice(-6000);
+
+    /* Everything the answer touched, so undo can put all of it back.
+       Kept off this.state so it is never written to storage. */
+    this._undo = { cardId: cardId, rating: rating, wasNew: wasNew, dayKey: dayKey, ts: entry.ts, before: before };
     this.save();
     return card;
+  },
+
+  canUndo() { return !!this._undo; },
+
+  /* Reverse the last review completely: card schedule, card stats, the daily
+     counters (reviews / new / correct) and the log entry. */
+  undoReview() {
+    const u = this._undo;
+    this._undo = null;
+    if (!u) return null;
+    const card = this.card(u.cardId);
+    if (!card) return null;
+
+    card.srs = u.before.srs;
+    card.stats = u.before.stats;
+    card.updatedAt = u.before.updatedAt;
+
+    const d = this.state.daily[u.dayKey];
+    if (d) {
+      d.reviews = Math.max(0, d.reviews - 1);
+      if (u.wasNew) d.new = Math.max(0, d.new - 1);
+      if (u.rating > 1) d.correct = Math.max(0, d.correct - 1);
+    }
+
+    const last = this.state.log[this.state.log.length - 1];
+    if (last && last.ts === u.ts && last.cardId === u.cardId) this.state.log.pop();
+
+    this.save();
+    return { card: card, rating: u.rating, wasNew: u.wasNew };
   },
 
   /* Quiz answers can optionally nudge the schedule. */
   quizResult(cardId, correct) {
     const card = this.card(cardId);
     if (!card) return;
+    this._undo = null;
     card.stats.seen++;
     if (correct) card.stats.correct++; else card.stats.wrong++;
     const d = this.today();
