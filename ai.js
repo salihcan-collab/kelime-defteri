@@ -1,0 +1,199 @@
+/* ==========================================================================
+   ai.js — optional AI assistance
+
+   Everything in the app works without AI. When a key is supplied, the AI can
+   fill in card fields, invent fresh practice questions and mark free writing.
+
+   Three provider shapes are supported:
+     openai     — api.openai.com  (paid, very cheap with a mini model)
+     compatible — any OpenAI-compatible endpoint: OpenRouter, Groq, Together,
+                  DeepSeek, LM Studio or Ollama running on your own machine
+     gemini     — Google AI Studio (has a free tier)
+
+   The key never leaves this computer except in the request to the provider
+   you chose. It is stored in your browser, not on any server.
+   ========================================================================== */
+
+const AI = {
+  get cfg() { return Store.state.settings.ai; },
+
+  available() {
+    const c = this.cfg;
+    if (!c.enabled) return false;
+    if (c.provider === 'compatible' && /localhost|127\.0\.0\.1/.test(c.baseUrl)) return true;
+    return !!c.apiKey;
+  },
+
+  /* ---------- transport ---------------------------------------------------- */
+  async chat(messages, opts) {
+    opts = opts || {};
+    const c = this.cfg;
+    if (!this.available()) throw new Error('AI is switched off. Turn it on in Settings → AI assistant.');
+
+    let url, headers = { 'Content-Type': 'application/json' }, body;
+
+    if (c.provider === 'gemini') {
+      const model = c.model || 'gemini-2.0-flash';
+      url = 'https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(model) +
+            ':generateContent?key=' + encodeURIComponent(c.apiKey);
+      const sys = messages.filter(m => m.role === 'system').map(m => m.content).join('\n\n');
+      body = {
+        contents: messages.filter(m => m.role !== 'system')
+          .map(m => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] })),
+        generationConfig: {
+          temperature: opts.temperature != null ? opts.temperature : 0.6,
+          maxOutputTokens: opts.maxTokens || 900,
+          responseMimeType: opts.json ? 'application/json' : 'text/plain'
+        }
+      };
+      if (sys) body.systemInstruction = { parts: [{ text: sys }] };
+    } else {
+      const base = (c.baseUrl || 'https://api.openai.com/v1').replace(/\/+$/, '');
+      url = base + '/chat/completions';
+      if (c.apiKey) headers['Authorization'] = 'Bearer ' + c.apiKey;
+      body = {
+        model: c.model || 'gpt-4o-mini',
+        messages: messages,
+        temperature: opts.temperature != null ? opts.temperature : 0.6,
+        max_tokens: opts.maxTokens || 900
+      };
+      if (opts.json) body.response_format = { type: 'json_object' };
+    }
+
+    let res;
+    try {
+      res = await fetch(url, { method: 'POST', headers: headers, body: JSON.stringify(body) });
+    } catch (e) {
+      throw new Error('Could not reach the AI provider. Check your internet connection, the base URL, ' +
+                      'and — if you opened this file directly — try serving the folder over http (see the README).');
+    }
+
+    if (!res.ok) {
+      let detail = '';
+      try { const j = await res.json(); detail = (j.error && (j.error.message || j.error.status)) || ''; } catch (e) {}
+      if (res.status === 401 || res.status === 403) throw new Error('The API key was rejected (' + res.status + '). ' + detail);
+      if (res.status === 429) throw new Error('Rate limit or quota reached (429). ' + detail);
+      if (res.status === 404) throw new Error('Model "' + (this.cfg.model) + '" was not found at this endpoint. ' + detail);
+      throw new Error('AI request failed (' + res.status + '). ' + detail);
+    }
+
+    const data = await res.json();
+    if (c.provider === 'gemini') {
+      const parts = data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts;
+      return (parts || []).map(p => p.text || '').join('').trim();
+    }
+    return ((data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '').trim();
+  },
+
+  async json(messages, opts) {
+    const raw = await this.chat(messages, Object.assign({ json: true }, opts || {}));
+    return parseLooseJSON(raw);
+  },
+
+  /* ---------- features ------------------------------------------------------ */
+  async test() {
+    const out = await this.chat([{ role: 'user', content: 'Reply with exactly: OK' }], { maxTokens: 10, temperature: 0 });
+    return out.slice(0, 40);
+  },
+
+  /* Fill in the missing parts of a card from just the word. */
+  async enrich(term, hint) {
+    const lang = this.cfg.nativeLanguage || 'Turkish';
+    const res = await this.json([
+      { role: 'system', content:
+        'You are a bilingual lexicographer building vocabulary flashcards for a learner whose native language is ' + lang + '. ' +
+        'Answer only with JSON.' },
+      { role: 'user', content:
+        'Word or phrase: "' + term + '"' + (hint ? '\nContext/hint: ' + hint : '') + '\n\n' +
+        'Return JSON with exactly these keys:\n' +
+        '{"pos": one of [' + PARTS_OF_SPEECH.join(', ') + '],\n' +
+        ' "definition": a clear English definition, max 18 words, no dictionary abbreviations,\n' +
+        ' "example": one natural English sentence that CONTAINS the word "' + term + '" verbatim,\n' +
+        ' "translation": the ' + lang + ' translation (just the translation, no explanation),\n' +
+        ' "category": a short topic label in English, 1-2 words (e.g. Work, Feelings, Travel)}' }
+    ], { temperature: 0.4, maxTokens: 320 });
+    return {
+      pos: res.pos || '', definition: res.definition || '', example: res.example || '',
+      translation: res.translation || '', category: res.category || ''
+    };
+  },
+
+  /* Invent a batch of new cards on a topic. */
+  async suggestCards(topic, level, count) {
+    const lang = this.cfg.nativeLanguage || 'Turkish';
+    const res = await this.json([
+      { role: 'system', content: 'You build vocabulary decks for learners of English. Answer only with JSON.' },
+      { role: 'user', content:
+        'Create ' + count + ' useful English vocabulary items about "' + topic + '" at CEFR level ' + level + '.\n' +
+        'Avoid very basic words the learner certainly knows. Return JSON:\n' +
+        '{"cards":[{"term":"","pos":"","definition":"","example":"","translation":"' + lang + ' translation","category":""}]}\n' +
+        'Each "example" must contain its "term" verbatim.' }
+    ], { temperature: 0.85, maxTokens: 2000 });
+    return (res.cards || []).filter(c => c && c.term);
+  },
+
+  /* Fresh, context-rich questions the offline generator cannot produce. */
+  async makeQuestions(cards, count) {
+    const lang = this.cfg.nativeLanguage || 'Turkish';
+    const list = cards.map(c => '- ' + c.term + ' (' + (c.pos || '?') + '): ' + (c.definition || c.translation)).join('\n');
+    const res = await this.json([
+      { role: 'system', content: 'You are an English teacher writing exam questions. Answer only with JSON.' },
+      { role: 'user', content:
+        'Learner native language: ' + lang + '.\nTarget words:\n' + list + '\n\n' +
+        'Write ' + count + ' multiple-choice questions. Use a NEW sentence for each word (do not reuse the ' +
+        'definitions above word for word). Mix these question styles:\n' +
+        '  • a sentence with a gap where only the target word fits\n' +
+        '  • "which word means ...?"\n' +
+        '  • choosing the correct usage in context\n' +
+        'Distractors must be plausible but clearly wrong. Return JSON:\n' +
+        '{"questions":[{"term":"the target word","prompt":"question text, use ____ for a gap",' +
+        '"options":["a","b","c","d"],"answer":"the exact correct option","explanation":"one short sentence"}]}' }
+    ], { temperature: 0.8, maxTokens: 2200 });
+    return (res.questions || []).filter(q => q && q.prompt && Array.isArray(q.options) && q.answer);
+  },
+
+  /* Mark a sentence the learner wrote using the target word. */
+  async gradeSentence(card, sentence) {
+    const lang = this.cfg.nativeLanguage || 'Turkish';
+    const res = await this.json([
+      { role: 'system', content:
+        'You are a friendly but precise English writing tutor. Be encouraging and concrete. Answer only with JSON.' },
+      { role: 'user', content:
+        'Target word: "' + card.term + '" (' + (card.pos || '') + ') — ' + (card.definition || card.translation) + '\n' +
+        'The learner wrote: "' + sentence + '"\n\n' +
+        'Judge whether the target word is used correctly and whether the sentence is natural English.\n' +
+        'Return JSON: {"correct":true|false,"score":0-100,"feedback":"2-3 sentences in English, ' +
+        'name the specific problem if there is one","corrected":"a corrected or improved version of their sentence",' +
+        '"note":"one short tip in ' + lang + '"}' }
+    ], { temperature: 0.4, maxTokens: 500 });
+    return res;
+  },
+
+  /* Short explanation shown after a wrong answer. */
+  async explain(card, wrongAnswer) {
+    const lang = this.cfg.nativeLanguage || 'Turkish';
+    return await this.chat([
+      { role: 'system', content: 'You are a concise English teacher. Maximum 45 words. No preamble.' },
+      { role: 'user', content:
+        'The learner (native language ' + lang + ') was asked about "' + card.term + '" and answered "' +
+        wrongAnswer + '", which is wrong. The right meaning is: ' + (card.definition || card.translation) +
+        '. Explain the difference in one or two short sentences, then give one memory hook.' }
+    ], { temperature: 0.6, maxTokens: 160 });
+  }
+};
+
+/* Models sometimes wrap JSON in prose or code fences — dig it out. */
+function parseLooseJSON(text) {
+  if (!text) throw new Error('The AI returned an empty response.');
+  let t = String(text).trim()
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/```$/, '')
+    .trim();
+  try { return JSON.parse(t); } catch (e) {}
+  const start = t.search(/[{[]/);
+  const end = Math.max(t.lastIndexOf('}'), t.lastIndexOf(']'));
+  if (start !== -1 && end > start) {
+    try { return JSON.parse(t.slice(start, end + 1)); } catch (e) {}
+  }
+  throw new Error('The AI response was not valid JSON. Try again, or pick a stronger model.');
+}

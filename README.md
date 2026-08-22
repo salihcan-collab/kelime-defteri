@@ -1,227 +1,238 @@
-# Kelime Defteri 📔
+# Lexio — Kelime Öğrenme Uygulaması
 
-A digital-notebook English vocabulary learning app: build vocabulary cards
-by hand, with AI, or a hybrid of both; study them with a spaced-repetition
-scheduler; and practice with AI-generated quizzes — all in a soft,
-customizable notebook UI. It's a small shared app for **up to 2 people**,
-each with their own private login and notebook.
+Bilgisayarında çalışan, kurulum gerektirmeyen bir İngilizce kelime çalışma uygulaması.
+Aralıklı tekrar (spaced repetition), deste sistemi, sekiz farklı alıştırma modu ve
+özelleştirilebilir arayüz içerir. İlerlemen bilgisayarında saklanır; hiçbir yere gönderilmez.
 
-## 1. Architecture
+> Uygulamanın arayüzü tamamen İngilizcedir. Bu kılavuz Türkçedir.
 
-| Layer | Choice | Why |
-|---|---|---|
-| Framework | **Next.js 15 (App Router) + TypeScript** | One deployable app for UI + API routes; React Server Components keep data fetching simple; trivial to deploy on Vercel, a Node server, or Docker. |
-| Database | **Postgres via Prisma ORM** | Works with any standard Postgres — a free hosted instance (Neon, Supabase, Railway — see §5, "Deploying"), or a local instance for development. No SQLite-specific behavior anywhere in the schema, so this is also a one-line `datasource` change away from other Postgres-compatible providers. |
-| Accounts | **Custom email + password login, capped at 2 accounts** | See §2 below — deliberately minimal since this is a private notebook for you and one other person, not a public app. |
-| Styling | **Tailwind CSS + CSS custom properties** | Six notebook color palettes and four font stacks are implemented as CSS variable sets switched via `data-theme` / `data-font` attributes — no rebuild needed to re-theme, and it composes cleanly with Tailwind utilities. |
-| Client state | **Zustand (persisted)** | Theme/font/highlight-style/preferences painted instantly from `localStorage` (no flash of wrong theme) and mirrored to the `Settings` table so they survive across browsers too. |
-| AI | **OpenAI SDK, server-only** | All calls happen in Next.js Route Handlers so the API key never reaches the browser. Every call uses **Structured Outputs** (`response_format: json_schema`, `strict: true`) so responses are always valid JSON — no retry/repair tokens spent. |
-| Pronunciation | **Free dictionary API (dictionaryapi.dev) + Web Speech API** | Real recorded audio and IPA when available, at zero cost; AI is only used as an IPA fallback for words the dictionary doesn't have. Playback uses the browser's built-in `speechSynthesis` — no TTS API bill at all. |
+![Lexio ekran görüntüsü](ekran-goruntusu.png)
 
-### Why Postgres instead of Supabase's full BaaS layer
+---
 
-The spec offered Supabase/Firebase/SQLite as options. This app doesn't
-need Supabase's auth, storage, or realtime layers — just a reliable place
-to persist "progress tracking" (retention data, streaks, mastered words,
-full review history) for at most two accounts. Plain Postgres via Prisma
-gets that with no extra product surface to learn, while still deploying
-for free on a hosted Postgres like Neon (see §5). Every table is already
-keyed by `userId`, and the schema uses no Postgres-specific column types,
-so pointing `DATABASE_URL` at Supabase's own Postgres later — to pick up
-its auth/storage/realtime features — is a config change, not a rewrite.
+## 1. Nasıl çalıştırılır
 
-### A note on the requested model name
+Kod bilgisi, kurulum, hesap veya internet gerekmez.
 
-The spec asks for `gpt-5.6-luna` as the default model. That string isn't
-in OpenAI's published model list as of this app's build. Rather than
-hard-code a guess, the model is read from a single env var
-(`OPENAI_MODEL`, defaulting to `gpt-5.6-luna` exactly as requested) with
-an automatic one-time fallback to `OPENAI_FALLBACK_MODEL`
-(`gpt-4o-mini` by default) if the primary name is rejected — see
-`src/lib/openai.ts`. Update `.env` once you've confirmed the correct
-model string for your account; no code changes needed.
+1. Bu klasörü bilgisayarına indir (GitHub'da yeşil **Code** düğmesi → **Download ZIP**) ve ZIP'i çıkar.
+2. Klasördeki **`index.html`** dosyasına çift tıkla.
+3. Uygulama varsayılan tarayıcında açılır. Hepsi bu.
 
-## 2. Accounts (2-user login)
+Sık kullanmak için tarayıcıda sayfayı yer imlerine ekleyebilirsin.
 
-There's no public signup. The **first two people** to visit `/signup`
-claim the two account slots; after that, signup is closed and shows a
-"this notebook is full" message with a link to log in instead. Each
-account is a private notebook — cards, tags, settings, and review history
-are never shared between the two accounts (the AI cache is the one
-exception: word lookups are shared, since a definition doesn't change
-depending on who asked).
+**Tarayıcı önerisi:** Chrome, Edge veya Firefox. Safari'de dosyaya çift tıklayarak açmak
+bazı sürümlerde kaydetmeyi engelleyebilir; bu durumda aşağıdaki *Sorun giderme* bölümüne bak.
 
-- **Sign up**: visit `/signup`, enter an email + password (min 8
-  characters). No email verification, no password reset — with only two
-  trusted accounts sharing one deployment, that's an intentional
-  trade-off to keep this simple. If you forget your password, someone
-  with server access can clear that user's row and you sign up again.
-- **Log in**: `/login`.
-- **Log out**: the button next to your email in the top-right nav.
-- **Changing the limit**: it's the single constant `MAX_USERS` in
-  `src/lib/auth.ts` — raise it if you ever want more than 2 accounts.
+---
 
-Every page and API route requires a session (enforced centrally in
-`src/middleware.ts`); logged-out visitors are redirected to `/login`.
+## 2. İlerlemen nasıl saklanır
 
-## 3. Project structure
+Çalıştığın her kelime, tarih ve istatistik **tarayıcının kendi deposunda** (localStorage)
+otomatik kaydedilir. Uygulamayı kapatıp açtığında kaldığın yerden devam edersin.
 
-```
-prisma/
-  schema.prisma        # User, Card, ExampleSentence, Tag, ReviewLog, Settings, AICache
-  seed.ts               # sample cards for a given account (see below)
+Bunun iki sınırı var, ikisi de kolayca çözülür:
 
-src/
-  middleware.ts          # gatekeeper: redirects/blocks any request without a session
+- Tarayıcı geçmişini/site verilerini temizlersen kayıt da silinir.
+- Başka bir bilgisayara geçersen kayıt taşınmaz.
 
-  app/
-    login/, signup/       # public auth pages (outside the account cap check)
-    (app)/                 # every authenticated page, wrapped with the Navbar
-      page.tsx               # dashboard: streak, due count, daily goal, recent cards
-      cards/                 # notebook: browse/search/filter, new, [id] view + edit
-      review/                # SRS review session (SM-2)
-      quiz/                  # AI + algorithmic practice quizzes
-      settings/              # theme / font / highlight-style / preferences
-    api/
-      auth/                # signup / login / logout / me
-      cards/               # CRUD, scoped to the logged-in user
-      tags/                # tag autocomplete list, scoped to the logged-in user
-      review/              # submit a grade -> SM-2 update + streak
-      stats/                # dashboard numbers
-      settings/            # get/patch user preferences
-      ai/
-        generate-card/      # full-card AI draft
-        generate-field/     # single-field AI fill (the "modular hybrid" endpoint)
-        pronunciation/      # dictionary API lookup + AI IPA fallback
-        quiz/                # builds a quiz (half algorithmic, half AI-authored)
+Bu yüzden **ara sıra yedek al**: sol alttaki **Save backup file** düğmesi ya da
+**Settings → Your data → Download backup (.json)**. Bu bir `.json` dosyası indirir.
+Geri yüklemek için: **Settings → Restore from backup** (birleştirme veya tamamen değiştirme
+seçeneğiyle). Aynı dosyayı başka bir bilgisayarda içe aktararak ilerlemeni taşıyabilirsin.
 
-  components/
-    auth/                 # AuthShell (shared login/signup page chrome)
-    ui/                   # Button, Field, Panel/Badge — shared primitives
-    vocab/                 # VocabForm, TagInput, AIFieldButton, HighlightedSentence, PronunciationPlayer
-    review/                 # ReviewSession, RatingButtons
-    quiz/                    # QuizRunner, QuizQuestionView (4 question types)
-    settings/                 # ThemePicker, FontPicker, HighlightStylePicker, PreferenceSliders
-    layout/                    # Navbar, ThemeProvider
+---
 
-  lib/
-    auth.ts         requireSession.ts   prisma.ts      srs.ts
-    streak.ts        highlight.ts        openai.ts      ai.ts
-    dictionary.ts    cache.ts             quiz.ts        validation.ts
-    settings.ts
+## 3. Ekranlar
 
-  store/settingsStore.ts   # zustand, persisted, theme/font/highlight/preferences
-  hooks/useTTS.ts           # Web Speech API playback
-  types/index.ts             # shared types incl. enum-like unions (see note below)
-```
-
-## 4. Feature-to-code map
-
-- **Highlighting system** (Bold / Underline / Color / Bold+Underline, default
-  Bold+Underline): `lib/highlight.ts` computes character-offset spans for
-  the target word inside each example sentence at save time (handles
-  simple inflections like *run → running*); `components/vocab/HighlightedSentence.tsx`
-  renders them per the style chosen in Settings.
-- **Modular hybrid AI card creation**: `components/vocab/AIFieldButton.tsx`
-  sits next to every individual field and calls
-  `POST /api/ai/generate-field` for just that field; "Generate full card
-  with AI" calls `POST /api/ai/generate-card` once. Both are safe to mix —
-  AI never overwrites a field you didn't ask it to touch.
-- **Pronunciation**: `PronunciationPlayer` plays a real recorded clip when
-  the free dictionary API has one, otherwise falls back to
-  `speechSynthesis`; IPA is looked up the same way with AI as a last resort.
-- **SRS**: `lib/srs.ts` is an SM-2 variant adapted to four Anki-style grades
-  (Again/Hard/Good/Easy) instead of raw 0-5 quality — see the file's doc
-  comment for the exact formula and mastery threshold.
-- **Quizzes**: `lib/quiz.ts` builds multiple-choice and recall questions
-  algorithmically from your own card bank (zero AI cost); `lib/ai.ts`
-  generates the fill-in-the-blank and sentence-construction questions,
-  which genuinely need generated text. `api/ai/quiz` splits a batch
-  between the two so AI spend stays proportional to what actually needs it.
-- **Cost/token optimization**: every AI call goes through
-  `callStructured()` (`lib/openai.ts`), which enforces JSON Schema
-  Structured Outputs, and through `getCached`/`setCached` (`lib/cache.ts`),
-  a persistent cache keyed by a hash of `(kind, input)` in the `AICache`
-  table — the same word/field is never billed twice, shared across both
-  accounts.
-- **Accounts**: `lib/auth.ts` (password hashing with `bcryptjs`, signed
-  session cookies with `jose`) + `middleware.ts` (gatekeeper) + `api/auth/*`
-  (signup/login/logout). See §2 above.
-
-## 5. Getting started
-
-```bash
-npm install
-cp .env.example .env
-# point DATABASE_URL at a Postgres instance (local, Docker, or a free
-# hosted one — see the comment in .env.example)
-# fill in AUTH_SECRET (required — generate with `openssl rand -base64 32`)
-# fill in OPENAI_API_KEY to enable AI features (optional)
-npm run db:push              # create the schema in that database
-npm run dev                  # http://localhost:3000
-```
-
-Then open the app, go to `/signup`, and create your account (and a second
-one for whoever else you're sharing this with, if anyone). Once at least
-one account exists, you can optionally run `npm run db:seed` to drop a
-few sample cards into the first account's notebook (or
-`npm run db:seed -- you@example.com` to target a specific one) — useful
-for exploring the UI without typing anything in by hand.
-
-The app is fully usable with **no OpenAI key at all** — every AI button
-disables itself with an explanatory tooltip, pronunciation still works via
-the free dictionary API + Web Speech, and quizzes fall back to fully
-algorithmic questions. Set `OPENAI_API_KEY` (and double-check
-`OPENAI_MODEL`) whenever you want AI-assisted card filling and contextual
-quiz questions.
-
-### Deploying so you can actually use it day-to-day
-
-Any Postgres-compatible host works (Neon, Supabase, Railway, Fly.io, a VPS
-with Postgres installed): provision a Postgres database, set
-`DATABASE_URL` to its connection string, set `AUTH_SECRET` (generate one
-with `openssl rand -base64 32`) and optionally `OPENAI_API_KEY`, then run
-`npm run build && npm run start`. The `build` script runs `prisma db push`
-before `next build`, so the database schema is kept in sync with
-`prisma/schema.prisma` automatically on every deploy — no separate
-migration step needed.
-
-The easiest free combination for this app's size (2 accounts, low
-traffic): a **Neon** Postgres database + hosting on **Vercel**, which
-auto-deploys on every push to the connected branch. Steps:
-
-1. Create a free database at [neon.tech](https://neon.tech) and copy its
-   connection string (the **unpooled/direct** one, not the `-pooler`
-   hostname — this app is low-traffic enough that a connection pooler
-   isn't needed, and it keeps `prisma db push` simple).
-2. Create a project at [vercel.com](https://vercel.com), import this
-   GitHub repo, and set it to deploy the `claude/vocab-learning-app-ww31qa`
-   branch (or merge to your default branch first).
-3. In the Vercel project's Environment Variables, set `DATABASE_URL` (from
-   step 1), `AUTH_SECRET` (`openssl rand -base64 32`), and optionally
-   `OPENAI_API_KEY` / `OPENAI_MODEL`.
-4. Deploy. Every future push to that branch redeploys and re-syncs the
-   schema automatically.
-
-### Scripts
-
-| Command | What it does |
+| Ekran | Ne işe yarar |
 |---|---|
-| `npm run dev` / `build` / `start` | standard Next.js dev/build/serve |
-| `npm run lint` / `typecheck` | ESLint / `tsc --noEmit` |
-| `npm run db:push` | sync `prisma/schema.prisma` to the database in `DATABASE_URL` |
-| `npm run db:seed [-- email]` | insert sample vocabulary cards for an account |
+| **Dashboard** | Bugün kaç kart var, seri (streak), doğruluk oranı, deste ilerlemeleri, 12 haftalık aktivite haritası |
+| **Decks** | Desteleri oluştur, düzenle, sil; içindeki kelimeleri gör |
+| **Study** | Aralıklı tekrar seansı — asıl öğrenmenin olduğu yer |
+| **Practice** | 8 farklı test/alıştırma modu |
+| **Browse** | Tüm kelimeler; arama, filtre, sıralama, toplu içe/dışa aktarma |
+| **Progress** | Hatırlama oranı, 14 günlük geçmiş, gelecek 14 günün tahmini, en çok zorlandığın kelimeler |
+| **Settings** | Tema, font, renk, çalışma kuralları, AI, veri yönetimi |
 
-## 6. Known limitations / next steps
+---
 
-- Capped at 2 accounts by design (see §2) — raising `MAX_USERS` in
-  `src/lib/auth.ts` is the whole change if you want more.
-- No password reset flow. With just two trusted accounts, losing a
-  password means asking whoever has server/DB access to clear that user's
-  row so you can sign up again.
-- Inflection-aware highlighting (`lib/highlight.ts`) is prefix-based, not a
-  real stemmer, so irregular forms ("go" → "went") won't auto-highlight;
-  the stored `highlightSpans` can always be hand-corrected per sentence.
-- The free dictionary API only covers single English words well;
-  multi-word phrases (phrasal verbs, idioms) usually fall through to the
-  AI IPA fallback or manual entry.
+## 4. Aralıklı tekrar (spaced repetition) nasıl çalışır
+
+Her kartı gördüğünde dört seçenekten birini işaretlersin:
+
+| Düğme | Anlamı | Sonuç |
+|---|---|---|
+| **Again** (1) | Hatırlamadım | Kart aynı seansta birkaç dakika sonra tekrar gelir |
+| **Hard** (2) | Zor hatırladım | Aralık kısa tutulur |
+| **Good** (3) | Hatırladım | Aralık normal şekilde uzar |
+| **Easy** (4) | Çok kolaydı | Aralık belirgin şekilde uzar |
+
+Düğmelerin altında bir sonraki tekrarın ne zaman olacağı yazar (`10m`, `1d`, `2mo` gibi).
+Sistem SM-2 algoritmasının Anki'de kullanılan sürümüne dayanır: yeni kartlar 1 dakika →
+10 dakika → 1 gün adımlarıyla başlar, sonra her başarılı tekrarda aralık kendi
+"kolaylık katsayısı" kadar çarpılarak uzar. Unuttuğun kart otomatik olarak başa döner.
+
+**Günlük limitler** (Settings → Study rules) birikmeyi önler: varsayılan olarak günde
+15 yeni kelime ve en fazla 120 tekrar. Kendine göre ayarlayabilirsin — günde 10–20 yeni
+kelime sürdürülebilir bir tempodur.
+
+---
+
+## 5. Bir kelime kartında neler var
+
+- **Word** — kelime veya kalıp
+- **Part of speech** — sözcük türü (noun, verb, adjective, phrasal verb, idiom…)
+- **Meaning** — İngilizce tanım
+- **Example sentence** — kelimeyi içeren doğal bir örnek cümle
+- **Translation** — Türkçe karşılığı
+- **Category** — konu etiketi (Work, Feelings, Travel…)
+- **Personal note** — kendi hatırlatıcı notun (isteğe bağlı)
+
+Örnek cümlenin kelimeyi **içermesi** önemlidir: "Fill in the blank" alıştırması cümledeki
+kelimeyi boşluğa çevirerek soru üretir.
+
+Yeni kelime eklemek için herhangi bir ekranda **N** tuşuna basman yeterli.
+
+---
+
+## 6. Alıştırma modları (Practice)
+
+| Mod | Ne yapar |
+|---|---|
+| **Word → Meaning** | Kelimeyi görürsün, doğru anlamı seçersin |
+| **Meaning → Word** | Anlamı görürsün, doğru kelimeyi seçersin |
+| **Type the word** | Anlamdan yola çıkıp kelimeyi yazarsın (tek harflik yazım hatası affedilir) |
+| **Fill in the blank** | Örnek cümledeki boşluğu doldurursun |
+| **Matching pairs** | Kelimelerle karşılıklarını eşleştirirsin |
+| **Listening** | Kelime sesli okunur, duyduğunu yazarsın |
+| **AI quiz** | Yapay zekâ o kelimeler için yepyeni bağlam soruları yazar |
+| **Writing coach** | Kendi cümleni yazarsın, yapay zekâ puanlar ve düzeltir |
+
+"Which words" seçeneğiyle sadece zamanı gelenleri, en zorlandıklarını ya da hiç
+başlamadıklarını çalışabilirsin. **Count towards scheduling** açıkken testte kaçırdığın
+kelime tekrar programında öne alınır.
+
+Seslendirme, bilgisayarında zaten yüklü olan sesleri kullanır — internet gerekmez, ücretsizdir.
+
+---
+
+## 7. Görünüm
+
+**Settings → Appearance** altında:
+
+- **8 tema:** Dark, Light, Midnight, Nord, Forest, Sepia, Rose, Mono
+- **8 vurgu rengi:** Indigo, Blue, Teal, Emerald, Amber, Rose, Violet, Slate
+- **5 yazı tipi:** Sans, Rounded, Serif, Humanist, Mono
+- **3 yazı boyutu**
+
+Üst çubuktaki ay simgesiyle aydınlık/karanlık arasında hızlıca geçiş yapabilirsin.
+Seçimlerin kaydedilir.
+
+---
+
+## 8. Yapay zekâ (isteğe bağlı — sorunun cevabı)
+
+**Evet, mümkün ve ücretsiz seçenekler var.** Uygulama AI olmadan da eksiksiz çalışır;
+AI yalnızca dört yerde devreye girer:
+
+1. **Kart otomatik doldurma** — sadece kelimeyi yaz, tanım/örnek/çeviri/kategori dolsun
+2. **Deste üretme** — "job interviews, B2, 15 kelime" de, hazır deste gelsin
+3. **AI quiz** — her seferinde yeni bağlam cümleleriyle sorular + açıklamalar
+4. **Writing coach** — yazdığın cümleyi puanlar, düzeltir, Türkçe kısa not verir
+
+### Kurulum
+
+**Settings → AI assistant → Enable AI features** → bir sağlayıcı düğmesine bas
+(ayarlar otomatik dolar) → anahtarını yapıştır → **Test the connection**.
+
+| Sağlayıcı | Maliyet | Anahtar nereden |
+|---|---|---|
+| **Google Gemini** | **Ücretsiz katman var** — başlamak için en iyisi | aistudio.google.com/apikey |
+| **Groq** | **Ücretsiz katman**, çok hızlı | console.groq.com/keys |
+| **OpenRouter** | `:free` etiketli modeller ücretsiz | openrouter.ai/keys |
+| **OpenAI** | Ücretli ama çok ucuz (`gpt-4o-mini`) | platform.openai.com/api-keys |
+| **DeepSeek** | Ücretli, çok ucuz | platform.deepseek.com |
+| **Ollama** | **Tamamen ücretsiz**, kendi bilgisayarında, internetsiz | ollama.com |
+
+### Elindeki OpenAI anahtarıyla maliyet
+
+Bir kart doldurma veya bir quiz sorusu yaklaşık 500–1.500 token eder.
+`gpt-4o-mini` ile bu **sentin küçük bir kesri** demektir: her gün yoğun kullansan bile
+aylık maliyet genelde **1 doların altında** kalır. Pahalı modellere ihtiyaç yok —
+bu iş için küçük modeller fazlasıyla yeterli.
+
+### Anahtarın güvenliği
+
+Anahtarın yalnızca **senin tarayıcında** saklanır ve sadece seçtiğin sağlayıcıya gider.
+Ne bize ne başka bir sunucuya iletilir — zaten uygulamanın bir sunucusu yok.
+Yine de bu dosyaları başkasıyla paylaşacaksan anahtarını önce Settings'ten sil.
+
+> **Not:** Gemini, dosyaya çift tıklayarak açtığın halde bile çalışacak şekilde
+> test edildi. Bir sağlayıcıda "Could not reach the AI provider" hatası alırsan
+> aşağıdaki *Sorun giderme* adımını uygula — bu tarayıcının güvenlik kuralıyla ilgilidir,
+> anahtarınla değil.
+
+---
+
+## 9. Kelime aktarma
+
+- **CSV içe aktarma:** Browse → **Import**. Sütun sırası:
+  `term, part of speech, definition, example, translation, category`.
+  Başlık satırı varsa otomatik algılanır. Dosya seçebilir veya satırları yapıştırabilirsin.
+- **CSV dışa aktarma:** Browse → **Export CSV** (Excel'de açılır).
+- **Tam yedek:** Settings → **Download backup (.json)** — istatistikler dahil her şey.
+
+---
+
+## 10. Klavye kısayolları
+
+| Tuş | İşlev |
+|---|---|
+| `Space` | Cevabı göster / devam et |
+| `1` `2` `3` `4` | Kartı değerlendir veya test şıkkını seç |
+| `S` | Kelimeyi sesli oku |
+| `U` | Son cevabı geri al |
+| `N` | Yeni kelime ekle |
+| `Esc` | Pencereyi kapat / seansı bitir |
+| `D` `K` `S` `P` `B` `G` | Ekranlar arası geçiş |
+
+---
+
+## 11. Sorun giderme
+
+**"Bu tarayıcı yerel depolamayı engelliyor" uyarısı alıyorum / ilerleme kaydedilmiyor**
+Tarayıcı, dosyadan açılan sayfalara veri yazmayı engelliyordur (çoğunlukla Safari veya
+gizli sekme). Çözüm: klasördeki **`sunucu-baslat.command`** (Mac) veya
+**`sunucu-baslat.bat`** (Windows) dosyasına çift tıkla, sonra tarayıcıda
+`http://localhost:8000` adresini aç. Aynı uygulama, bu kez normal bir web sayfası gibi
+çalışır ve kaydetme sorunsuz olur. (Bu dosyalar bilgisayarında Python gerektirir;
+yoksa Chrome veya Firefox kullanmak da sorunu çözer.)
+
+**AI "Could not reach the AI provider" diyor**
+Aynı çözüm: yukarıdaki yerel sunucu dosyasını kullan. Tarayıcılar, dosyadan açılan
+sayfaların bazı sunuculara istek atmasını engelleyebiliyor; sayfa `http://localhost`
+üzerinden açıldığında bu kısıt kalkar.
+
+**Sesli okuma çalışmıyor**
+İşletim sisteminde İngilizce ses paketi yüklü olmayabilir. Windows'ta
+Ayarlar → Saat ve Dil → Konuşma bölümünden İngilizce ses eklenebilir.
+
+**Kartlarım kayboldu**
+Tarayıcı verileri temizlenmiş olabilir. Settings → **Restore from backup** ile
+son `.json` yedeğini geri yükle.
+
+---
+
+## 12. Dosyalar
+
+```
+index.html   arayüz iskeleti — açılacak dosya budur
+styles.css   tasarım, temalar, renkler
+data.js      başlangıç desteleri (66 kelime) ve tema/font listeleri
+srs.js       aralıklı tekrar algoritması
+storage.js   kaydetme, yedekleme, içe/dışa aktarma, istatistik hesapları
+ai.js        isteğe bağlı yapay zekâ katmanı
+app.js       ekranlar, çalışma seansı, test motoru
+```
+
+Hiçbir dış kütüphane, derleme adımı veya paket kurulumu yoktur.
