@@ -9,6 +9,9 @@
   --border:#272c37; --border-soft:#1f242d;
   --text:#e8eaf0; --text-dim:#98a0b0; --text-faint:#6b7382;
   --good:#22c55e; --warn:#f59e0b; --bad:#ef4444; --info:#38bdf8;
+  /* new -> learning -> familiar -> mastered, as one ramp. Familiar sits
+     between amber and green so it never reads as the same as mastered. */
+  --level-familiar:color-mix(in srgb, var(--good) 55%, var(--warn) 45%);
   --shadow:0 1px 2px rgba(0,0,0,.28), 0 8px 24px -12px rgba(0,0,0,.55);
   --shadow-lg:0 24px 60px -20px rgba(0,0,0,.65);
   --grid-line:rgba(255,255,255,.05);
@@ -289,6 +292,8 @@ button:disabled{ opacity:.45; cursor:not-allowed; transform:none !important; }
 .due-now{ color:var(--bad); font-weight:650; font-size:.82rem; white-space:nowrap; }
 .chip.new{ color:var(--info); }
 .chip.learning{ color:var(--warn); }
+.chip.familiar{ color:var(--level-familiar); }
+.chip.mastered{ color:var(--good); }
 .chip.review{ color:var(--good); }
 .chip.due{ color:var(--bad); }
 
@@ -496,17 +501,17 @@ input[type=range]::-moz-range-thumb{
   overflow:hidden; line-height:1.45; }
 .table .col-word{ width:14%; }
 .table .col-type{ width:9%; }
-.table .col-meaning{ width:30%; }
-.table .col-translation{ width:18%; }
-.table .col-category{ width:11%; }
+.table .col-meaning{ width:29%; }
+.table .col-translation{ width:17%; }
+.table .col-category{ width:10%; }
 .table .col-level{ width:10%; }
-.table .col-next{ width:8%; }
+.table .col-next{ width:11%; white-space:nowrap; }
 .table .col-actions{ width:82px; }   /* two icon buttons, never a percentage */
 .table td.col-actions{ padding-left:0; padding-right:8px; }
 .table td.col-word{ overflow-wrap:anywhere; }
 .table td.col-translation{ white-space:normal; }
 .table tr:last-child td{ border-bottom:0; }
-.table tbody tr{ transition:background .12s; }
+.table tbody tr{ transition:background .12s; cursor:pointer; }
 .table tbody tr:hover{ background:var(--surface-2); }
 .table .term{ font-weight:650; }
 .table .tr-actions{ display:flex; gap:4px; opacity:0; transition:.15s; }

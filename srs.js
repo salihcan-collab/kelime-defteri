@@ -47,6 +47,7 @@ const SRS = {
     now = now || Date.now();
     const c = SRS.config;
     const s = Object.assign({}, srs);
+    const lastReview = srs.lastReview;          /* before we overwrite it below */
     s.reps = (s.reps || 0) + 1;
     s.lastReview = now;
 
@@ -92,6 +93,15 @@ const SRS = {
 
     /* --- review --- */
     const prev = Math.max(1, s.interval || 1);
+
+    /* How much of the scheduled wait actually happened. Answering a card early
+       — which studying ahead makes easy — proves far less than answering it on
+       the day it was due, so the interval grows in proportion. Without this a
+       handful of taps in one sitting could push a card to months. */
+    const elapsedDays = lastReview ? (now - lastReview) / DAY : prev;
+    const earned = Math.max(0, Math.min(1, prev > 0 ? elapsedDays / prev : 1));
+    const grow = (factor) => SRS._cap(prev * (1 + (factor - 1) * earned));
+
     if (rating === 1) {
       s.lapses = (s.lapses || 0) + 1;
       s.ease = Math.max(c.minEase, s.ease - 0.2);
@@ -102,12 +112,12 @@ const SRS = {
     }
     if (rating === 2) {
       s.ease = Math.max(c.minEase, s.ease - 0.15);
-      s.interval = SRS._cap(prev * c.hardFactor);
+      s.interval = grow(c.hardFactor);
     } else if (rating === 3) {
-      s.interval = SRS._cap(prev * s.ease);
+      s.interval = grow(s.ease);
     } else {
       s.ease = s.ease + 0.15;
-      s.interval = SRS._cap(prev * s.ease * c.easyBonus);
+      s.interval = grow(s.ease * c.easyBonus);
     }
     s.due = now + SRS._fuzz(s.interval) * DAY;
     return s;
@@ -133,6 +143,7 @@ const SRS = {
     return days * (1 + (Math.random() * 2 - 1) * f);
   },
 
+  /* Compact form for the rating buttons: "10m", "3d", "5mo" — never "1.4mo". */
   humanDelay(ms) {
     if (ms <= 0) return 'now';
     const m = ms / MIN;
@@ -140,10 +151,23 @@ const SRS = {
     const h = m / 60;
     if (h < 24) return Math.round(h) + 'h';
     const d = h / 24;
-    if (d < 31) return Math.round(d) + 'd';
+    if (d < 60) return Math.round(d) + 'd';
     const mo = d / 30.44;
-    if (mo < 12) return (mo < 2 ? mo.toFixed(1) : Math.round(mo)) + 'mo';
-    return (d / 365).toFixed(1) + 'y';
+    if (mo < 24) return Math.round(mo) + 'mo';
+    return Math.round(d / 365) + 'y';
+  },
+
+  /* Long form for lists, where a plain number of days reads better than a
+     fraction of a month. */
+  humanDays(ms) {
+    if (ms <= 0) return 'due now';
+    const d = ms / DAY;
+    if (d < 1) {
+      const h = Math.round(ms / (60 * MIN));
+      return h < 1 ? 'in under an hour' : 'in ' + h + ' hour' + (h === 1 ? '' : 's');
+    }
+    const days = Math.round(d);
+    return 'in ' + days + ' day' + (days === 1 ? '' : 's');
   },
 
   /* How well a card is known — used for stats and colour coding.

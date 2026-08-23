@@ -174,8 +174,8 @@ function refreshChrome() {
 const LEVELS = {
   new:      { label: 'New',      cls: 'new' },
   learning: { label: 'Learning', cls: 'learning' },
-  familiar: { label: 'Familiar', cls: 'review' },
-  mastered: { label: 'Mastered', cls: 'review' }
+  familiar: { label: 'Familiar', cls: 'familiar' },
+  mastered: { label: 'Mastered', cls: 'mastered' }
 };
 function levelChip(card) {
   const l = LEVELS[SRS.bucket(card.srs)] || LEVELS.new;
@@ -187,7 +187,7 @@ function isDueNow(card) { return card.srs.state !== 'new' && SRS.isDue(card.srs)
 function dueText(card) {
   if (card.srs.state === 'new') return 'not started';
   const diff = card.srs.due - Date.now();
-  return diff <= 0 ? 'due now' : 'in ' + SRS.humanDelay(diff);
+  return diff <= 0 ? 'due now' : SRS.humanDays(diff);
 }
 function dueCell(card) {
   return isDueNow(card)
@@ -339,7 +339,7 @@ function levelBar(c) {
     ? '<i style="width:' + w(n) + ';background:' + colour + '" title="' + n + ' ' + label + '"></i>' : '';
   return '<div class="stack-bar thin">' +
     seg(c.mastered, 'var(--good)', 'mastered') +
-    seg(c.familiar, 'color-mix(in srgb,var(--good) 45%,var(--surface-3))', 'familiar') +
+    seg(c.familiar, 'var(--level-familiar)', 'familiar') +
     seg(c.learning, 'var(--warn)', 'in learning') +
     seg(c.new, 'var(--surface-3)', 'not started') +
   '</div>';
@@ -361,7 +361,7 @@ function deckProgressRow(deck) {
     '</div>' +
     '<div class="stack-bar">' +
       '<i style="width:' + w(mas) + ';background:var(--good)"></i>' +
-      '<i style="width:' + w(fam) + ';background:color-mix(in srgb,var(--good) 45%,var(--surface-3))"></i>' +
+      '<i style="width:' + w(fam) + ';background:var(--level-familiar)"></i>' +
       '<i style="width:' + w(lr) + ';background:var(--warn)"></i>' +
       '<i style="width:' + w(nw) + ';background:var(--surface-3)"></i>' +
     '</div></div>';
@@ -377,8 +377,11 @@ function renderDashboard(host) {
   const all = Store.state.cards;
   const known = all.filter(x => SRS.bucket(x.srs) === 'mastered' || SRS.bucket(x.srs) === 'familiar').length;
   const ret = Store.retention(30);
-  const goal = Store.state.settings.newPerDay + Math.min(Store.state.settings.reviewPerDay, 40);
   const pending = c.ready;
+  /* Progress through today's queue: what has been answered against what is
+     answered plus what is still waiting. The old denominator was a made-up
+     daily target and read like a broken ratio next to a long session. */
+  const dayTotal = today.reviews + pending;
   const hour = new Date().getHours();
   const greet = hour < 5 ? 'Still up' : hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
 
@@ -419,8 +422,11 @@ function renderDashboard(host) {
     '<div class="grid g2" style="margin-top:16px;align-items:start">' +
       '<div class="card">' +
         '<div class="section-title" style="margin:0 0 12px"><h2>Today</h2>' +
-          '<span class="hint">' + today.reviews + ' / ' + goal + ' reviews</span></div>' +
-        '<div class="bar"><i style="width:' + clamp(pct(today.reviews, goal), 0, 100) + '%"></i></div>' +
+          '<span class="hint">' + (pending
+            ? pending + ' still to do'
+            : today.reviews ? 'all caught up' : 'nothing due') + '</span></div>' +
+        '<div class="bar"><i style="width:' +
+          (dayTotal ? clamp(pct(today.reviews, dayTotal), 0, 100) : 0) + '%"></i></div>' +
         '<div class="row" style="margin-top:15px;gap:26px">' +
           '<div><div class="faint">Reviewed</div><b style="font-size:1.15rem">' + today.reviews + '</b></div>' +
           '<div><div class="faint">New seen</div><b style="font-size:1.15rem">' + today.new + '</b></div>' +
@@ -439,7 +445,7 @@ function renderDashboard(host) {
           : '<div class="empty">' + ICONS.empty + '<h3>No decks yet</h3></div>') +
         '<div class="row" style="margin-top:14px;gap:14px;font-size:.72rem;color:var(--text-faint)">' +
           '<span><i class="dot" style="background:var(--good)"></i>Mastered</span>' +
-          '<span><i class="dot" style="background:color-mix(in srgb,var(--good) 45%,var(--surface-3))"></i>Familiar</span>' +
+          '<span><i class="dot" style="background:var(--level-familiar)"></i>Familiar</span>' +
           '<span><i class="dot" style="background:var(--warn)"></i>Learning</span>' +
           '<span><i class="dot" style="background:var(--surface-3)"></i>New</span>' +
         '</div>' +
@@ -560,12 +566,12 @@ function cardTable(cards) {
     cards.map(c =>
       '<tr data-card="' + c.id + '">' +
         '<td class="term col-word">' + esc(c.term) + '</td>' +
-        '<td>' + (c.pos ? '<span class="chip pos">' + esc(c.pos) + '</span>' : '') + '</td>' +
+        '<td class="col-type">' + (c.pos ? '<span class="chip pos">' + esc(c.pos) + '</span>' : '') + '</td>' +
         '<td class="muted col-meaning"><span class="clamp2">' + esc(c.definition || '') + '</span></td>' +
         '<td class="col-translation"><span class="clamp2">' + esc(c.translation) + '</span></td>' +
-        '<td>' + (c.category ? '<span class="chip cat">' + esc(c.category) + '</span>' : '') + '</td>' +
-        '<td>' + levelChip(c) + '</td>' +
-        '<td>' + dueCell(c) + '</td>' +
+        '<td class="col-category">' + (c.category ? '<span class="chip cat">' + esc(c.category) + '</span>' : '') + '</td>' +
+        '<td class="col-level">' + levelChip(c) + '</td>' +
+        '<td class="col-next">' + dueCell(c) + '</td>' +
         '<td class="col-actions"><div class="tr-actions">' +
           '<button class="icon-btn" data-edit="' + c.id + '" title="Edit">' + ICONS.edit + '</button>' +
           '<button class="icon-btn" data-del="' + c.id + '" title="Delete">' + ICONS.trash + '</button>' +
@@ -1923,13 +1929,13 @@ function renderStats(host) {
     '<div class="card">' +
       '<div class="stack-bar" style="height:14px">' +
         '<i style="width:' + w(buckets.mastered) + ';background:var(--good)"></i>' +
-        '<i style="width:' + w(buckets.familiar) + ';background:color-mix(in srgb,var(--good) 45%,var(--surface-3))"></i>' +
+        '<i style="width:' + w(buckets.familiar) + ';background:var(--level-familiar)"></i>' +
         '<i style="width:' + w(buckets.learning) + ';background:var(--warn)"></i>' +
         '<i style="width:' + w(buckets.new) + ';background:var(--surface-3)"></i>' +
       '</div>' +
       '<div class="grid g4" style="margin-top:16px">' +
         miniStat('Mastered', buckets.mastered, 'recalled after 21+ days', 'var(--good)') +
-        miniStat('Familiar', buckets.familiar, 'known, still settling in', 'color-mix(in srgb,var(--good) 45%,var(--surface-3))') +
+        miniStat('Familiar', buckets.familiar, 'known, still settling in', 'var(--level-familiar)') +
         miniStat('Learning', buckets.learning, 'in short-term repetition', 'var(--warn)') +
         miniStat('New', buckets.new, 'not started yet', 'var(--surface-3)') +
       '</div>' +

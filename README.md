@@ -173,6 +173,12 @@ bunlardan birindedir:
 | **Familiar** | Biliniyor ama henüz pekişmedi (aralık 21 günün altında) |
 | **Mastered** | 21 gün veya daha uzun aralıklarla hatırlanıyor |
 
+> **Aralıklar nasıl büyür?** Bir kartı **vaktinde** çalıştığında aralık tam olarak büyür
+> (Good'da yaklaşık 2,5 kat). Vaktinden **önce** çalışırsan — "Study ahead" ile mümkün —
+> aralık, geçen sürenin oranı kadar büyür. Aynı gün aynı karta arka arkaya Good demek
+> aralığı uzatmaz: hafıza sınanmamıştır. Bu yüzden bir kartın *Mastered* olması gerçekten
+> haftalar sürer.
+
 **2. Zamanlama (Next review)** — o kelimenin sırasının gelip gelmediği.
 **Due now** = tekrar vakti geldi. Bu bir seviye değildir; her seviyeden kelime
 "due" olabilir. Bir kelime aynı anda hem *Familiar* hem *due now* olabilir,
