@@ -90,10 +90,11 @@
 :root[data-font="humanist"] { --font:Optima,Candara,"Gill Sans MT","Gill Sans","Trebuchet MS",sans-serif; }
 :root[data-font="mono"]     { --font:ui-monospace,SFMono-Regular,"JetBrains Mono",Menlo,Consolas,"Liberation Mono",monospace; }
 
-/* Steps of roughly 20 %, so the three sizes are plainly different. */
-:root[data-size="sm"]{ --fs:14px; }
-:root[data-size="md"]{ --fs:16.5px; }
-:root[data-size="lg"]{ --fs:19.5px; }
+/* Four steps of 1.5px — enough to feel, small enough to fine-tune. */
+:root[data-size="sm"]{ --fs:14.5px; }
+:root[data-size="md"]{ --fs:16px; }
+:root[data-size="lg"]{ --fs:17.5px; }
+:root[data-size="xl"]{ --fs:19px; }
 
 /* ---------- Base -------------------------------------------------------- */
 *,*::before,*::after{ box-sizing:border-box; }
@@ -182,6 +183,8 @@ svg{ width:20px; height:20px; fill:none; stroke:currentColor; stroke-width:1.75;
   overscroll-behavior:contain; -webkit-overflow-scrolling:touch;
   scrollbar-gutter:stable; outline:none; }
 .view{ padding:26px 26px 48px; max-width:1180px; margin:0 auto; animation:fade .28s ease; }
+/* Tables, deck grids and charts read better wide; forms and flashcards do not. */
+#view-browse, #view-decks, #view-stats, #view-dashboard{ max-width:1560px; }
 @keyframes fade{ from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:none;} }
 
 /* ---------- Buttons ----------------------------------------------------- */
@@ -478,12 +481,30 @@ input[type=range]::-moz-range-thumb{
 .toolbar .search input{ padding-left:36px; }
 .toolbar select{ width:auto; min-width:130px; }
 
-.table{ width:100%; border-collapse:separate; border-spacing:0; font-size:.87rem; }
+/* Fixed layout: without it the browser hands the width to whichever column has
+   the longest unbreakable word, and the meaning column ends up squeezed. */
+.table{ width:100%; min-width:900px; table-layout:fixed;
+  border-collapse:separate; border-spacing:0; font-size:.87rem; }
 .table th{
   text-align:left; padding:10px 13px; font-size:.72rem; text-transform:uppercase; letter-spacing:.06em;
   color:var(--text-faint); font-weight:700; border-bottom:1px solid var(--border-soft); white-space:nowrap;
 }
 .table td{ padding:11px 13px; border-bottom:1px solid var(--border-soft); vertical-align:middle; }
+/* Two lines and then an ellipsis: rows keep the same height whatever the text
+   or the font size does. */
+.clamp2{ display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
+  overflow:hidden; line-height:1.45; }
+.table .col-word{ width:14%; }
+.table .col-type{ width:9%; }
+.table .col-meaning{ width:30%; }
+.table .col-translation{ width:18%; }
+.table .col-category{ width:11%; }
+.table .col-level{ width:10%; }
+.table .col-next{ width:8%; }
+.table .col-actions{ width:82px; }   /* two icon buttons, never a percentage */
+.table td.col-actions{ padding-left:0; padding-right:8px; }
+.table td.col-word{ overflow-wrap:anywhere; }
+.table td.col-translation{ white-space:normal; }
 .table tr:last-child td{ border-bottom:0; }
 .table tbody tr{ transition:background .12s; }
 .table tbody tr:hover{ background:var(--surface-2); }
@@ -513,20 +534,25 @@ input[type=range]::-moz-range-thumb{
 /* The map takes the width it needs and the figures fill whatever is left, so a
    one-month map leaves room for the stats to spread into two or three columns
    instead of stranding an empty half-card. */
-.activity-grid{ display:grid; grid-template-columns:minmax(0,auto) minmax(200px,1fr);
-  gap:28px; align-items:center; }
+.activity-grid{ display:grid; grid-template-columns:minmax(0,auto) minmax(300px,1fr);
+  gap:26px; align-items:center; }
 .activity-stats{
-  border-left:1px solid var(--border-soft); padding-left:24px; align-self:stretch;
-  display:grid; grid-template-columns:repeat(auto-fit,minmax(185px,1fr));
-  gap:0 26px; align-content:center;
+  border-left:1px solid var(--border-soft); padding-left:24px; align-self:center;
+  display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr));
+  gap:14px 22px; align-content:center;
 }
-/* No rules between rows: with an auto-fit grid the column count changes, and a
-   border-top would land above items that are visually in the first row. */
-.as-row{ display:flex; flex-direction:column; gap:2px; padding:11px 0; }
-.as-row .k{ font-size:.7rem; text-transform:uppercase; letter-spacing:.07em;
+/* Narrow windows: the map keeps its width and the figures move underneath. */
+@media (max-width:1500px){
+  .activity-grid{ grid-template-columns:1fr; gap:18px; }
+  .activity-stats{ border-left:0; border-top:1px solid var(--border-soft);
+    padding-left:0; padding-top:14px; }
+}
+/* Supporting figures, not headlines — the heatmap is the subject here. */
+.as-row{ display:flex; flex-direction:column; gap:1px; }
+.as-row .k{ font-size:.66rem; text-transform:uppercase; letter-spacing:.06em;
   color:var(--text-faint); font-weight:700; }
-.as-row .v{ font-size:1.1rem; font-weight:700; letter-spacing:-.02em; line-height:1.3; }
-.as-row .s{ font-size:.75rem; color:var(--text-dim); }
+.as-row .v{ font-size:.98rem; font-weight:700; letter-spacing:-.01em; line-height:1.35; }
+.as-row .s{ font-size:.72rem; color:var(--text-dim); line-height:1.35; }
 .hm-col{ display:flex; flex-direction:column; gap:3px; }
 .hm-cell{ width:var(--hm-cell,12px); height:var(--hm-cell,12px); border-radius:3px;
   background:var(--surface-2); transition:.12s; }

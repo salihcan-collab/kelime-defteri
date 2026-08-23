@@ -330,6 +330,21 @@ function barChartHTML(items) {
     '</div>').join('') + '</div>';
 }
 
+/* How a deck's words are spread across the four levels. The old bar averaged
+   SRS.strength(), which nobody could read off the screen. */
+function levelBar(c) {
+  const total = c.total || 1;
+  const w = (n) => (100 * n / total) + '%';
+  const seg = (n, colour, label) => n
+    ? '<i style="width:' + w(n) + ';background:' + colour + '" title="' + n + ' ' + label + '"></i>' : '';
+  return '<div class="stack-bar thin">' +
+    seg(c.mastered, 'var(--good)', 'mastered') +
+    seg(c.familiar, 'color-mix(in srgb,var(--good) 45%,var(--surface-3))', 'familiar') +
+    seg(c.learning, 'var(--warn)', 'in learning') +
+    seg(c.new, 'var(--surface-3)', 'not started') +
+  '</div>';
+}
+
 function deckProgressRow(deck) {
   const cards = Store.cardsOf(deck.id);
   const c = Store.counts(deck.id);
@@ -475,14 +490,14 @@ function renderDecks(host) {
       '<div class="deck-grid">' + Store.state.decks.map(d => {
         const cards = Store.cardsOf(d.id);
         const c = Store.counts(d.id);
-        const strength = cards.length ? cards.reduce((a, x) => a + SRS.strength(x.srs), 0) / cards.length : 0;
+        const known = c.familiar + c.mastered;
         return '<div class="deck-card" data-deck="' + d.id + '">' +
           '<div class="top"><div class="deck-emoji">' + esc(d.emoji) + '</div>' +
             '<div style="min-width:0"><h3>' + esc(d.name) + '</h3>' +
               '<div class="desc">' + esc(d.description || 'No description') + '</div></div></div>' +
-          '<div class="bar thin"><i style="width:' + Math.round(strength * 100) + '%"></i></div>' +
+          levelBar(c) +
           '<div class="deck-meta">' +
-            '<span><b>' + cards.length + '</b> word' + (cards.length === 1 ? '' : 's') + '</span>' +
+            '<span><b>' + known + '</b> of ' + cards.length + ' known</span>' +
             '<span><b style="color:' + (c.due ? 'var(--bad)' : 'inherit') + '">' + c.due + '</b> due</span>' +
             '<span><b>' + c.new + '</b> new</span>' +
           '</div></div>';
@@ -537,18 +552,21 @@ function renderDeckDetail(host, deck) {
 
 function cardTable(cards) {
   return '<table class="table"><thead><tr>' +
-    '<th>Word</th><th>Type</th><th>Meaning</th><th>Translation</th><th>Category</th><th>Level</th><th>Next review</th><th></th>' +
+    '<th class="col-word">Word</th><th class="col-type">Type</th>' +
+    '<th class="col-meaning">Meaning</th><th class="col-translation">Translation</th>' +
+    '<th class="col-category">Category</th><th class="col-level">Level</th>' +
+    '<th class="col-next">Next review</th><th class="col-actions"></th>' +
     '</tr></thead><tbody>' +
     cards.map(c =>
       '<tr data-card="' + c.id + '">' +
-        '<td class="term">' + esc(c.term) + '</td>' +
+        '<td class="term col-word">' + esc(c.term) + '</td>' +
         '<td>' + (c.pos ? '<span class="chip pos">' + esc(c.pos) + '</span>' : '') + '</td>' +
-        '<td class="muted" style="max-width:280px">' + esc((c.definition || '').slice(0, 90)) + '</td>' +
-        '<td>' + esc(c.translation) + '</td>' +
+        '<td class="muted col-meaning"><span class="clamp2">' + esc(c.definition || '') + '</span></td>' +
+        '<td class="col-translation"><span class="clamp2">' + esc(c.translation) + '</span></td>' +
         '<td>' + (c.category ? '<span class="chip cat">' + esc(c.category) + '</span>' : '') + '</td>' +
         '<td>' + levelChip(c) + '</td>' +
         '<td>' + dueCell(c) + '</td>' +
-        '<td><div class="tr-actions">' +
+        '<td class="col-actions"><div class="tr-actions">' +
           '<button class="icon-btn" data-edit="' + c.id + '" title="Edit">' + ICONS.edit + '</button>' +
           '<button class="icon-btn" data-del="' + c.id + '" title="Delete">' + ICONS.trash + '</button>' +
         '</div></td>' +
@@ -2066,7 +2084,7 @@ function renderSettings(host) {
       '</div></div>' +
 
       '<div class="field" style="margin-bottom:0"><label>Text size</label><div class="seg">' +
-        [['sm', 'Small'], ['md', 'Medium'], ['lg', 'Large']].map(o =>
+        [['sm', 'Small'], ['md', 'Medium'], ['lg', 'Large'], ['xl', 'X-large']].map(o =>
           '<button data-pick-size="' + o[0] + '" class="' + (s.size === o[0] ? 'sel' : '') + '">' + o[1] + '</button>').join('') +
       '</div></div>' +
     '</div>' +
