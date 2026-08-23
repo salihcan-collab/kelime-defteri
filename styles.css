@@ -16,7 +16,7 @@
 }
 :root[data-theme="light"]{
   --bg:#f5f6f8; --surface:#ffffff; --surface-2:#f1f3f6; --surface-3:#e8ebef;
-  --border:#e3e6ec; --border-soft:#edf0f4;
+  --border:#dde1e9; --border-soft:#e7eaf0;
   --text:#15181e; --text-dim:#666e7d; --text-faint:#98a0ad;
   --shadow:0 1px 2px rgba(16,24,40,.06), 0 10px 26px -16px rgba(16,24,40,.28);
   --shadow-lg:0 28px 64px -24px rgba(16,24,40,.28);
@@ -46,7 +46,7 @@
 }
 :root[data-theme="sepia"]{
   --bg:#f3ead9; --surface:#fdf8ee; --surface-2:#efe4d0; --surface-3:#e7d9c0;
-  --border:#e0d2b8; --border-soft:#eadfc9;
+  --border:#dccdb0; --border-soft:#e6dac2;
   --text:#3b3126; --text-dim:#7b6d58; --text-faint:#a2947d;
   --shadow:0 1px 2px rgba(90,70,40,.08), 0 10px 26px -16px rgba(90,70,40,.30);
   --grid-line:rgba(90,70,40,.07);
@@ -54,7 +54,7 @@
 }
 :root[data-theme="rose"]{
   --bg:#fcf5f6; --surface:#ffffff; --surface-2:#faecee; --surface-3:#f4dee2;
-  --border:#f0dde0; --border-soft:#f6e8ea;
+  --border:#ecd6da; --border-soft:#f2e1e4;
   --text:#25191c; --text-dim:#75636a; --text-faint:#a3919a;
   --shadow:0 1px 2px rgba(80,20,40,.05), 0 10px 26px -16px rgba(80,20,40,.22);
   --grid-line:rgba(80,20,40,.05);
@@ -79,15 +79,21 @@
 :root[data-accent="slate"]   { --accent:#64748b; --accent-soft:rgba(100,116,139,.16); --accent-ink:#fff; }
 
 /* ---------- Fonts ------------------------------------------------------- */
+/* Each stack has to land on a different family per platform, or two options
+   look identical. Windows in particular: "Segoe UI Variable Text" is just
+   Segoe UI, so a rounded stack ending there was indistinguishable from Sans.
+     Windows  -> Segoe UI / Century Gothic (or Trebuchet) / Palatino / Candara / Consolas
+     macOS    -> SF Pro Text / SF Pro Rounded / Iowan Old Style / Optima / SF Mono */
 :root[data-font="sans"]     { --font:"Inter","SF Pro Text",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif; }
-:root[data-font="rounded"]  { --font:ui-rounded,"SF Pro Rounded","Segoe UI Variable Text","Nunito",system-ui,sans-serif; }
+:root[data-font="rounded"]  { --font:ui-rounded,"SF Pro Rounded","Varela Round",Quicksand,"Century Gothic","Trebuchet MS",Verdana,sans-serif; }
 :root[data-font="serif"]    { --font:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif; }
-:root[data-font="humanist"] { --font:Optima,Candara,"Trebuchet MS","Segoe UI",system-ui,sans-serif; }
+:root[data-font="humanist"] { --font:Optima,Candara,"Gill Sans MT","Gill Sans","Trebuchet MS",sans-serif; }
 :root[data-font="mono"]     { --font:ui-monospace,SFMono-Regular,"JetBrains Mono",Menlo,Consolas,"Liberation Mono",monospace; }
 
-:root[data-size="sm"]{ --fs:15px;   --scale:.94; }
-:root[data-size="md"]{ --fs:16px;   --scale:1; }
-:root[data-size="lg"]{ --fs:17.5px; --scale:1.06; }
+/* Steps of roughly 20 %, so the three sizes are plainly different. */
+:root[data-size="sm"]{ --fs:14px; }
+:root[data-size="md"]{ --fs:16.5px; }
+:root[data-size="lg"]{ --fs:19.5px; }
 
 /* ---------- Base -------------------------------------------------------- */
 *,*::before,*::after{ box-sizing:border-box; }
@@ -247,22 +253,24 @@ button:disabled{ opacity:.45; cursor:not-allowed; transform:none !important; }
 .stack-bar > i{ display:block; height:100%; }
 
 /* ---------- Deck grid ---------------------------------------------------- */
-.deck-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(258px,1fr)); gap:14px; }
+.deck-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:16px; }
 .deck-card{
-  background:var(--surface); border:1px solid var(--border-soft); border-radius:16px;
-  padding:17px; display:flex; flex-direction:column; gap:12px; cursor:pointer;
+  background:var(--surface); border:1px solid var(--border); border-radius:16px;
+  padding:20px; display:flex; flex-direction:column; gap:14px; cursor:pointer;
   transition:.18s; position:relative; overflow:hidden; text-align:left;
+  box-shadow:var(--shadow); min-height:172px;
 }
-.deck-card:hover{ transform:translateY(-2px); border-color:var(--border); box-shadow:var(--shadow-lg); }
+.deck-card:hover{ transform:translateY(-2px); border-color:var(--accent); box-shadow:var(--shadow-lg); }
 .deck-card .top{ display:flex; align-items:flex-start; gap:11px; }
 .deck-emoji{
   width:40px; height:40px; border-radius:12px; display:grid; place-items:center;
   font-size:1.15rem; background:var(--surface-2); flex:none;
 }
-.deck-card h3{ font-size:.98rem; }
-.deck-card .desc{ font-size:.79rem; color:var(--text-faint); margin-top:3px;
-  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
-.deck-meta{ display:flex; gap:14px; font-size:.76rem; color:var(--text-dim); }
+.deck-card h3{ font-size:1.02rem; }
+.deck-card .desc{ font-size:.82rem; color:var(--text-dim); margin-top:5px; line-height:1.5;
+  display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+.deck-card .top{ flex:1; }
+.deck-meta{ display:flex; gap:16px; font-size:.78rem; color:var(--text-dim); }
 .deck-meta b{ color:var(--text); font-weight:650; }
 .dot{ width:6px; height:6px; border-radius:50%; display:inline-block; margin-right:5px; }
 
@@ -493,14 +501,36 @@ input[type=range]::-moz-range-thumb{
 
 /* ---------- Heatmap / charts ---------------------------------------------- */
 .heatmap-wrap{ overflow-x:auto; padding-bottom:4px; }
-.hm-months{ display:flex; gap:3px; height:15px; margin-bottom:4px; }
+.hm-months{ display:flex; gap:3px; height:16px; margin-bottom:5px; }
 .hm-months span{
-  width:12px; flex:none; position:relative; font-size:.66rem; color:var(--text-faint);
+  width:var(--hm-cell,12px); flex:none; position:relative; font-size:.68rem; color:var(--text-faint);
   white-space:nowrap; overflow:visible;
 }
 .heatmap{ display:flex; gap:3px; }
+
+/* The map is short and wide, the figures tall and narrow: centring the map in
+   its column keeps the block balanced instead of leaving a hole beneath it. */
+/* The map takes the width it needs and the figures fill whatever is left, so a
+   one-month map leaves room for the stats to spread into two or three columns
+   instead of stranding an empty half-card. */
+.activity-grid{ display:grid; grid-template-columns:minmax(0,auto) minmax(200px,1fr);
+  gap:28px; align-items:center; }
+.activity-stats{
+  border-left:1px solid var(--border-soft); padding-left:24px; align-self:stretch;
+  display:grid; grid-template-columns:repeat(auto-fit,minmax(185px,1fr));
+  gap:0 26px; align-content:center;
+}
+/* No rules between rows: with an auto-fit grid the column count changes, and a
+   border-top would land above items that are visually in the first row. */
+.as-row{ display:flex; flex-direction:column; gap:2px; padding:11px 0; }
+.as-row .k{ font-size:.7rem; text-transform:uppercase; letter-spacing:.07em;
+  color:var(--text-faint); font-weight:700; }
+.as-row .v{ font-size:1.1rem; font-weight:700; letter-spacing:-.02em; line-height:1.3; }
+.as-row .s{ font-size:.75rem; color:var(--text-dim); }
 .hm-col{ display:flex; flex-direction:column; gap:3px; }
-.hm-cell{ width:12px; height:12px; border-radius:3px; background:var(--surface-2); transition:.12s; }
+.hm-cell{ width:var(--hm-cell,12px); height:var(--hm-cell,12px); border-radius:3px;
+  background:var(--surface-2); transition:.12s; }
+.hm-legend .hm-cell{ width:12px; height:12px; }
 .hm-cell[data-lvl="1"]{ background:color-mix(in srgb,var(--accent) 28%, var(--surface-2)); }
 .hm-cell[data-lvl="2"]{ background:color-mix(in srgb,var(--accent) 50%, var(--surface-2)); }
 .hm-cell[data-lvl="3"]{ background:color-mix(in srgb,var(--accent) 74%, var(--surface-2)); }
@@ -544,10 +574,15 @@ input[type=range]::-moz-range-thumb{
 .font-opt.sel{ border-color:var(--accent); background:var(--accent-soft); }
 .font-opt .sample{ font-size:1.28rem; font-weight:650; }
 .font-opt .nm{ font-size:.72rem; color:var(--text-faint); margin-top:3px; font-family:var(--font); }
-.seg{ display:inline-flex; background:var(--surface-2); border-radius:10px; padding:3px; gap:2px; }
+.seg{ display:inline-flex; align-self:flex-start; background:var(--surface-2);
+  border-radius:10px; padding:3px; gap:2px; }
 .seg button{ padding:6px 14px; border-radius:8px; border:0; background:transparent; cursor:pointer;
   font-size:.82rem; font-weight:600; color:var(--text-dim); transition:.14s; }
-.seg button.sel{ background:var(--surface); color:var(--text); box-shadow:var(--shadow); }
+.seg button.sel{
+  background:var(--accent); color:var(--accent-ink); font-weight:700;
+  box-shadow:0 3px 10px -4px var(--accent);
+}
+.seg button:not(.sel):hover{ color:var(--text); background:var(--surface); }
 
 /* ---------- Modal / toast --------------------------------------------------- */
 .modal-host{ position:fixed; inset:0; z-index:60; display:grid; place-items:center; padding:20px; }
@@ -611,6 +646,8 @@ kbd{
   .topbar{ padding:13px 15px; }
   .topbar-actions .primary-btn span{ display:none; }
   .topbar-actions .primary-btn{ padding:9px 11px; }
+  .activity-grid{ grid-template-columns:1fr; gap:16px; }
+  .activity-stats{ border-left:0; border-top:1px solid var(--border-soft); padding-left:0; padding-top:6px; }
   .g4{ grid-template-columns:repeat(2,minmax(0,1fr)); }
   .g3,.g2{ grid-template-columns:1fr; }
   .inline-fields{ grid-template-columns:1fr; }

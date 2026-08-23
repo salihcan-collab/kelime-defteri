@@ -51,7 +51,7 @@ seçeneğiyle). Aynı dosyayı başka bir bilgisayarda içe aktararak ilerlemeni
 | **Study** | Aralıklı tekrar seansı — asıl öğrenmenin olduğu yer |
 | **Practice** | 8 farklı test/alıştırma modu |
 | **Browse** | Tüm kelimeler; arama, filtre, sıralama, toplu içe/dışa aktarma |
-| **Progress** | Hatırlama oranı, 14 günlük geçmiş, gelecek 14 günün tahmini, aktivite haritası (1 ay – 1 yıl arası seçilebilir), en çok zorlandığın kelimeler |
+| **Progress** | Hatırlama oranı, 14 günlük geçmiş, gelecek 14 günün tahmini, aktivite haritası (1 ay – 1 yıl arası seçilebilir; yanında dönem istatistikleri), en çok zorlandığın kelimeler |
 | **Settings** | Tema, font, renk, çalışma kuralları, AI, veri yönetimi |
 
 ---
@@ -194,8 +194,10 @@ Dashboard'daki **"Due now"** kutusu, kenar çubuğundaki rozet ve Study ekranın
 
 - **8 tema:** Dark, Light, Midnight, Nord, Forest, Sepia, Rose, Mono
 - **8 vurgu rengi:** Indigo, Blue, Teal, Emerald, Amber, Rose, Violet, Slate
-- **5 yazı tipi:** Sans, Rounded, Serif, Humanist, Mono
-- **3 yazı boyutu**
+- **5 yazı tipi:** Sans, Rounded, Serif, Humanist, Mono — her biri hem Windows'ta hem
+  macOS'ta farklı bir yazı tipine denk gelir (Windows: Segoe UI, Century Gothic,
+  Palatino, Candara, Consolas)
+- **3 yazı boyutu** (%18'lik adımlarla)
 
 Üst çubuktaki ay simgesiyle aydınlık/karanlık arasında hızlıca geçiş yapabilirsin.
 Seçimlerin kaydedilir.

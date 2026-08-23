@@ -312,7 +312,9 @@ function heatmapHTML(weeks, withMonths) {
     }).join('') + '</div>';
   }
 
-  return '<div class="heatmap-wrap">' + months +
+  /* Fewer weeks, bigger squares — a one-month map should not sit in a corner. */
+  const cell = weeks <= 6 ? 30 : weeks <= 14 ? 20 : weeks <= 30 ? 15 : 12;
+  return '<div class="heatmap-wrap" style="--hm-cell:' + cell + 'px">' + months +
     '<div class="heatmap">' + columns.map(c => '<div class="hm-col">' + c.cells + '</div>').join('') + '</div>' +
     '</div>';
 }
@@ -480,7 +482,7 @@ function renderDecks(host) {
               '<div class="desc">' + esc(d.description || 'No description') + '</div></div></div>' +
           '<div class="bar thin"><i style="width:' + Math.round(strength * 100) + '%"></i></div>' +
           '<div class="deck-meta">' +
-            '<span><b>' + cards.length + '</b> words</span>' +
+            '<span><b>' + cards.length + '</b> word' + (cards.length === 1 ? '' : 's') + '</span>' +
             '<span><b style="color:' + (c.due ? 'var(--bad)' : 'inherit') + '">' + c.due + '</b> due</span>' +
             '<span><b>' + c.new + '</b> new</span>' +
           '</div></div>';
@@ -1938,11 +1940,13 @@ function renderStats(host) {
         '<button data-weeks="' + r.weeks + '" class="' + (activityWeeks() === r.weeks ? 'sel' : '') + '">' +
         r.label + '</button>').join('') + '</div>' +
     '</div>' +
-    '<div class="card">' + heatmapHTML(activityWeeks(), true) +
-      '<div class="row between" style="margin-top:12px;gap:12px">' +
-        '<span class="faint">' + activityTotal(activityWeeks()) + '</span>' +
-        '<div class="hm-legend">Less' +
-          [0, 1, 2, 3, 4].map(l => '<span class="hm-cell" data-lvl="' + l + '"></span>').join('') + 'More</div>' +
+    '<div class="card">' +
+      '<div class="activity-grid">' +
+        '<div style="min-width:0">' + heatmapHTML(activityWeeks(), true) +
+          '<div class="hm-legend" style="margin-top:12px">Less' +
+            [0, 1, 2, 3, 4].map(l => '<span class="hm-cell" data-lvl="' + l + '"></span>').join('') + 'More</div>' +
+        '</div>' +
+        activityPanel(activityWeeks()) +
       '</div>' +
     '</div>' +
 
@@ -1978,13 +1982,43 @@ function activityWeeks() {
   const w = Store.state.settings.activityWeeks;
   return ACTIVITY_RANGES.some(r => r.weeks === w) ? w : 13;
 }
-function activityTotal(weeks) {
+/* What the heatmap cannot show at a glance, read off the same period. */
+function activityStats(weeks) {
   const hist = Store.history(weeks * 7);
   const reviews = hist.reduce((n, h) => n + h.reviews, 0);
-  const active = hist.filter(h => h.reviews > 0).length;
-  return reviews
-    ? reviews.toLocaleString() + ' reviews on ' + active + ' active day' + (active === 1 ? '' : 's')
-    : 'No reviews in this period yet';
+  const started = hist.reduce((n, h) => n + h.new, 0);
+  const correct = hist.reduce((n, h) => n + h.correct, 0);
+  const active = hist.filter(h => h.reviews > 0);
+  let run = 0, longest = 0;
+  hist.forEach(h => { if (h.reviews > 0) { run++; longest = Math.max(longest, run); } else run = 0; });
+  const best = hist.reduce((a, h) => (h.reviews > (a ? a.reviews : 0) ? h : a), null);
+  return {
+    days: hist.length, reviews: reviews, started: started,
+    active: active.length, longest: longest, best: best,
+    accuracy: reviews ? Math.round(100 * correct / reviews) : null,
+    perActive: active.length ? Math.round(reviews / active.length) : 0
+  };
+}
+
+function activityPanel(weeks) {
+  const a = activityStats(weeks);
+  const day = (d) => d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+  const row = (k, v, s) => '<div class="as-row"><span class="k">' + k + '</span>' +
+    '<span class="v">' + v + '</span>' + (s ? '<span class="s">' + s + '</span>' : '') + '</div>';
+
+  if (!a.reviews) {
+    return '<div class="activity-stats"><p class="faint" style="line-height:1.6">' +
+      'Nothing studied in this period yet. Once you start reviewing, the squares fill in ' +
+      'and your totals appear here.</p></div>';
+  }
+  return '<div class="activity-stats">' +
+    row('Reviews', a.reviews.toLocaleString(), a.perActive + ' per active day') +
+    row('Active days', a.active + ' / ' + a.days, pct(a.active, a.days) + '% of the period') +
+    row('Longest streak', a.longest + ' day' + (a.longest === 1 ? '' : 's'), 'without a gap') +
+    row('Busiest day', a.best.reviews + ' reviews', day(a.best.date)) +
+    row('New words started', a.started.toLocaleString(),
+        a.accuracy != null ? a.accuracy + '% answered correctly' : '') +
+  '</div>';
 }
 
 function miniStat(label, n, sub, color) {
