@@ -116,7 +116,7 @@ Yeni kelime eklemek için herhangi bir ekranda **N** tuşuna basman yeterli.
 | **Meaning → Word** | Anlamı görürsün, doğru kelimeyi seçersin |
 | **Type the word** | Anlamdan yola çıkıp kelimeyi yazarsın (tek harflik yazım hatası affedilir) |
 | **Fill in the blank** | Örnek cümledeki boşluğu doldurursun |
-| **Matching pairs** | Kelimelerle karşılıklarını eşleştirirsin (en fazla 6'lık tahtalara bölünür) |
+| **Matching pairs** | Kelimelerle karşılıklarını eşleştirirsin (en fazla 6'lık tahtalara bölünür; sağ sütunda her zaman bir fazla seçenek olur ki son kelime kendiliğinden ortaya çıkmasın) |
 | **Listening** | Kelime sesli okunur, duyduğunu yazarsın |
 | **AI quiz** | Yapay zekâ o kelimeler için yepyeni bağlam soruları yazar |
 | **Writing coach** | Kendi cümleni yazarsın, yapay zekâ puanlar ve düzeltir |
@@ -136,6 +136,12 @@ karşılığı da yazar — "40% · 26 of 66 words" gibi. Böylece 20 kelimelik 
 Bir turun sonunda **"Practise the N I missed"** düğmesi yalnızca kaçırdığın kelimeleri
 tekrar sorar; çeldirici şıklar arasında o turda kaçırdığın diğer kelimeler de yer alır,
 çünkü karıştırdığın kelimeler genelde onlardır.
+
+**İpucu:** "Meaning → Word", "Type the word", "Fill in the blank" ve "Listening"
+alıştırmalarında sorunun altında bir **Show hint** düğmesi vardır. Türkçe çeviri (boşluk
+doldurmada İngilizce anlam) varsayılan olarak gizlidir, takıldığında tıklayıp görebilirsin.
+Puanı etkilemez. "Word → Meaning" alıştırmasında ipucu yoktur — çeviri doğrudan cevabın
+kendisi olurdu.
 
 Seslendirme, bilgisayarında zaten yüklü olan sesleri kullanır — internet gerekmez, ücretsizdir.
 

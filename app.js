@@ -30,7 +30,9 @@ const ICONS = {
   spark: '<svg viewBox="0 0 24 24"><path d="M12 3l1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9z"/><path d="M18 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/></svg>',
   empty: '<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="15" rx="2"/><path d="M3 10h18M8 5V3M16 5V3"/></svg>',
   loader: '<svg viewBox="0 0 24 24" class="spin"><path d="M21 12a9 9 0 1 1-6.2-8.6"/></svg>',
-  back: '<svg viewBox="0 0 24 24"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>'
+  back: '<svg viewBox="0 0 24 24"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>',
+  bulb: '<svg viewBox="0 0 24 24"><path d="M9 18h6"/><path d="M10 22h4"/>' +
+        '<path d="M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg>'
 };
 
 /* ---------- toast ---------------------------------------------------------- */
@@ -912,16 +914,21 @@ function drawStudyCard(host) {
   const prev = SRS.preview(card.srs);
   const deck = Store.deck(card.deckId);
 
+  /* Context on the front. When the word itself is on show, blanking it out of
+     its own sentence says nothing — highlight it in place instead. Only when
+     the word is what you are being asked to recall does the gap belong. */
+  const frontExample = (s.showExampleOnFront && card.example)
+    ? '<p class="fc-example" style="margin-top:16px">' +
+      (askTerm ? esc(blankOut(card.example, card.term).text) : highlightTerm(card.example, card.term)) +
+      '</p>' : '';
+
   const front = askTerm
     ? '<div class="fc-prompt">' + esc(card.translation || card.definition) + '</div>' +
-      '<p class="muted" style="margin-top:10px">Which English word is this?</p>'
+      '<p class="muted" style="margin-top:10px">Which English word is this?</p>' + frontExample
     : '<div class="row" style="gap:12px;align-items:center">' +
         '<div class="fc-term">' + esc(card.term) + '</div>' +
         (TTS.ok ? '<button class="icon-btn tts-btn" data-act="say" title="Pronounce">' + ICONS.sound + '</button>' : '') +
-      '</div>' +
-      (s.showExampleOnFront && card.example
-        ? '<p class="fc-example" style="margin-top:16px">' +
-          esc(blankOut(card.example, card.term).text) + '</p>' : '');
+      '</div>' + frontExample;
 
   const back =
     '<div class="fc-body">' +
@@ -1249,6 +1256,15 @@ function buildQuestions(mode, pool, count, opts) {
       const tail = out.pop();
       out[out.length - 1].cards = out[out.length - 1].cards.concat(tail.cards);
     }
+    /* One spare meaning per board, so the final word still has to be chosen
+       rather than being whatever is left over. */
+    out.forEach(board => {
+      const used = {};
+      board.cards.forEach(c => { used[c.id] = 1; used[String(meaningOf(c)).toLowerCase()] = 1; });
+      const spares = pool.filter(c =>
+        !used[c.id] && meaningOf(c) && !used[String(meaningOf(c)).toLowerCase()]);
+      board.decoy = spares.length ? sample(spares, 1)[0] : null;
+    });
     return out;
   }
 
@@ -1256,33 +1272,36 @@ function buildQuestions(mode, pool, count, opts) {
     if (mode === 'mc-meaning') {
       const key = (c) => c.definition || c.translation;
       const choices = shuffle([key(card)].concat(distractors(card, pool, key, nOpts, prefer)));
-      return { type: 'mc', card: card, prompt: card.term, sub: card.pos, options: choices, answer: key(card),
+      /* No hint here: the translation would simply be the answer. */
+      return { type: 'mc', card: card, prompt: card.term, pos: card.pos, options: choices, answer: key(card),
                question: 'What does this word mean?' };
     }
     if (mode === 'mc-word') {
       const key = (c) => c.term;
       const choices = shuffle([card.term].concat(distractors(card, pool, key, nOpts, prefer)));
-      return { type: 'mc', card: card, prompt: meaningOf(card),
-               sub: card.translation && card.definition ? card.translation : '',
+      return { type: 'mc', card: card, prompt: meaningOf(card), pos: card.pos,
+               hint: card.definition && card.translation ? card.translation : '',
                options: choices, answer: card.term, question: 'Which word fits this meaning?' };
     }
     if (mode === 'typing') {
-      return { type: 'type', card: card, prompt: meaningOf(card), sub: card.translation !== meaningOf(card) ? card.translation : '',
+      return { type: 'type', card: card, prompt: meaningOf(card), pos: card.pos,
+               hint: card.translation !== meaningOf(card) ? card.translation : '',
                answer: card.term, question: 'Type the English word' };
     }
     if (mode === 'listening') {
-      return { type: 'type', card: card, prompt: '', speak: card.term, answer: card.term,
+      return { type: 'type', card: card, prompt: '', speak: card.term, pos: card.pos,
+               hint: card.translation || card.definition, answer: card.term,
                question: 'Listen and type what you hear' };
     }
     if (mode === 'cloze') {
       const sentence = card.example || (card.term + ' — ' + meaningOf(card));
       const gap = blankOut(sentence, card.term);
-      return { type: 'type', card: card, cloze: gap.text, answer: card.term,
+      return { type: 'type', card: card, cloze: gap.text, answer: card.term, pos: card.pos,
                /* the sentence may inflect the word — accept what it actually removed */
-               alt: gap.surface, sub: meaningOf(card), question: 'Complete the sentence' };
+               alt: gap.surface, hint: meaningOf(card), question: 'Complete the sentence' };
     }
     if (mode === 'ai-writing') {
-      return { type: 'write', card: card, question: 'Write a sentence using this word' };
+      return { type: 'write', card: card, pos: card.pos, question: 'Write a sentence using this word' };
     }
     return null;
   }).filter(Boolean);
@@ -1321,8 +1340,8 @@ async function startQuiz() {
         const card = cards.find(c => c.term.toLowerCase() === String(q.term || '').toLowerCase()) || cards[0];
         const opts = q.options.slice(0, optionCount());
         if (opts.indexOf(q.answer) === -1) opts[0] = q.answer;
-        return { type: 'mc', card: card, prompt: q.prompt, options: shuffle(opts), answer: q.answer,
-                 explanation: q.explanation, question: 'AI question' };
+        return { type: 'mc', card: card, prompt: q.prompt, pos: card.pos, options: shuffle(opts),
+                 answer: q.answer, explanation: q.explanation, question: 'AI question' };
       });
       if (!quiz.items.length) throw new Error('No questions came back.');
       quiz = Object.assign(newQuiz(mode, quiz.items), { startedAt: quiz.startedAt });
@@ -1403,10 +1422,20 @@ function questionCard(inner, item) {
   return '<div class="flashcard" style="min-height:auto;padding:28px 26px">' +
     '<div class="fc-top">' +
       '<span class="chip">' + esc(item.question) + '</span>' +
-      (item.sub ? '<span class="chip cat">' + esc(item.sub) + '</span>' : '') +
+      (item.pos ? '<span class="chip pos">' + esc(item.pos) + '</span>' : '') +
       '<div class="spacer"></div>' +
       (c && c.category ? '<span class="faint">' + esc(c.category) + '</span>' : '') +
-    '</div>' + inner + '</div>';
+    '</div>' + inner + hintHTML(item) + '</div>';
+}
+
+/* The translation (or the meaning, for a gap-fill) sits under the question and
+   stays hidden until asked for, so it is a way out rather than a giveaway. */
+function hintHTML(item) {
+  if (!item.hint) return '';
+  if (quiz.hintShown) {
+    return '<div class="hint-text">' + ICONS.bulb + '<span>' + esc(item.hint) + '</span></div>';
+  }
+  return '<button class="hint-btn" data-act="hint">' + ICONS.bulb + 'Show hint</button>';
 }
 
 function mcHTML(item) {
@@ -1438,7 +1467,7 @@ function typeHTML(item) {
   return questionCard(inner, item) +
     '<div class="row" style="gap:9px;flex-wrap:nowrap">' +
       '<input type="text" id="qInput" placeholder="Type your answer…" autocomplete="off" autocapitalize="off" ' +
-        'spellcheck="false"' + (answered ? ' disabled' : '') + ' value="' + esc(answered ? (quiz.given || '') : '') + '">' +
+        'spellcheck="false"' + (answered ? ' disabled' : '') + ' value="' + esc(quiz.given || '') + '">' +
       (answered ? '' : '<button class="primary-btn" data-act="check">Check</button>') +
     '</div>' +
     (answered ? feedbackHTML(item) : '<p class="faint">Spelling is checked, but a single typo is forgiven.</p>');
@@ -1449,8 +1478,7 @@ function writeHTML(item) {
   const c = item.card;
   return questionCard(
     '<div class="fc-term" style="font-size:1.7rem">' + esc(c.term) + '</div>' +
-    '<p class="muted" style="margin-top:8px">' + esc(meaningOf(c)) + '</p>' +
-    (c.pos ? '<div style="margin-top:10px"><span class="chip pos">' + esc(c.pos) + '</span></div>' : ''), item) +
+    '<p class="muted" style="margin-top:8px">' + esc(meaningOf(c)) + '</p>', item) +
     '<textarea id="qWrite" rows="3" placeholder="Write your own sentence using this word…"' +
       (quiz.state === 'idle' ? '' : ' disabled') + '>' + esc(quiz.given || '') + '</textarea>' +
     (quiz.state === 'idle'
@@ -1493,9 +1521,10 @@ function feedbackHTML(item) {
 
 function matchingHTML(item) {
   if (!quiz.match) {
+    const rightCards = item.decoy ? item.cards.concat([item.decoy]) : item.cards;
     quiz.match = {
       left: shuffle(item.cards.map(c => ({ id: c.id, text: c.term }))),
-      right: shuffle(item.cards.map(c => ({ id: c.id, text: c.translation || c.definition }))),
+      right: shuffle(rightCards.map(c => ({ id: c.id, text: c.translation || c.definition }))),
       sel: null, done: [], misses: 0, flash: null
     };
   }
@@ -1527,6 +1556,12 @@ function bindQuizEvents(host, item) {
     if (e.target.closest('[data-act="edit-card"]')) return cardEditor(item.card);
     if (e.target.closest('[data-act="explain"]')) return explainWrong(item);
     if (e.target.closest('[data-act="check"]')) return checkAnswer(item);
+    if (e.target.closest('[data-act="hint"]')) {
+      const typed = $('#qInput');
+      if (typed) quiz.given = typed.value;      /* a re-render must not eat the answer */
+      quiz.hintShown = true;
+      return render('practice');
+    }
     const opt = e.target.closest('[data-opt]');
     if (opt && quiz.state !== 'answered') return answerMC(item, opt.dataset.opt);
     const mi = e.target.closest('[data-side]');
@@ -1535,6 +1570,8 @@ function bindQuizEvents(host, item) {
   const input = $('#qInput');
   if (input && quiz.state !== 'answered') {
     input.focus();
+    input.setSelectionRange(input.value.length, input.value.length);
+    input.oninput = () => { quiz.given = input.value; };
     input.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); checkAnswer(item); } };
   }
   const wr = $('#qWrite');
@@ -1638,7 +1675,7 @@ function matchClick(item, side, id) {
 
 function nextQuizItem() {
   quiz.i++;
-  quiz.state = 'idle'; quiz.given = ''; quiz.lastResult = null;
+  quiz.state = 'idle'; quiz.given = ''; quiz.lastResult = null; quiz.hintShown = false;
   quiz.match = null;                 /* the next matching board starts fresh */
   if (quiz.i >= quiz.items.length) return finishQuiz();
   render('practice');
@@ -1944,7 +1981,8 @@ function renderSettings(host) {
       'How long a round is set on the Practice screen itself.</span></div>' +
       '<label class="switch"><input type="checkbox" id="setEx"' + (s.showExampleOnFront ? ' checked' : '') + '>' +
         '<span class="track"></span><span class="txt">Show the example sentence on the front' +
-        '<small>The target word appears as a blank, giving you a context clue.</small></span></label>' +
+        '<small>Seeing the word in context. When the word is what you have to recall, ' +
+        'it appears as a gap instead.</small></span></label>' +
       '<label class="switch"><input type="checkbox" id="setSpeak"' + (s.autoSpeak ? ' checked' : '') + '>' +
         '<span class="track"></span><span class="txt">Pronounce words automatically' +
         '<small>Uses the voices already installed on your computer.</small></span></label>' +

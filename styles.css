@@ -404,6 +404,20 @@ input[type=range]::-moz-range-thumb{
 .feedback.no{ background:rgba(239,68,68,.10); border:1px solid rgba(239,68,68,.28); }
 .feedback b{ font-weight:700; }
 .cloze-blank{ display:inline-block; min-width:88px; border-bottom:2px dashed var(--accent); }
+.hint-btn{
+  margin-top:18px; align-self:flex-start; display:inline-flex; align-items:center; gap:8px;
+  padding:8px 14px; border-radius:10px; cursor:pointer; font-size:.82rem; font-weight:600;
+  background:transparent; border:1px dashed var(--border); color:var(--text-faint); transition:.15s;
+}
+.hint-btn:hover{ border-style:solid; border-color:var(--accent); color:var(--accent); }
+.hint-btn svg{ width:15px; height:15px; }
+.hint-text{
+  margin-top:18px; display:flex; align-items:center; gap:9px; padding:10px 14px;
+  border-radius:10px; background:var(--accent-soft); color:var(--text);
+  font-size:.92rem; animation:fade .2s ease;
+}
+.hint-text svg{ width:16px; height:16px; color:var(--accent); }
+
 .match-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
 .match-col{ display:flex; flex-direction:column; gap:8px; }
 .match-item{ padding:11px 13px; border-radius:11px; border:1px solid var(--border); background:var(--surface);
