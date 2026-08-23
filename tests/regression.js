@@ -547,7 +547,10 @@ const head = (s) => console.log('\n— ' + s + ' —');
     wo.stats = { seen: 7, correct: 6, wrong: 1 };
     const edited = st.cards.find(c => c.term === 'bring up');
     edited.definition = 'My own wording for this one.';
+    /* Exactly what an old save looks like: stamped by a release that knew
+       nothing about starter revisions. */
     st.version = 1;
+    delete st.starterRevision;
     localStorage.setItem('lexio.v1', JSON.stringify(st));
     return { words: st.cards.length, workOutId: wo.id };
   });
@@ -587,6 +590,50 @@ const head = (s) => console.log('\n— ' + s + ' —');
   await page.waitForTimeout(900);
   const thirdOpen = await page.evaluate(() => ({ words: Store.state.cards.length, ran: !!Store._starterUpgrade }));
   is(thirdOpen.words === secondOpen && !thirdOpen.ran, 'opening it again changes nothing');
+
+  /* The case that actually stranded a real collection: a release bumped the
+     schema without changing any content, so the collection was already
+     stamped with the new schema when the content fix was written. Gating the
+     content upgrade on the schema version locks that collection out forever. */
+  await page.evaluate(() => {
+    Store.wipe();
+    const st = Store.state;
+    const seen = {};
+    st.cards = st.cards.filter(c => {
+      if (c.term === 'object') return false;
+      const k = c.term.toLowerCase();
+      if (seen[k]) return false; seen[k] = 1; return true;
+    });
+    st.cards.forEach(c => { if (c.term === 'work out') c.definition = 'To end well, or to exercise, or to calculate.'; });
+    st.version = SCHEMA_VERSION;      /* already on the current schema */
+    delete st.starterRevision;        /* but never offered the content */
+    localStorage.setItem('lexio.v1', JSON.stringify(st));
+  });
+  await page.reload();
+  await page.waitForTimeout(900);
+  const stranded = await page.evaluate(() => ({
+    objects: Store.sensesOf('object').length,
+    workOut: Store.sensesOf('work out').length,
+    revision: Store.state.starterRevision
+  }));
+  is(stranded.objects === 3 && stranded.workOut === 3,
+     'a collection already stamped with the current schema still receives the content');
+  is(stranded.revision === 1, 'and is marked so it is not upgraded twice');
+
+  /* And the button that exists so no collection can ever be stranded again. */
+  const manual = await page.evaluate(() => {
+    Store.wipe();
+    Store.state.cards = Store.state.cards.filter(c => c.term !== 'object');
+    Store.saveNow();
+    const missing = Store.sensesOf('object').length;
+    const first = Store.refreshStarters();
+    const second = Store.refreshStarters();
+    return { missing: missing, restored: Store.sensesOf('object').length, first: first, second: second };
+  });
+  is(manual.missing === 0 && manual.restored === 3,
+     `"Restore starter words" brings back what is missing (${manual.first.added} added)`);
+  is(manual.second.added === 0 && manual.second.repaired === 0,
+     'pressing it a second time does nothing');
   await page.evaluate(() => { Store.wipe(); Store.saveNow(); });
 
   /* ------------------------------------------------------------------ *

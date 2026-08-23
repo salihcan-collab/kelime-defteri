@@ -120,6 +120,12 @@ alıştırmalar üçüne de ihtiyaç duyar. Eksik alanlar kırmızı çerçeveyl
 > sıkıştırılmış başlangıç kelimeleri **yerinde düzeltilir** (kartın kimliği, tekrar takvimi
 > ve istatistikleri korunur), eksik anlamlar yanına eklenir ve `object` gelir. Kendin
 > düzenlediğin hiçbir kelimeye dokunulmaz. Ne değiştiğini bir bildirimle görürsün.
+>
+> Koleksiyonunun güncel olup olmadığını **Settings → Your data** satırından görebilirsin:
+> `starter words rev 1/1` yazıyorsa günceldir. Soldaki sayı küçükse **Restore starter
+> words** düğmesine bas — eksik olanı tamamlar, güncelse "already up to date" der. Bu
+> düğmeye istediğin zaman basabilirsin; kendi düzenlediğin kelimelere ve tekrar geçmişine
+> asla dokunmaz.
 
 ### Birden çok anlamı olan kelimeler
 

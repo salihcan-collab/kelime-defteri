@@ -22,6 +22,7 @@ const Store = {
   defaults() {
     return {
       version: SCHEMA_VERSION,
+      starterRevision: (typeof STARTER_REVISION === 'undefined' ? 0 : STARTER_REVISION),
       createdAt: Date.now(),
       settings: {
         theme: 'dark',
@@ -93,9 +94,15 @@ const Store = {
     });
     s.log = data.log || [];
     s.daily = data.daily || {};
-    /* Schema 1 collections were dealt starter cards that have since been
-       improved. Reach them once, before stamping the new version number. */
-    if ((data.version || 1) < 2) this.upgradeStarters(s);
+    /* Starter content that has been corrected or added since this collection
+       was created. Gated on its own counter, never on the schema version —
+       a release that only bumps the schema would otherwise lock the collection
+       out of every content fix written after it. */
+    s.starterRevision = data.starterRevision || 0;
+    if (s.starterRevision < STARTER_REVISION) {
+      this.upgradeStarters(s);
+      s.starterRevision = STARTER_REVISION;
+    }
     s.version = SCHEMA_VERSION;
     return s;
   },
@@ -168,6 +175,20 @@ const Store = {
 
     /* Read once by the app so it can say what happened; never saved. */
     if (repaired || added) this._starterUpgrade = { repaired: repaired, added: added };
+  },
+
+  /* The same thing on demand, from Settings. Safe to press at any time: it
+     only ever fills in what is missing, so pressing it twice does nothing the
+     second time. It exists because an automatic upgrade that fails to reach a
+     collection leaves the learner with no way to ask for it. */
+  refreshStarters() {
+    this._starterUpgrade = null;
+    this.upgradeStarters(this.state);
+    this.state.starterRevision = STARTER_REVISION;
+    this.saveNow();
+    const result = this._starterUpgrade || { repaired: 0, added: 0 };
+    this._starterUpgrade = null;
+    return result;
   },
 
   save() {

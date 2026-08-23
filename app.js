@@ -2303,10 +2303,18 @@ function renderSettings(host) {
         '<button class="ghost-btn" data-act="restore">Restore from backup</button>' +
         '<button class="ghost-btn" data-act="csv">Export as CSV</button>' +
         '<button class="ghost-btn" data-act="import">Import CSV</button>' +
+        '<button class="ghost-btn" data-act="starters">Restore starter words</button>' +
       '</div>' +
+      '<p class="faint" style="margin-top:10px">' +
+        '“Restore starter words” fills in starter content your collection is missing — ' +
+        'words added since you started, and starter cards whose meanings have since been ' +
+        'separated. It never changes a word you have edited yourself, and never touches ' +
+        'your review history.</p>' +
       '<p class="faint" style="margin-top:12px">' +
         Store.state.cards.length + ' words · ' + Store.state.decks.length + ' decks · ' +
-        Store.state.log.length + ' reviews recorded' +
+        Store.state.log.length + ' reviews recorded · ' +
+        /* Printed so a collection that is behind can be spotted at a glance. */
+        'starter words rev ' + (Store.state.starterRevision || 0) + '/' + STARTER_REVISION +
         (Store.state.lastBackup ? ' · last backup ' + new Date(Store.state.lastBackup).toLocaleDateString() : ' · never backed up') +
       '</p>' +
       '<div class="row" style="margin-top:18px;padding-top:16px;border-top:1px solid var(--border-soft)">' +
@@ -2363,6 +2371,17 @@ function bindSettings(host) {
     if (e.target.closest('[data-act="backup"]')) {
       download('lexio-backup-' + stamp() + '.json', Store.exportJSON());
       toast('Backup downloaded', 'ok'); return render('settings');
+    }
+    if (e.target.closest('[data-act="starters"]')) {
+      const r = Store.refreshStarters();
+      if (!r.repaired && !r.added) toast('Starter words are already up to date', 'ok');
+      else {
+        const parts = [];
+        if (r.repaired) parts.push(r.repaired + ' word' + (r.repaired === 1 ? '' : 's') + ' updated');
+        if (r.added) parts.push(r.added + ' added');
+        toast(parts.join(' · '), 'ok');
+      }
+      refreshChrome(); return render('settings');
     }
     if (e.target.closest('[data-act="csv"]')) {
       download('lexio-words-' + stamp() + '.csv', Store.exportCSV(), 'text/csv');

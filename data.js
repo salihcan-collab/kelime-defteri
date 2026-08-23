@@ -167,6 +167,13 @@ const STARTER_DECKS = [
    The new wording is not repeated here: everything is looked up in
    STARTER_DECKS above, so there is one source of truth for the content.
    -------------------------------------------------------------------------- */
+/* Bumped whenever the starter decks gain or correct content. It is deliberately
+   NOT the schema version: the schema can be stamped by a release that carries no
+   content change, and then a content upgrade written later could never reach the
+   collections that release had already stamped. This counter only ever moves when
+   the words themselves move. */
+const STARTER_REVISION = 1;
+
 const STARTER_UPGRADES = {
   /* Cards that used to squeeze two or three meanings into one definition.
      `oldDefinition` is exactly what shipped — a card whose definition still
