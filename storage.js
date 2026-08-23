@@ -195,13 +195,27 @@ const Store = {
     return deckId ? this.state.cards.filter(c => c.deckId === deckId) : this.state.cards.slice();
   },
 
+  /* "Start from zero": the cards forget their schedule AND the diary is wiped,
+     otherwise today's counters keep eating into the day's new-word allowance
+     and the Progress page still reports the runs that were just erased.
+     A single-deck reset only drops that deck's entries — the daily activity
+     record is about what you did, not about which deck you did it in. */
   resetProgress(deckId) {
+    const reset = {};
     this.state.cards.forEach(c => {
       if (!deckId || c.deckId === deckId) {
+        reset[c.id] = 1;
         c.srs = SRS.newState();
         c.stats = { seen: 0, correct: 0, wrong: 0 };
       }
     });
+    this._undo = null;
+    if (deckId) {
+      this.state.log = this.state.log.filter(l => !reset[l.cardId]);
+    } else {
+      this.state.log = [];
+      this.state.daily = {};
+    }
     this.save();
   },
 

@@ -359,8 +359,14 @@ input[type=range]::-moz-range-thumb{
 
 /* ---------- Study / flashcard -------------------------------------------- */
 .study-wrap{ max-width:720px; margin:0 auto; display:flex; flex-direction:column; gap:16px; }
-.study-head{ display:flex; align-items:center; gap:14px; }
-.study-head .bar{ flex:1; }
+.study-head{ display:flex; align-items:center; gap:12px; }
+.study-head .bar{ flex:1; min-width:40px; }
+.end-btn{ flex:none; }
+.end-btn:hover{ border-color:var(--bad); color:var(--bad); background:transparent; }
+@media (max-width:620px){
+  .end-btn span{ display:none; }          /* the icon carries it on a phone */
+  .end-btn{ padding:6px 9px; }
+}
 .counts{ display:flex; gap:9px; font-size:.78rem; font-weight:650; }
 .counts span{ padding:2px 9px; border-radius:99px; background:var(--surface-2); }
 .counts .c-new{ color:var(--info); } .counts .c-learn{ color:var(--warn); } .counts .c-due{ color:var(--good); }

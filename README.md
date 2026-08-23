@@ -263,6 +263,11 @@ Yine de bu dosyaları başkasıyla paylaşacaksan anahtarını önce Settings'te
 - **CSV dışa aktarma:** Browse → **Export CSV** (Excel'de açılır).
 - **Tam yedek:** Settings → **Download backup (.json)** — istatistikler dahil her şey.
 
+**Reset all progress** (Settings → Your data) kelimeleri korur, geri kalan her şeyi siler:
+kartlar *New* durumuna döner, tekrar geçmişi — seri, toplamlar, hatırlama oranı ve aktivite
+haritası — temizlenir, günün sayaçları da sıfırlanır (yani günlük yeni kelime hakkın yeniden
+tam olur).
+
 ---
 
 ## 10. Klavye kısayolları
@@ -274,7 +279,7 @@ Yine de bu dosyaları başkasıyla paylaşacaksan anahtarını önce Settings'te
 | `S` | Kelimeyi sesli oku |
 | `U` | Son cevabı geri al |
 | `N` | Yeni kelime ekle |
-| `Esc` | Pencereyi kapat / seansı bitir |
+| `Esc` | Pencereyi kapat / seansı bitir (ekrandaki **End session** düğmesiyle aynı) |
 | `D` `K` `S` `P` `B` `G` | Ekranlar arası geçiş |
 | `PageUp` `PageDown` | Sayfayı yukarı/aşağı kaydır |
 | `Home` `End` | Sayfanın başına/sonuna git |

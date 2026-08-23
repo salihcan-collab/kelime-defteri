@@ -31,6 +31,8 @@ const ICONS = {
   empty: '<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="15" rx="2"/><path d="M3 10h18M8 5V3M16 5V3"/></svg>',
   loader: '<svg viewBox="0 0 24 24" class="spin"><path d="M21 12a9 9 0 1 1-6.2-8.6"/></svg>',
   back: '<svg viewBox="0 0 24 24"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>',
+  finish: '<svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>' +
+          '<path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>',
   bulb: '<svg viewBox="0 0 24 24"><path d="M9 18h6"/><path d="M10 22h4"/>' +
         '<path d="M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg>'
 };
@@ -1016,7 +1018,8 @@ function drawStudyCard(host) {
   host.innerHTML =
     '<div class="study-wrap">' +
       '<div class="study-head">' +
-        '<button class="icon-btn" data-act="quit" title="End session">' + ICONS.back + '</button>' +
+        '<button class="soft-btn tiny end-btn" data-act="quit">' + ICONS.finish +
+          '<span>End session</span></button>' +
         '<div class="bar" style="flex:1"><i style="width:' + progress + '%"></i></div>' +
         '<div class="counts"><span class="c-due">' + remaining + ' left</span>' +
           (session.ahead ? '<span class="c-new">ahead of schedule</span>' : '') + '</div>' +
@@ -1466,7 +1469,8 @@ function drawQuizItem(host) {
   const progress = pct(doneCount, totalCount);
   const head =
     '<div class="study-head">' +
-      '<button class="icon-btn" data-act="quit" title="End practice">' + ICONS.back + '</button>' +
+      '<button class="soft-btn tiny end-btn" data-act="quit">' + ICONS.finish +
+        '<span>End practice</span></button>' +
       '<div class="bar" style="flex:1"><i style="width:' + progress + '%"></i></div>' +
       '<div class="counts"><span class="c-due">' +
         (matching ? doneCount + ' / ' + totalCount + ' matched'
@@ -2244,7 +2248,10 @@ function bindSettings(host) {
     if (e.target.closest('[data-act="import"]')) return importDialog();
     if (e.target.closest('[data-act="reset"]')) {
       const ok = await confirmDialog('Reset progress',
-        'Every word stays, but all review history and scheduling is erased. You will start from zero.', 'Reset progress', true);
+        'Every word stays. Everything else goes: each card returns to <b>New</b>, and the ' +
+        'review history behind your streak, totals, recall and activity map is erased. ' +
+        'Today\'s counters reset too, so the full daily allowance of new words is available again.',
+        'Reset progress', true);
       if (ok) { Store.resetProgress(); toast('Progress reset', 'ok'); render('settings'); refreshChrome(); }
       return;
     }
