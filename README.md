@@ -102,6 +102,9 @@ kelime sürdürülebilir bir tempodur.
 - **Example sentence** — kelimeyi içeren doğal bir örnek cümle
 - **Translation** — Türkçe karşılığı
 - **Category** — konu etiketi (Work, Feelings, Travel…)
+- **Sense label** — kelimenin birden çok anlamı varsa hangisi olduğunu söyleyen kısa etiket
+- **Collocations** — kelimenin birlikte kullanıldığı kalıplar (`make a decision`)
+- **Synonyms / Antonyms** — eş ve zıt anlamlılar
 - **Personal note** — kendi hatırlatıcı notun (isteğe bağlı)
 
 Örnek cümlenin kelimeyi **içermesi** önemlidir: "Fill in the blank" alıştırması cümledeki
@@ -111,10 +114,38 @@ kelimeyi boşluğa çevirerek soru üretir.
 alıştırmalar üçüne de ihtiyaç duyar. Eksik alanlar kırmızı çerçeveyle işaretlenir.
 Çeviri, kategori, örnek cümle ve not isteğe bağlıdır.
 
-**Aynı kelimeyi ikinci kez eklersen** uygulama uyarır ve kelimenin hâlihazırda hangi destede
-olduğunu gösterir. İstersen mevcut kartı açabilir, istersen "Save anyway" ile yine de
-kaydedebilirsin — aynı yazılışın farklı sözcük türleri olabilir. Kaydetmen için ikinci kez
-onaylaman gerekir, yani yanlışlıkla kopya oluşturamazsın.
+### Birden çok anlamı olan kelimeler
+
+`object` hem "nesne" hem "amaç" hem de "itiraz etmek" demektir; `work out` üç ayrı anlam
+taşır. Bunları tek bir tanıma sıkıştırmak öğrenmeyi zorlaştırır, çünkü her anlam aslında
+ayrı ayrı öğrenilir.
+
+Uygulama her anlamı **kendi kartı** olarak tutar, yani her anlamın kendi tekrar takvimi
+olur — birini iyi biliyor, diğerini yeni öğreniyor olabilirsin. Ama kartlar birbirini tanır:
+
+- **Sense label** alanı, aynı yazılışa sahip kartlar olduğu anda kendiliğinden görünür ve
+  hâlihazırda kayıtlı anlamları listeler (`Already saved: a thing, an aim, to protest`).
+- Kelime listesinde anlam etiketi kelimenin altında küçük ve italik durur, satırlar
+  karışmaz.
+- Çalışma kartının ön yüzünde, kelimenin birden çok anlamı varsa **sözcük türü ve anlam
+  etiketi** görünür. Bunlar cevabı ele vermez ama soruyu tahmin olmaktan çıkarır: "object
+  ne demek?" üç doğru cevabı olan bir soru olurdu.
+- Çoktan seçmelide, aynı kelimenin **başka bir anlamı asla çeldirici olarak sunulmaz** —
+  aksi hâlde iki şık da doğru olurdu.
+
+**Aynı kelimeyi ikinci kez eklersen** uygulama durur ve kayıtlı anlamları gösterir; düğme
+"Save as another sense" olur. İkinci kez onayladığında yeni anlam olarak kaydedilir. Yani
+yanlışlıkla kopya oluşturamazsın, ama bilerek ikinci bir anlam eklemek tek tıklık iştir.
+
+### Collocations ve ilişkili kelimeler
+
+- **Collocations** her satıra bir kalıp yazılır. Kartın arka yüzünde "Goes with" başlığı
+  altında listelenir ve kalıbın içindeki kelime koyu gösterilir.
+- **Synonyms / Antonyms** virgülle yazılır. Kaydettiğin bir kelimeyi işaret ediyorsa
+  çip **dolu**, henüz eklemediğin bir kelimeyse **kesik çizgili** görünür.
+- İlişki tek yönde yazılır ama iki yönde çalışır: `undermine` için "weaken" yazdığında,
+  `weaken` kartı da `undermine`'ı gösterir. Aynı bilgi iki kez saklanmaz, bu yüzden bir
+  kelimeyi sildiğinde diğerinde kırık bir bağlantı kalmaz — sadece düz metne döner.
 
 Yeni kelime eklemek için herhangi bir ekranda **N** tuşuna basman yeterli.
 
@@ -257,9 +288,14 @@ Yine de bu dosyaları başkasıyla paylaşacaksan anahtarını önce Settings'te
 ## 9. Kelime aktarma
 
 - **CSV içe aktarma:** Browse → **Import**. Sütun sırası:
-  `term, part of speech, definition, example, translation, category`.
-  Başlık satırı varsa otomatik algılanır. Dosya seçebilir veya satırları yapıştırabilirsin.
-  Hedef destede zaten bulunan kelimeler atlanır ve kaç tanesinin atlandığı bildirilir.
+  `term, part of speech, sense, definition, example, translation, category, collocations,
+  synonyms, antonyms`. Başlık satırı varsa otomatik algılanır; başlık yoksa eski altı
+  sütunluk sıra (`term, part of speech, definition, example, translation, category`)
+  geçerlidir, yani eski dosyaların aynen çalışmaya devam eder. Collocations, synonyms ve
+  antonyms sütunlarında birden çok değer **noktalı virgülle** ayrılır.
+  Dosya seçebilir veya satırları yapıştırabilirsin. Aynı kelimenin **farklı anlamı**
+  ayrı satır olarak eklenir; yalnızca kelime, sözcük türü ve tanımı birebir aynı olan
+  satırlar atlanır ve kaç tanesinin atlandığı bildirilir.
 - **CSV dışa aktarma:** Browse → **Export CSV** (Excel'de açılır).
 - **Tam yedek:** Settings → **Download backup (.json)** — istatistikler dahil her şey.
 

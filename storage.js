@@ -6,7 +6,7 @@
    ========================================================================== */
 
 const STORAGE_KEY = 'lexio.v1';
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 const todayKey = (d) => {
@@ -85,6 +85,10 @@ const Store = {
     s.cards = (data.cards || []).map(c => {
       if (!c.srs) c.srs = SRS.newState();
       if (!c.stats) c.stats = { seen: 0, correct: 0, wrong: 0 };
+      /* Added in schema 2. Older backups simply have none of these. */
+      if (typeof c.sense !== 'string') c.sense = '';
+      if (!Array.isArray(c.collocations)) c.collocations = [];
+      if (!Array.isArray(c.related)) c.related = [];
       return c;
     });
     s.log = data.log || [];
@@ -153,10 +157,15 @@ const Store = {
       deckId: data.deckId || (this.state.decks[0] && this.state.decks[0].id) || null,
       term: (data.term || '').trim(),
       pos: data.pos || '',
+      /* A short label that tells this sense apart from the word's other
+         senses — "to protest" next to "a thing". Empty for most words. */
+      sense: (data.sense || '').trim(),
       definition: (data.definition || '').trim(),
       example: (data.example || '').trim(),
       translation: (data.translation || '').trim(),
       category: (data.category || '').trim(),
+      collocations: (data.collocations || []).slice(),
+      related: (data.related || []).slice(),
       notes: data.notes || '',
       srs: data.srs || SRS.newState(),
       stats: { seen: 0, correct: 0, wrong: 0 },
@@ -181,14 +190,53 @@ const Store = {
 
   card(id) { return this.state.cards.find(c => c.id === id); },
 
-  /* Cards that already use this term, ignoring case and surrounding spaces. */
-  findDuplicates(term, exceptId, deckId) {
-    const key = String(term || '').trim().toLowerCase();
+  /* Words that share a spelling are senses of one headword: object the noun
+     and object the verb, work out "exercise" and work out "turn out well".
+     Each sense stays its own card with its own schedule, because you learn
+     them separately — this is only how they find each other. */
+  headKey(term) { return String(term || '').trim().toLowerCase(); },
+
+  sensesOf(term, exceptId, deckId) {
+    const key = this.headKey(term);
     if (!key) return [];
     return this.state.cards.filter(c =>
       c.id !== exceptId &&
       (!deckId || c.deckId === deckId) &&
-      String(c.term || '').trim().toLowerCase() === key);
+      this.headKey(c.term) === key);
+  },
+
+  siblings(card) { return card ? this.sensesOf(card.term, card.id) : []; },
+
+  /* The card you would land on if you followed a written word — used to turn
+     "scarce" typed into a synonym box into a link, without storing an id that
+     could later point at a deleted card. */
+  cardByTerm(term, exceptId) {
+    const key = this.headKey(term);
+    if (!key) return null;
+    return this.state.cards.find(c => c.id !== exceptId && this.headKey(c.term) === key) || null;
+  },
+
+  /* Relations are written on one word but true of both, so a word shows the
+     links it declares and the links other words declare about it. Nothing is
+     stored twice, and deleting a word cannot leave a broken reference. */
+  relationsFor(card) {
+    if (!card) return [];
+    const out = [];
+    const seen = {};
+    const push = (kind, text, from) => {
+      const key = kind + '|' + this.headKey(text);
+      if (!text || seen[key] || this.headKey(text) === this.headKey(card.term)) return;
+      seen[key] = 1;
+      out.push({ kind: kind, text: text, card: this.cardByTerm(text, card.id), via: from || null });
+    };
+    (card.related || []).forEach(r => push(r.kind, r.text, null));
+    this.state.cards.forEach(other => {
+      if (other.id === card.id) return;
+      (other.related || []).forEach(r => {
+        if (this.headKey(r.text) === this.headKey(card.term)) push(r.kind, other.term, other.id);
+      });
+    });
+    return out;
   },
 
   cardsOf(deckId) {
@@ -470,10 +518,13 @@ const Store = {
   },
 
   exportCSV(deckId) {
-    const rows = [['term', 'part of speech', 'definition', 'example', 'translation', 'category', 'deck']];
+    const rows = [['term', 'part of speech', 'sense', 'definition', 'example', 'translation',
+                   'category', 'collocations', 'synonyms', 'antonyms', 'deck']];
+    const rel = (c, kind) => (c.related || []).filter(r => r.kind === kind).map(r => r.text).join('; ');
     this.cardsOf(deckId).forEach(c => {
       const d = this.deck(c.deckId);
-      rows.push([c.term, c.pos, c.definition, c.example, c.translation, c.category, d ? d.name : '']);
+      rows.push([c.term, c.pos, c.sense, c.definition, c.example, c.translation, c.category,
+                 (c.collocations || []).join('; '), rel(c, 'syn'), rel(c, 'ant'), d ? d.name : '']);
     });
     return rows.map(r => r.map(v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"').join(',')).join('\n');
   },
@@ -495,20 +546,37 @@ const Store = {
     const iEx   = start ? idx(['example', 'sentence', 'example sentence'], 3) : 3;
     const iTr   = start ? idx(['translation', 'turkish', 'çeviri'], 4) : 4;
     const iCat  = start ? idx(['category', 'topic', 'tag'], 5) : 5;
+    /* Columns added in schema 2 — only picked up when the file names them, so
+       old headerless exports keep importing exactly as they used to. */
+    const named = (names) => { for (const n of names) { const i = head.indexOf(n); if (i !== -1) return i; } return -1; };
+    const iSense = start ? named(['sense', 'meaning label']) : -1;
+    const iColl  = start ? named(['collocations', 'collocation']) : -1;
+    const iSyn   = start ? named(['synonyms', 'synonym']) : -1;
+    const iAnt   = start ? named(['antonyms', 'antonym']) : -1;
+    const list = (v) => String(v == null ? '' : v).split(/[;|]/).map(x => x.trim()).filter(Boolean);
+    const at = (row, i) => (i === -1 ? '' : (row[i] || ''));
 
     let added = 0, skipped = 0;
+    /* Two rows for the same word are two senses of it, not a mistake — only a
+       row that repeats the same word, part of speech AND meaning is skipped. */
     const seen = {};
-    this.cardsOf(deckId).forEach(c => { seen[String(c.term).trim().toLowerCase()] = 1; });
+    const rowKey = (term, pos, def) =>
+      [term, pos, def].map(v => String(v || '').trim().toLowerCase()).join('|');
+    this.cardsOf(deckId).forEach(c => { seen[rowKey(c.term, c.pos, c.definition)] = 1; });
     for (let r = start; r < rows.length; r++) {
       const row = rows[r];
       if (!row || !row[iTerm] || !String(row[iTerm]).trim()) continue;
-      const key = String(row[iTerm]).trim().toLowerCase();
+      const key = rowKey(row[iTerm], row[iPos], row[iDef]);
       if (seen[key]) { skipped++; continue; }
       seen[key] = 1;
       this.addCard({
         deckId: deckId,
         term: row[iTerm], pos: row[iPos] || '', definition: row[iDef] || '',
-        example: row[iEx] || '', translation: row[iTr] || '', category: row[iCat] || ''
+        example: row[iEx] || '', translation: row[iTr] || '', category: row[iCat] || '',
+        sense: at(row, iSense),
+        collocations: list(at(row, iColl)),
+        related: list(at(row, iSyn)).map(t => ({ kind: 'syn', text: t }))
+          .concat(list(at(row, iAnt)).map(t => ({ kind: 'ant', text: t })))
       }, true);
       added++;
     }

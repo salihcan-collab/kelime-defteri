@@ -186,6 +186,69 @@ function levelChip(card) {
 
 /* When the next review falls — the other half of the picture. */
 function isDueNow(card) { return card.srs.state !== 'new' && SRS.isDue(card.srs); }
+
+/* ---------- senses, collocations and relations -------------------------------
+   A word with more than one important meaning stays one card per meaning, so
+   each meaning keeps its own schedule. These helpers are what make the cards
+   look like one word again wherever the learner sees them. */
+
+function splitLines(v) { return String(v || '').split('\n').map(x => x.trim()).filter(Boolean); }
+function splitList(v)  { return String(v || '').split(/[,;]/).map(x => x.trim()).filter(Boolean); }
+
+function relText(card, kind) {
+  return (card.related || []).filter(r => r.kind === kind).map(r => r.text).join(', ');
+}
+function parseRelations(synValue, antValue) {
+  return splitList(synValue).map(t => ({ kind: 'syn', text: t }))
+    .concat(splitList(antValue).map(t => ({ kind: 'ant', text: t })));
+}
+
+/* The short label that tells one sense from another. Falls back to the part of
+   speech, which is enough whenever the senses are a noun and a verb. */
+function senseLabel(card) { return (card.sense || '').trim(); }
+
+function senseChip(card) {
+  const label = senseLabel(card);
+  return label ? '<span class="chip sense">' + esc(label) + '</span>' : '';
+}
+
+/* The same label under the word rather than beside it — in a narrow table
+   column a chip alongside wraps unevenly and pulls the rows out of line. */
+function senseSub(card) {
+  const label = senseLabel(card);
+  return label ? '<div class="sense-sub">' + esc(label) + '</div>' : '';
+}
+
+/* "object · 2 senses" — shown wherever a word could be mistaken for another
+   card with the same spelling. */
+function senseCountChip(card) {
+  const n = Store.siblings(card).length;
+  return n ? '<span class="chip senses" title="This word has more than one meaning">' +
+    (n + 1) + ' senses</span>' : '';
+}
+
+const REL_LABEL = { syn: 'synonym', ant: 'opposite' };
+
+function relationChips(card) {
+  const rels = Store.relationsFor(card);
+  if (!rels.length) return '';
+  /* A solid chip is a word you have saved; a dashed one is a word you have
+     only written down. Neither is clickable — following a link mid-session
+     would throw you out of the session you are in. */
+  return '<div class="rel-row">' + rels.map(r =>
+    '<span class="chip rel ' + r.kind + (r.card ? ' known' : '') + '"' +
+      ' title="' + esc(REL_LABEL[r.kind] || r.kind) +
+      (r.card ? ' — saved in your collection' : ' — not saved as a word yet') + '">' +
+      (r.kind === 'ant' ? '↔ ' : '≈ ') + esc(r.text) +
+    '</span>').join('') + '</div>';
+}
+
+function collocationList(card) {
+  const list = card.collocations || [];
+  if (!list.length) return '';
+  return '<ul class="colloc">' + list.map(c =>
+    '<li>' + highlightTerm(c, card.term) + '</li>').join('') + '</ul>';
+}
 function dueText(card) {
   if (card.srs.state === 'new') return 'not started';
   const diff = card.srs.due - Date.now();
@@ -567,7 +630,7 @@ function cardTable(cards) {
     '</tr></thead><tbody>' +
     cards.map(c =>
       '<tr data-card="' + c.id + '">' +
-        '<td class="term col-word">' + esc(c.term) + '</td>' +
+        '<td class="term col-word">' + esc(c.term) + senseSub(c) + '</td>' +
         '<td class="col-type">' + (c.pos ? '<span class="chip pos">' + esc(c.pos) + '</span>' : '') + '</td>' +
         '<td class="muted col-meaning"><span class="clamp2">' + esc(c.definition || '') + '</span></td>' +
         '<td class="col-translation"><span class="clamp2">' + esc(c.translation) + '</span></td>' +
@@ -651,6 +714,11 @@ function cardEditor(card, presetDeck) {
           PARTS_OF_SPEECH.map(p => '<option' + (card && card.pos === p ? ' selected' : '') + '>' + p + '</option>').join('') +
         '</select></div>' +
       '</div>' +
+      /* Only shown once the word turns out to have more than one sense —
+         most words never need it, so it stays out of the way until then. */
+      '<div class="field hidden" id="senseRow"><label>Sense label</label>' +
+        '<input type="text" id="cSense" value="' + esc(card ? (card.sense || '') : '') + '" placeholder="e.g. to protest">' +
+        '<span class="help" id="senseHelp"></span></div>' +
       (AI.available()
         ? '<button class="ghost-btn tiny" id="aiFill" style="margin:-4px 0 14px">' + ICONS.spark + 'Auto-fill the rest with AI</button>'
         : '<p class="faint" style="margin:-4px 0 14px">Tip: connect an AI assistant in Settings to fill these fields automatically.</p>') +
@@ -666,6 +734,17 @@ function cardEditor(card, presetDeck) {
           '<input type="text" id="cCat" list="catList" value="' + esc(card ? card.category : '') + '" placeholder="e.g. Work">' +
           '<datalist id="catList">' + cats.map(c => '<option value="' + esc(c) + '">').join('') + '</datalist></div>' +
       '</div>' +
+      '<div class="field"><label>Collocations</label>' +
+        '<textarea id="cColl" rows="2" placeholder="make a decision&#10;take a decision">' +
+          esc(card ? (card.collocations || []).join('\n') : '') + '</textarea>' +
+        '<span class="help">One per line — the word\u2019s usual partners. Used for fill-in-the-blank practice.</span></div>' +
+      '<div class="inline-fields">' +
+        '<div class="field"><label>Synonyms</label>' +
+          '<input type="text" id="cSyn" value="' + esc(card ? relText(card, 'syn') : '') + '" placeholder="reliable, trustworthy"></div>' +
+        '<div class="field"><label>Antonyms</label>' +
+          '<input type="text" id="cAnt" value="' + esc(card ? relText(card, 'ant') : '') + '" placeholder="unreliable"></div>' +
+      '</div>' +
+      '<div id="relLinks"></div>' +
       '<div class="inline-fields">' +
         '<div class="field"><label>Deck</label><select id="cDeck">' +
           deckOptions(card ? card.deckId : (presetDeck || (Store.state.decks[0] || {}).id)) + '</select></div>' +
@@ -685,7 +764,10 @@ function cardEditor(card, presetDeck) {
       const read = () => ({
         term: $('#cTerm').value.trim(), pos: $('#cPos').value, definition: $('#cDef').value.trim(),
         example: $('#cEx').value.trim(), translation: $('#cTr').value.trim(),
-        category: $('#cCat').value.trim(), deckId: $('#cDeck').value, notes: $('#cNote').value.trim()
+        category: $('#cCat').value.trim(), deckId: $('#cDeck').value, notes: $('#cNote').value.trim(),
+        sense: $('#cSense').value.trim(),
+        collocations: splitLines($('#cColl').value),
+        related: parseRelations($('#cSyn').value, $('#cAnt').value)
       });
       /* A card is only useful if it has the word, what kind of word it is and
          what it means — the drills need all three. */
@@ -705,31 +787,34 @@ function cardEditor(card, presetDeck) {
         if (missing.length) $('#' + missing[0][0]).focus();
       };
 
-      /* Duplicates are allowed on purpose — the same spelling can be a
-         different part of speech — but never silently: the first save shows
-         what is already there and only a second, deliberate click goes through. */
-      let dupAcknowledged = false;
+      /* The same spelling can be two words — object the noun and object the
+         verb — so a repeat is not a mistake to block but a second sense to
+         label. The first save shows what is already saved under that spelling
+         and asks for a label; a second, deliberate click goes through. */
+      let senseAcknowledged = false;
 
-      const showDuplicateWarning = (dupes) => {
-        const rows = dupes.slice(0, 4).map(d => {
+      const senseNotice = (siblings) => {
+        const rows = siblings.slice(0, 4).map(d => {
           const deck = Store.deck(d.deckId);
           return '<div class="row between" style="padding:7px 0;border-top:1px solid var(--border-soft)">' +
             '<div style="min-width:0"><b>' + esc(d.term) + '</b>' +
               (d.pos ? ' <span class="chip pos">' + esc(d.pos) + '</span>' : '') +
+              senseChip(d) +
               '<div class="faint">' + esc(d.definition || d.translation || 'no meaning saved') + '</div></div>' +
             '<span class="faint">' + esc(deck ? deck.emoji + ' ' + deck.name : 'no deck') + '</span></div>';
         }).join('');
         $('#dupWarn').innerHTML =
           '<div class="feedback no" style="margin-top:4px">' +
-            '<b>You already have this word.</b> Saving it again splits its review history ' +
-            'across two cards — keep both only if they are genuinely different.' +
+            '<b>You already have ' + esc(siblings[0].term) + '.</b> If this is another meaning of the ' +
+            'same word, give both a short sense label so you can tell them apart while studying. ' +
+            'Each sense keeps its own review schedule.' +
             rows +
             '<div class="row end" style="margin-top:10px">' +
               '<button class="soft-btn tiny" data-act="open-dup">Open the existing word</button>' +
             '</div>' +
           '</div>';
         const open = $('#dupWarn [data-act="open-dup"]');
-        if (open) open.onclick = () => { closeModal(); setTimeout(() => cardEditor(dupes[0]), 60); };
+        if (open) open.onclick = () => { closeModal(); setTimeout(() => cardEditor(siblings[0]), 60); };
         $('#dupWarn').scrollIntoView({ block: 'nearest' });
       };
 
@@ -748,11 +833,11 @@ function cardEditor(card, presetDeck) {
           return false;
         }
         markMissing([]);
-        const dupes = Store.findDuplicates(data.term, card && card.id);
-        if (dupes.length && !dupAcknowledged) {
-          dupAcknowledged = true;
-          showDuplicateWarning(dupes);
-          setSaveLabel('Save anyway');
+        const siblings = Store.sensesOf(data.term, card && card.id);
+        if (siblings.length && !senseAcknowledged) {
+          senseAcknowledged = true;
+          senseNotice(siblings);
+          setSaveLabel('Save as another sense');
           toast('"' + data.term + '" is already saved — check below', 'err');
           return false;
         }
@@ -794,14 +879,36 @@ function cardEditor(card, presetDeck) {
         } catch (err) { toast(err.message, 'err'); }
         fill.disabled = false; fill.innerHTML = original;
       };
+      /* Reveal the sense label the moment the word turns out to have more than
+         one meaning, and say which meanings are already saved. */
       const hint = $('#dupHint');
-      const checkDuplicate = () => {
-        const dupes = Store.findDuplicates($('#cTerm').value, card && card.id);
-        if (!dupes.length) { hint.textContent = ''; hint.classList.remove('warn'); return; }
-        const deck = Store.deck(dupes[0].deckId);
-        hint.textContent = 'Already saved' + (deck ? ' in ' + deck.name : '') +
-          (dupes.length > 1 ? ' and ' + (dupes.length - 1) + ' other deck(s)' : '') + '.';
+      const senseRow = $('#senseRow');
+      const checkSenses = () => {
+        const siblings = Store.sensesOf($('#cTerm').value, card && card.id);
+        const has = siblings.length > 0 || !!$('#cSense').value.trim();
+        senseRow.classList.toggle('hidden', !has);
+        if (!siblings.length) { hint.textContent = ''; hint.classList.remove('warn'); return; }
+        const labelled = siblings.filter(d => senseLabel(d)).map(d => senseLabel(d));
+        $('#senseHelp').textContent = labelled.length
+          ? 'Already saved: ' + labelled.join(', ') + '.'
+          : 'Give each meaning a short label so you can tell them apart.';
+        hint.textContent = siblings.length === 1
+          ? 'One other sense of this word is saved.'
+          : siblings.length + ' other senses of this word are saved.';
         hint.classList.add('warn');
+      };
+
+      /* Which synonyms and antonyms point at words you actually have. */
+      const showLinks = () => {
+        const draft = Object.assign({}, card || {},
+          { term: $('#cTerm').value.trim(), related: parseRelations($('#cSyn').value, $('#cAnt').value) });
+        const rels = Store.relationsFor(draft);
+        const linked = rels.filter(r => r.card);
+        $('#relLinks').innerHTML = rels.length
+          ? '<p class="faint" style="margin:-8px 0 14px">' +
+              (linked.length ? linked.length + ' of ' + rels.length + ' linked to words you have. ' : '') +
+              'Words you have not added yet are kept as plain text.</p>'
+          : '';
       };
       ['cTerm', 'cPos', 'cDef'].forEach(id => {
         const el = $('#' + id);
@@ -811,14 +918,17 @@ function cardEditor(card, presetDeck) {
       const t = $('#cTerm');
       if (t) {
         t.addEventListener('input', () => {
-          dupAcknowledged = false;
+          senseAcknowledged = false;
           $('#dupWarn').innerHTML = '';
           setSaveLabel('Save');
-          checkDuplicate();
+          checkSenses();
+          showLinks();
         });
         t.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); const a = $('#aiFill'); if (a) a.click(); } };
       }
-      checkDuplicate();
+      ['cSyn', 'cAnt'].forEach(id => { const el = $('#' + id); if (el) el.addEventListener('input', showLinks); });
+      checkSenses();
+      showLinks();
     }
   });
 }
@@ -989,11 +1099,18 @@ function drawStudyCard(host) {
 
   /* A translation is a word, so it gets the same weight as the English word it
      stands in for; a definition is a sentence and reads better one size down. */
+  /* Asking "what does object mean?" is unanswerable while the word has three
+     meanings — the part of speech and the sense label are what make it a
+     question rather than a guess. They give away no meaning of their own. */
+  const senseCue = (!askTerm && Store.siblings(card).length)
+    ? '<div class="fc-sense">' + (card.pos ? '<span class="chip pos">' + esc(card.pos) + '</span>' : '') +
+      senseChip(card) + '</div>' : '';
+
   const front = !askTerm
     ? '<div class="row" style="gap:12px;align-items:center">' +
         '<div class="fc-term">' + esc(card.term) + '</div>' +
         (TTS.ok ? '<button class="icon-btn tts-btn" data-act="say" title="Pronounce">' + ICONS.sound + '</button>' : '') +
-      '</div>' + frontExample
+      '</div>' + senseCue + frontExample
     : dir === 'translation-first'
       ? '<div class="fc-term">' + esc(card.translation) + '</div>' + frontExample
       : '<div class="fc-prompt">' + esc(card.definition) + '</div>' + frontExample;
@@ -1012,6 +1129,10 @@ function drawStudyCard(host) {
       (card.example ? '<div class="fc-block"><div class="k">Example</div><div class="v fc-example">' + highlightTerm(card.example, card.term) + '</div></div>' : '') +
       (card.translation && dir !== 'translation-first'
         ? '<div class="fc-block"><div class="k">Translation</div><div class="v">' + esc(card.translation) + '</div></div>' : '') +
+      ((card.collocations || []).length
+        ? '<div class="fc-block"><div class="k">Goes with</div><div class="v">' + collocationList(card) + '</div></div>' : '') +
+      (Store.relationsFor(card).length
+        ? '<div class="fc-block"><div class="k">Related</div><div class="v">' + relationChips(card) + '</div></div>' : '') +
       (card.notes ? '<div class="fc-block"><div class="k">Your note</div><div class="v muted">' + esc(card.notes) + '</div></div>' : '') +
     '</div>';
 
@@ -1295,8 +1416,11 @@ function meaningOf(card) { return card.definition || card.translation; }
 function distractors(card, pool, key, n, prefer) {
   const picked = [];
   const seen = new Set([String(key(card) || '').toLowerCase()]);
+  /* Another sense of the same word is a true meaning of it, so offering it as
+     a wrong answer would make the question unanswerable. */
+  const head = Store.headKey(card.term);
   const take = (list) => shuffle(list).forEach(c => {
-    if (picked.length >= n || !c || c.id === card.id) return;
+    if (picked.length >= n || !c || c.id === card.id || Store.headKey(c.term) === head) return;
     const v = key(c);
     if (!v || seen.has(v.toLowerCase())) return;
     picked.push(v); seen.add(v.toLowerCase());

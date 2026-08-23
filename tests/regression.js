@@ -53,6 +53,7 @@ const head = (s) => console.log('\n— ' + s + ' —');
     await page.waitForTimeout(250);
   };
   await fresh();
+  const seedSize = await page.evaluate(() => STARTER_DECKS.reduce((n, d) => n + d.cards.length, 0));
 
   /* ------------------------------------------------------------------ *
      1. It boots, and every view renders without throwing.
@@ -260,7 +261,7 @@ const head = (s) => console.log('\n— ' + s + ' —');
       newAvailable: c.newAvailable
     };
   });
-  is(reset.words === 66 && reset.allNew && reset.statsZero, 'the words survive, their progress does not');
+  is(reset.words === seedSize && reset.allNew && reset.statsZero, 'the words survive, their progress does not');
   is(reset.log === 0 && reset.diary === 0 && reset.streak === 0, 'the review history and the streak are cleared');
   is(reset.newAvailable === 15, `the whole daily allowance is available again (${reset.newAvailable} of 15)`);
 
@@ -345,10 +346,10 @@ const head = (s) => console.log('\n— ' + s + ' —');
     Store.wipe();
     const first = Store.state.cards[0];
     return {
-      same:  Store.findDuplicates(first.term, null, first.deckId).length,
-      cased: Store.findDuplicates(first.term.toUpperCase(), null, first.deckId).length,
-      self:  Store.findDuplicates(first.term, first.id, first.deckId).length,
-      novel: Store.findDuplicates('zzzsomethingnew', null, first.deckId).length
+      same:  Store.sensesOf(first.term, null, first.deckId).length,
+      cased: Store.sensesOf(first.term.toUpperCase(), null, first.deckId).length,
+      self:  Store.sensesOf(first.term, first.id, first.deckId).length,
+      novel: Store.sensesOf('zzzsomethingnew', null, first.deckId).length
     };
   });
   is(dup.same === 1 && dup.cased === 1, 'an existing word is found again, whatever its case');
@@ -394,14 +395,124 @@ const head = (s) => console.log('\n— ' + s + ' —');
     label: (document.querySelector('.modal-foot [data-act="save"]') || {}).textContent,
     count: Store.state.cards.length
   }));
-  is(warned.warning && warned.count === countBefore, 'saving a word you already have warns instead of saving');
+  is(warned.warning && warned.count === countBefore, 'saving a word you already have stops to ask first');
   is(warned.stillOpen && warned.typed === 'a deliberate second copy',
-     'the warning appears inside the editor and keeps what was typed');
-  is(/anyway/i.test(warned.label || ''), `the button now reads "${(warned.label || '').trim()}"`);
+     'the notice appears inside the editor and keeps what was typed');
+  is(/sense/i.test(warned.label || ''), `the button now reads "${(warned.label || '').trim()}"`);
   await page.click('.modal-foot [data-act="save"]');
   await page.waitForTimeout(300);
   const forced = await page.evaluate(() => Store.state.cards.length);
-  is(forced === countBefore + 1, 'a second, deliberate click does save the duplicate');
+  is(forced === countBefore + 1, 'a second, deliberate click saves it as another sense');
+
+  /* ------------------------------------------------------------------ *
+     8b. Senses of one word.
+
+     object is a noun and a verb; work out means three different things. Each
+     sense stays its own card with its own schedule, but the app has to know
+     they are one word — otherwise a multiple-choice question can offer two
+     meanings that are both true.
+   * ------------------------------------------------------------------ */
+  head('words with more than one sense');
+  const senses = await page.evaluate(() => {
+    Store.wipe();
+    const groups = {};
+    Store.state.cards.forEach(c => {
+      const k = Store.headKey(c.term);
+      (groups[k] = groups[k] || []).push(c);
+    });
+    const multi = Object.keys(groups).filter(k => groups[k].length > 1);
+    const object = groups['object'] || [];
+    return {
+      multi: multi.length,
+      allLabelled: multi.every(k => groups[k].every(c => (c.sense || '').trim())),
+      objectSenses: object.length,
+      objectParts: Array.from(new Set(object.map(c => c.pos))).sort(),
+      separateSchedules: object.length > 1 &&
+        new Set(object.map(c => c.id)).size === object.length,
+      siblingCount: object.length ? Store.siblings(object[0]).length : -1,
+      caseInsensitive: Store.sensesOf('OBJECT').length
+    };
+  });
+  is(senses.multi >= 4, `${senses.multi} seed words carry more than one sense`);
+  is(senses.allLabelled, 'every sense of a repeated word has a label to tell it apart');
+  is(senses.objectSenses === 3 && senses.objectParts.join(',') === 'noun,verb',
+     `object is kept as ${senses.objectSenses} senses across ${senses.objectParts.join(' and ')}`);
+  is(senses.separateSchedules && senses.siblingCount === senses.objectSenses - 1,
+     'each sense is its own card, and each one knows its siblings');
+  is(senses.caseInsensitive === 3, 'senses are found whatever the capitalisation');
+
+  /* The bug this prevents: "What does object mean?" offering both "a thing"
+     and "to protest" — two correct answers, one of them marked wrong. */
+  const noSiblingOptions = await page.evaluate(() => {
+    quizSetup.scope = 'all'; quizSetup.deckId = '';
+    const pool = practicePool(null, 'all');
+    const object = pool.filter(c => Store.headKey(c.term) === 'object');
+    let clashes = 0, asked = 0;
+    ['mc-meaning', 'mc-word'].forEach(mode => {
+      const qs = buildQuestions(mode, pool, object.length, { cards: object });
+      qs.forEach(q => {
+        asked++;
+        const wrong = q.options.filter(o => o !== q.answer);
+        const siblingMeanings = Store.siblings(q.card)
+          .map(sb => mode === 'mc-meaning' ? (sb.definition || sb.translation) : sb.term);
+        if (wrong.some(o => siblingMeanings.indexOf(o) !== -1)) clashes++;
+      });
+    });
+    return { asked: asked, clashes: clashes };
+  });
+  is(noSiblingOptions.asked > 0 && noSiblingOptions.clashes === 0,
+     `no question offers another sense of the same word as a wrong answer (${noSiblingOptions.asked} checked)`);
+
+  /* ------------------------------------------------------------------ *
+     8c. Collocations and relations.
+   * ------------------------------------------------------------------ */
+  head('collocations, synonyms and opposites');
+  const links = await page.evaluate(() => {
+    Store.wipe();
+    const withColl = Store.state.cards.filter(c => (c.collocations || []).length);
+    const withRel = Store.state.cards.filter(c => (c.related || []).length);
+    /* every collocation should contain its own word, or the drills cannot use it */
+    const orphan = [];
+    withColl.forEach(c => (c.collocations || []).forEach(p => {
+      if (!termMatch(p, c.term)) orphan.push(c.term + ' / ' + p);
+    }));
+    const undermine = Store.state.cards.find(c => c.term === 'undermine');
+    const rels = Store.relationsFor(undermine);
+    /* a relation written on one word is true of the other one too */
+    const weaken = Store.state.cards.find(c => Store.headKey(c.term) === 'weaken');
+    return {
+      coll: withColl.length, rel: withRel.length, orphan: orphan,
+      undermineRels: rels.map(r => r.kind + ':' + r.text).sort(),
+      resolvesToCards: rels.filter(r => r.card).length,
+      backLink: weaken ? Store.relationsFor(weaken).some(r => r.text === 'undermine') : 'no such card'
+    };
+  });
+  is(links.coll >= 10 && links.rel >= 5,
+     `${links.coll} words carry collocations and ${links.rel} carry synonyms or opposites`);
+  is(links.orphan.length === 0,
+     links.orphan.length ? `collocation without its word: ${links.orphan[0]}` : 'every collocation contains its own word');
+  is(links.undermineRels.join(' ') === 'ant:strengthen syn:weaken',
+     `undermine knows its synonym and its opposite (${links.undermineRels.join(', ')})`);
+
+  const twoWay = await page.evaluate(() => {
+    Store.wipe();
+    const deck = Store.state.decks[0].id;
+    const a = Store.addCard({ term: 'zzzfirst', pos: 'noun', definition: 'one', deckId: deck,
+                              related: [{ kind: 'syn', text: 'zzzsecond' }] }, true);
+    const b = Store.addCard({ term: 'zzzsecond', pos: 'noun', definition: 'two', deckId: deck }, true);
+    const forward = Store.relationsFor(a);
+    const backward = Store.relationsFor(b);
+    Store.deleteCard(b.id);
+    const afterDelete = Store.relationsFor(a);
+    return {
+      forwardLinked: forward.some(r => r.text === 'zzzsecond' && r.card && r.card.id === b.id),
+      backLinked: backward.some(r => r.text === 'zzzfirst' && r.card && r.card.id === a.id),
+      survives: afterDelete.some(r => r.text === 'zzzsecond' && !r.card)
+    };
+  });
+  is(twoWay.forwardLinked, 'a synonym you already have becomes a link');
+  is(twoWay.backLinked, 'the other word shows the same link back, without storing it twice');
+  is(twoWay.survives, 'deleting the other word leaves plain text, never a broken link');
 
   /* ------------------------------------------------------------------ *
      9. Practice.
@@ -640,7 +751,8 @@ const head = (s) => console.log('\n— ' + s + ' —');
     const text = 'term,part of speech,definition,example,translation,category\n' +
                  'zzzalpha,noun,first test word,A zzzalpha appears here.,birinci,testing\n' +
                  'zzzbeta,verb,second test word,They zzzbeta every day.,ikinci,testing\n' +
-                 'zzzalpha,noun,duplicate of the first,Again zzzalpha.,birinci,testing\n';
+                 'zzzalpha,noun,first test word,A zzzalpha appears here.,birinci,testing\n' +
+                 'zzzalpha,verb,to zzzalpha something,They zzzalpha it daily.,ikinci anlam,testing\n';
     const res = Store.importCSV(text, deck);
     const out = Store.exportCSV(deck);
     return { added: res.added, skipped: res.skipped,
@@ -648,8 +760,8 @@ const head = (s) => console.log('\n— ' + s + ' —');
              keptFields: (Store.state.cards.find(c => c.term === 'zzzbeta') || {}).translation,
              exported: out.split('\n').length };
   });
-  is(csv.added === 2 && csv.skipped === 1, `CSV import adds 2 and skips the duplicate (${csv.added}/${csv.skipped})`);
-  is(csv.hasAlpha === 1, 'the duplicate row does not create a second copy');
+  is(csv.added === 3 && csv.skipped === 1, `CSV import adds 3 and skips the identical row (${csv.added}/${csv.skipped})`);
+  is(csv.hasAlpha === 2, 'a repeated word imports as a second sense, not as a duplicate');
   is(csv.keptFields === 'ikinci', 'the columns land in the right fields');
   is(csv.exported > 2, 'export writes a header plus rows');
 
