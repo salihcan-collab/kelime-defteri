@@ -47,7 +47,7 @@ seçeneğiyle). Aynı dosyayı başka bir bilgisayarda içe aktararak ilerlemeni
 | Ekran | Ne işe yarar |
 |---|---|
 | **Dashboard** | Bugün kaç kart var, seri (streak), doğruluk oranı, deste ilerlemeleri, 12 haftalık aktivite haritası |
-| **Decks** | Desteleri oluştur, düzenle, sil; içindeki kelimeleri gör |
+| **Decks** | Desteleri oluştur, düzenle, sil; içindeki kelimeleri gör. Kartlardaki çubuk, destedeki kelimelerin seviyelere dağılımıdır — yeşil: Mastered, açık yeşil: Familiar, turuncu: Learning, gri: New |
 | **Study** | Aralıklı tekrar seansı — asıl öğrenmenin olduğu yer |
 | **Practice** | 8 farklı test/alıştırma modu |
 | **Browse** | Tüm kelimeler; arama, filtre, sıralama, toplu içe/dışa aktarma |
@@ -197,7 +197,7 @@ Dashboard'daki **"Due now"** kutusu, kenar çubuğundaki rozet ve Study ekranın
 - **5 yazı tipi:** Sans, Rounded, Serif, Humanist, Mono — her biri hem Windows'ta hem
   macOS'ta farklı bir yazı tipine denk gelir (Windows: Segoe UI, Century Gothic,
   Palatino, Candara, Consolas)
-- **3 yazı boyutu** (%18'lik adımlarla)
+- **4 yazı boyutu:** Small / Medium / Large / X-large (14.5 – 19 px)
 
 Üst çubuktaki ay simgesiyle aydınlık/karanlık arasında hızlıca geçiş yapabilirsin.
 Seçimlerin kaydedilir.
