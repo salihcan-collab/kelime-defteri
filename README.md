@@ -51,7 +51,7 @@ seçeneğiyle). Aynı dosyayı başka bir bilgisayarda içe aktararak ilerlemeni
 | **Study** | Aralıklı tekrar seansı — asıl öğrenmenin olduğu yer |
 | **Practice** | 8 farklı test/alıştırma modu |
 | **Browse** | Tüm kelimeler; arama, filtre, sıralama, toplu içe/dışa aktarma |
-| **Progress** | Hatırlama oranı, 14 günlük geçmiş, gelecek 14 günün tahmini, en çok zorlandığın kelimeler |
+| **Progress** | Hatırlama oranı, 14 günlük geçmiş, gelecek 14 günün tahmini, aktivite haritası (1 ay – 1 yıl arası seçilebilir), en çok zorlandığın kelimeler |
 | **Settings** | Tema, font, renk, çalışma kuralları, AI, veri yönetimi |
 
 ---
@@ -75,6 +75,18 @@ daha iyidir). Bu seansta başlıkta "ahead of schedule" yazar.
 Sistem SM-2 algoritmasının Anki'de kullanılan sürümüne dayanır: yeni kartlar 1 dakika →
 10 dakika → 1 gün adımlarıyla başlar, sonra her başarılı tekrarda aralık kendi
 "kolaylık katsayısı" kadar çarpılarak uzar. Unuttuğun kart otomatik olarak başa döner.
+
+**Soru yönü** (Settings → Study rules) üç şekilde çalışabilir:
+
+| Seçenek | Ön yüzde ne var | Ne hatırlıyorsun |
+|---|---|---|
+| Show the English word | İngilizce kelime | Anlamını |
+| Show the translation | Türkçe karşılığı | İngilizce kelimeyi |
+| Show the English definition | İngilizce tanım | İngilizce kelimeyi |
+| Mix all three | Sırayla hepsi | — |
+
+Bir kartta o yönün ihtiyaç duyduğu alan yoksa (ör. çevirisi girilmemişse) uygulama
+otomatik olarak başka bir yöne düşer.
 
 **Günlük limitler** (Settings → Study rules) birikmeyi önler: varsayılan olarak günde
 15 yeni kelime ve en fazla 120 tekrar. Kendine göre ayarlayabilirsin — günde 10–20 yeni
@@ -140,8 +152,8 @@ tekrar sorar; çeldirici şıklar arasında o turda kaçırdığın diğer kelim
 **İpucu:** "Meaning → Word", "Type the word", "Fill in the blank" ve "Listening"
 alıştırmalarında sorunun altında bir **Show hint** düğmesi vardır. Türkçe çeviri (boşluk
 doldurmada İngilizce anlam) varsayılan olarak gizlidir, takıldığında tıklayıp görebilirsin.
-Puanı etkilemez. "Word → Meaning" alıştırmasında ipucu yoktur — çeviri doğrudan cevabın
-kendisi olurdu.
+Puanı etkilemez, sayfayı da oynatmaz — yazdığın cevap ve imleç yerinde kalır.
+"Word → Meaning" alıştırmasında ipucu yoktur — çeviri doğrudan cevabın kendisi olurdu.
 
 Seslendirme, bilgisayarında zaten yüklü olan sesleri kullanır — internet gerekmez, ücretsizdir.
 

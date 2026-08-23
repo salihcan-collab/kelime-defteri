@@ -264,30 +264,57 @@ function stamp() {
 /* ==========================================================================
    Charts
    ========================================================================== */
-function heatmapHTML(weeks) {
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function heatmapHTML(weeks, withMonths) {
   const days = weeks * 7;
   const hist = Store.history(days + 7);
   const start = new Date(); start.setDate(start.getDate() - (days - 1));
   while (start.getDay() !== 1) start.setDate(start.getDate() - 1);   // align to Monday
   const map = {}; hist.forEach(h => map[h.key] = h.reviews);
   const max = Math.max(10, ...hist.map(h => h.reviews));
-  let html = '<div class="heatmap">';
-  const cur = new Date(start);
   const today = new Date(); today.setHours(23, 59, 59, 999);
+
+  const columns = [];
+  const cur = new Date(start);
   while (cur <= today) {
-    html += '<div class="hm-col">';
+    /* Midweek decides which month a column belongs to, so a week straddling
+       two months is labelled with the one it mostly sits in. */
+    const midweek = new Date(cur); midweek.setDate(midweek.getDate() + 3);
+    const month = midweek.getMonth();
+    let cells = '';
     for (let d = 0; d < 7; d++) {
       const k = cur.getFullYear() + '-' + String(cur.getMonth() + 1).padStart(2, '0') + '-' + String(cur.getDate()).padStart(2, '0');
       const n = map[k] || 0;
       const lvl = n === 0 ? 0 : clamp(Math.ceil(4 * n / max), 1, 4);
       const future = cur > today;
-      html += '<div class="hm-cell" data-lvl="' + (future ? 0 : lvl) + '" title="' + k + ' · ' + n + ' reviews"></div>';
+      cells += '<div class="hm-cell" data-lvl="' + (future ? 0 : lvl) + '" title="' + k + ' · ' + n +
+               ' review' + (n === 1 ? '' : 's') + '"></div>';
       cur.setDate(cur.getDate() + 1);
     }
-    html += '</div>';
+    columns.push({ month: month, cells: cells });
   }
-  html += '</div>';
-  return html;
+
+  /* A month name above the first column that belongs to it. The leading
+     column is skipped — the range rarely starts on the 1st — and labels are
+     kept at least three columns apart so they never overlap. */
+  let months = '';
+  if (withMonths) {
+    let prev = columns.length ? columns[0].month : -1;
+    let lastLabelAt = -99;
+    months = '<div class="hm-months">' + columns.map((col, i) => {
+      let label = '';
+      if (i > 0 && col.month !== prev && i - lastLabelAt >= 3) {
+        label = MONTH_NAMES[col.month]; lastLabelAt = i;
+      }
+      prev = col.month;
+      return '<span>' + label + '</span>';
+    }).join('') + '</div>';
+  }
+
+  return '<div class="heatmap-wrap">' + months +
+    '<div class="heatmap">' + columns.map(c => '<div class="hm-col">' + c.cells + '</div>').join('') + '</div>' +
+    '</div>';
 }
 
 function barChartHTML(items) {
@@ -906,9 +933,19 @@ function currentCard() { return session && session.queue[0]; }
 function drawStudyCard(host) {
   const card = currentCard();
   const s = Store.state.settings;
+
+  /* Which side of the card leads. The two reverse directions both ask for the
+     English word, but from different starting points — the translation, or
+     the English definition. Fall back when a card lacks one of them. */
   let dir = s.studyDirection;
-  if (dir === 'mixed') dir = (card.id.charCodeAt(0) + session.done) % 2 ? 'translation-first' : 'term-first';
-  const askTerm = dir === 'translation-first';   // show translation, recall the English word
+  if (dir === 'mixed') {
+    const options = ['term-first', 'translation-first', 'definition-first'];
+    dir = options[(card.id.charCodeAt(0) + session.done) % options.length];
+  }
+  if (dir === 'translation-first' && !card.translation) dir = card.definition ? 'definition-first' : 'term-first';
+  if (dir === 'definition-first' && !card.definition) dir = card.translation ? 'translation-first' : 'term-first';
+
+  const askTerm = dir !== 'term-first';          // the English word is the answer
   const remaining = session.queue.length;
   const progress = pct(session.done, session.done + remaining);
   const prev = SRS.preview(card.srs);
@@ -922,13 +959,16 @@ function drawStudyCard(host) {
       (askTerm ? esc(blankOut(card.example, card.term).text) : highlightTerm(card.example, card.term)) +
       '</p>' : '';
 
-  const front = askTerm
-    ? '<div class="fc-prompt">' + esc(card.translation || card.definition) + '</div>' +
-      '<p class="muted" style="margin-top:10px">Which English word is this?</p>' + frontExample
-    : '<div class="row" style="gap:12px;align-items:center">' +
+  /* A translation is a word, so it gets the same weight as the English word it
+     stands in for; a definition is a sentence and reads better one size down. */
+  const front = !askTerm
+    ? '<div class="row" style="gap:12px;align-items:center">' +
         '<div class="fc-term">' + esc(card.term) + '</div>' +
         (TTS.ok ? '<button class="icon-btn tts-btn" data-act="say" title="Pronounce">' + ICONS.sound + '</button>' : '') +
-      '</div>' + frontExample;
+      '</div>' + frontExample
+    : dir === 'translation-first'
+      ? '<div class="fc-term">' + esc(card.translation) + '</div>' + frontExample
+      : '<div class="fc-prompt">' + esc(card.definition) + '</div>' + frontExample;
 
   const back =
     '<div class="fc-body">' +
@@ -938,9 +978,12 @@ function drawStudyCard(host) {
             (TTS.ok ? '<button class="icon-btn tts-btn" data-act="say">' + ICONS.sound + '</button>' : '') +
           '</div></div>'
         : '') +
-      (card.definition ? '<div class="fc-block"><div class="k">Meaning</div><div class="v big">' + esc(card.definition) + '</div></div>' : '') +
+      /* Skip whatever was already on the front. */
+      (card.definition && dir !== 'definition-first'
+        ? '<div class="fc-block"><div class="k">Meaning</div><div class="v big">' + esc(card.definition) + '</div></div>' : '') +
       (card.example ? '<div class="fc-block"><div class="k">Example</div><div class="v fc-example">' + highlightTerm(card.example, card.term) + '</div></div>' : '') +
-      (!askTerm && card.translation ? '<div class="fc-block"><div class="k">Translation</div><div class="v">' + esc(card.translation) + '</div></div>' : '') +
+      (card.translation && dir !== 'translation-first'
+        ? '<div class="fc-block"><div class="k">Translation</div><div class="v">' + esc(card.translation) + '</div></div>' : '') +
       (card.notes ? '<div class="fc-block"><div class="k">Your note</div><div class="v muted">' + esc(card.notes) + '</div></div>' : '') +
     '</div>';
 
@@ -1429,13 +1472,15 @@ function questionCard(inner, item) {
 }
 
 /* The translation (or the meaning, for a gap-fill) sits under the question and
-   stays hidden until asked for, so it is a way out rather than a giveaway. */
+   stays hidden until asked for, so it is a way out rather than a giveaway.
+   Both states are always in the DOM: revealing one is a class toggle, which
+   keeps the typed answer untouched and costs no layout shift. */
 function hintHTML(item) {
   if (!item.hint) return '';
-  if (quiz.hintShown) {
-    return '<div class="hint-text">' + ICONS.bulb + '<span>' + esc(item.hint) + '</span></div>';
-  }
-  return '<button class="hint-btn" data-act="hint">' + ICONS.bulb + 'Show hint</button>';
+  return '<div class="hint-slot' + (quiz.hintShown ? ' revealed' : '') + '" id="hintSlot">' +
+    '<div class="hint-text">' + ICONS.bulb + '<span>' + esc(item.hint) + '</span></div>' +
+    '<button class="hint-btn" data-act="hint">' + ICONS.bulb + 'Show hint</button>' +
+  '</div>';
 }
 
 function mcHTML(item) {
@@ -1557,10 +1602,12 @@ function bindQuizEvents(host, item) {
     if (e.target.closest('[data-act="explain"]')) return explainWrong(item);
     if (e.target.closest('[data-act="check"]')) return checkAnswer(item);
     if (e.target.closest('[data-act="hint"]')) {
-      const typed = $('#qInput');
-      if (typed) quiz.given = typed.value;      /* a re-render must not eat the answer */
       quiz.hintShown = true;
-      return render('practice');
+      const slot = $('#hintSlot');
+      if (slot) slot.classList.add('revealed');   /* no re-render: nothing else moves */
+      const typed = $('#qInput');
+      if (typed) typed.focus();
+      return;
     }
     const opt = e.target.closest('[data-opt]');
     if (opt && quiz.state !== 'answered') return answerMC(item, opt.dataset.opt);
@@ -1823,6 +1870,12 @@ function renderBrowse(host) {
    Progress / statistics
    ========================================================================== */
 function renderStats(host) {
+  host.onclick = (e) => {
+    const r = e.target.closest('[data-weeks]');
+    if (!r) return;
+    Store.state.settings.activityWeeks = parseInt(r.dataset.weeks, 10);
+    Store.save(); render('stats');
+  };
   const all = Store.state.cards;
   const st = Store.streak();
   const hist = Store.history(14);
@@ -1880,10 +1933,17 @@ function renderStats(host) {
         })) + '</div>' +
     '</div>' +
 
-    '<div class="section-title"><h2>Activity</h2><span class="hint">last 26 weeks</span></div>' +
-    '<div class="card">' + heatmapHTML(26) +
-      '<div class="hm-legend" style="margin-top:10px;justify-content:flex-end">Less' +
-        [0, 1, 2, 3, 4].map(l => '<span class="hm-cell" data-lvl="' + l + '"></span>').join('') + 'More</div>' +
+    '<div class="section-title"><h2>Activity</h2>' +
+      '<div class="seg">' + ACTIVITY_RANGES.map(r =>
+        '<button data-weeks="' + r.weeks + '" class="' + (activityWeeks() === r.weeks ? 'sel' : '') + '">' +
+        r.label + '</button>').join('') + '</div>' +
+    '</div>' +
+    '<div class="card">' + heatmapHTML(activityWeeks(), true) +
+      '<div class="row between" style="margin-top:12px;gap:12px">' +
+        '<span class="faint">' + activityTotal(activityWeeks()) + '</span>' +
+        '<div class="hm-legend">Less' +
+          [0, 1, 2, 3, 4].map(l => '<span class="hm-cell" data-lvl="' + l + '"></span>').join('') + 'More</div>' +
+      '</div>' +
     '</div>' +
 
     '<div class="grid g2" style="margin-top:16px;align-items:start">' +
@@ -1906,6 +1966,25 @@ function renderStats(host) {
         }).join('') : '<p class="faint">Add categories to your cards to see this breakdown.</p>') +
       '</div>' +
     '</div>';
+}
+
+const ACTIVITY_RANGES = [
+  { weeks: 5,  label: '1 month' },
+  { weeks: 13, label: '3 months' },
+  { weeks: 26, label: '6 months' },
+  { weeks: 52, label: '1 year' }
+];
+function activityWeeks() {
+  const w = Store.state.settings.activityWeeks;
+  return ACTIVITY_RANGES.some(r => r.weeks === w) ? w : 13;
+}
+function activityTotal(weeks) {
+  const hist = Store.history(weeks * 7);
+  const reviews = hist.reduce((n, h) => n + h.reviews, 0);
+  const active = hist.filter(h => h.reviews > 0).length;
+  return reviews
+    ? reviews.toLocaleString() + ' reviews on ' + active + ' active day' + (active === 1 ? '' : 's')
+    : 'No reviews in this period yet';
 }
 
 function miniStat(label, n, sub, color) {
@@ -1969,11 +2048,12 @@ function renderSettings(host) {
           '<span class="help">A safety cap so a backlog never becomes overwhelming.</span></div>' +
       '</div>' +
       '<div class="field"><label>Question side</label><select id="setDir">' +
-        [['term-first', 'Show the English word, recall the meaning'],
-         ['translation-first', 'Show the meaning, recall the English word'],
-         ['mixed', 'Mix both directions']].map(o =>
+        [['term-first', 'Show the English word — recall what it means'],
+         ['translation-first', 'Show the translation — recall the English word'],
+         ['definition-first', 'Show the English definition — recall the English word'],
+         ['mixed', 'Mix all three']].map(o =>
           '<option value="' + o[0] + '"' + (s.studyDirection === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') +
-      '</select></div>' +
+      '</select><span class="help">A card missing the side a direction needs falls back to another one.</span></div>' +
       '<div class="field"><label>Answer choices per question</label><div class="seg">' +
         [4, 5].map(n => '<button data-pick-opts="' + n + '" class="' +
           (optionCount() === n ? 'sel' : '') + '">' + n + ' options</button>').join('') +
