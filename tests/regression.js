@@ -515,6 +515,81 @@ const head = (s) => console.log('\n— ' + s + ' —');
   is(twoWay.survives, 'deleting the other word leaves plain text, never a broken link');
 
   /* ------------------------------------------------------------------ *
+     8d. Bringing an older collection up to date.
+
+     The bug: starter decks are only ever dealt to an empty collection, so a
+     learner who had been using the app since schema 1 got the new fields but
+     none of the new content — 66 words, no object, one muddled "work out".
+   * ------------------------------------------------------------------ */
+  head('upgrading a collection made before the change');
+  const built = await page.evaluate(() => {
+    const OLD = {
+      'turn down': 'To refuse an offer, or to reduce volume.',
+      'work out':  'To end well, or to exercise, or to calculate.',
+      'bring up':  'To mention a subject, or to raise a child.',
+      'catch up':  'To reach the same level, or to exchange news.'
+    };
+    Store.wipe();
+    const st = Store.state;
+    const seen = {};
+    st.cards = st.cards.filter(c => {
+      if (c.term === 'object') return false;
+      const k = c.term.toLowerCase();
+      if (seen[k]) return false; seen[k] = 1; return true;
+    });
+    st.cards.forEach(c => {
+      if (OLD[c.term]) c.definition = OLD[c.term];
+      delete c.sense; delete c.collocations; delete c.related;
+    });
+    const wo = st.cards.find(c => c.term === 'work out');
+    wo.srs = Object.assign(SRS.newState(), { state: 'review', interval: 12, ease: 2.4,
+                                             due: Date.now() + 12 * 86400000, reps: 5 });
+    wo.stats = { seen: 7, correct: 6, wrong: 1 };
+    const edited = st.cards.find(c => c.term === 'bring up');
+    edited.definition = 'My own wording for this one.';
+    st.version = 1;
+    localStorage.setItem('lexio.v1', JSON.stringify(st));
+    return { words: st.cards.length, workOutId: wo.id };
+  });
+  is(built.words === 66, `a schema-1 collection has ${built.words} words and no object`);
+
+  await page.reload();
+  await page.waitForTimeout(900);
+  const upgraded = await page.evaluate(() => ({
+    version: Store.state.version,
+    objects: Store.sensesOf('object').length,
+    workOut: Store.sensesOf('work out').map(c => c.sense).sort(),
+    turnDown: Store.sensesOf('turn down').length,
+    catchUp: Store.sensesOf('catch up').length,
+    bringUp: Store.sensesOf('bring up').map(c => c.definition),
+    undermine: (Store.state.cards.find(c => c.term === 'undermine') || {}).collocations || [],
+    told: [...document.querySelectorAll('.toast')].some(t => /updated|added/i.test(t.textContent))
+  }));
+  is(upgraded.version === 2 && upgraded.objects === 3, 'reopening it adds object with its three senses');
+  is(upgraded.workOut.length === 3 && upgraded.turnDown === 2 && upgraded.catchUp === 2,
+     `the words that held several meanings are split apart (${upgraded.workOut.join(', ')})`);
+  is(upgraded.undermine.length === 3, 'words that only gained collocations get them');
+  is(upgraded.bringUp.length === 1 && upgraded.bringUp[0] === 'My own wording for this one.',
+     'a word the learner had edited is left exactly as they wrote it');
+  is(upgraded.told, 'the learner is told that starter words changed');
+
+  const repairedCard = await page.evaluate(id => {
+    const c = Store.card(id);
+    return c && { sense: c.sense, interval: c.srs.interval, reps: c.srs.reps, seen: c.stats.seen };
+  }, built.workOutId);
+  is(repairedCard && repairedCard.interval === 12 && repairedCard.reps === 5 && repairedCard.seen === 7,
+     'a repaired card keeps its id, its schedule and its statistics');
+  is(repairedCard && repairedCard.sense === 'to turn out well',
+     'and becomes the sense its own example sentence was already showing');
+
+  const secondOpen = await page.evaluate(() => Store.state.cards.length);
+  await page.reload();
+  await page.waitForTimeout(900);
+  const thirdOpen = await page.evaluate(() => ({ words: Store.state.cards.length, ran: !!Store._starterUpgrade }));
+  is(thirdOpen.words === secondOpen && !thirdOpen.ran, 'opening it again changes nothing');
+  await page.evaluate(() => { Store.wipe(); Store.saveNow(); });
+
+  /* ------------------------------------------------------------------ *
      9. Practice.
 
      The bug: "practice the 3 I missed" built questions with three choices,

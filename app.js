@@ -2490,6 +2490,17 @@ function boot() {
   Store.load();
   applyAppearance();
 
+  /* An older collection has just had its starter words brought up to date.
+     Say so — words appearing on their own would otherwise be alarming. */
+  if (Store._starterUpgrade) {
+    const u = Store._starterUpgrade;
+    const parts = [];
+    if (u.repaired) parts.push(u.repaired + ' starter word' + (u.repaired === 1 ? '' : 's') + ' updated');
+    if (u.added) parts.push(u.added + ' new sense' + (u.added === 1 ? '' : 's') + ' added');
+    setTimeout(() => toast(parts.join(' · ') + ' — see Browse', 'ok'), 700);
+    Store.saveNow();
+  }
+
   $('#nav').onclick = (e) => {
     const b = e.target.closest('.nav-item');
     if (b) go(b.dataset.view, {});

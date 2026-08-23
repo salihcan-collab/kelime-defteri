@@ -93,8 +93,81 @@ const Store = {
     });
     s.log = data.log || [];
     s.daily = data.daily || {};
+    /* Schema 1 collections were dealt starter cards that have since been
+       improved. Reach them once, before stamping the new version number. */
+    if ((data.version || 1) < 2) this.upgradeStarters(s);
     s.version = SCHEMA_VERSION;
     return s;
+  },
+
+  /* Bring an existing collection up to date with starter content that changed,
+     touching only cards that are still exactly as they shipped. Anything the
+     learner edited, renamed or deleted is left alone, and a repaired card keeps
+     its id, its schedule and its statistics — only its wording is corrected. */
+  upgradeStarters(state) {
+    if (typeof STARTER_UPGRADES === 'undefined' || typeof STARTER_DECKS === 'undefined') return;
+    const key = (v) => String(v == null ? '' : v).trim().toLowerCase();
+
+    /* Every card the starter decks ship today, with the deck it belongs to. */
+    const shipped = [];
+    STARTER_DECKS.forEach(d => d.cards.forEach(c => shipped.push({ deckName: d.name, card: c })));
+    const shippedSenses = (term) => shipped.filter(s => key(s.card.term) === key(term));
+
+    /* Fields that carry content. A repaired card keeps everything else. */
+    const contentOf = (src) => ({
+      sense: src.sense || '', definition: src.definition || '',
+      translation: src.translation || '', category: src.category || '',
+      collocations: (src.collocations || []).slice(),
+      related: (src.related || []).slice()
+    });
+
+    let repaired = 0, added = 0;
+
+    STARTER_UPGRADES.splits.forEach(rule => {
+      const old = state.cards.find(c =>
+        key(c.term) === key(rule.term) && key(c.definition) === key(rule.oldDefinition));
+      if (!old) return;                       /* edited, renamed or deleted — leave it */
+      const senses = shippedSenses(rule.term);
+      const keep = senses.find(s => s.card.sense === rule.becomes);
+      if (!keep) return;
+      Object.assign(old, contentOf(keep.card), { updatedAt: Date.now() });
+      repaired++;
+      senses.forEach(s => {
+        if (s.card.sense === rule.becomes) return;
+        if (state.cards.some(c => key(c.term) === key(rule.term) && key(c.sense) === key(s.card.sense))) return;
+        state.cards.push(this._makeCard(Object.assign({}, s.card, { deckId: old.deckId })));
+        added++;
+      });
+    });
+
+    STARTER_UPGRADES.enrich.forEach(term => {
+      const src = shippedSenses(term)[0];
+      if (!src) return;
+      const card = state.cards.find(c =>
+        key(c.term) === key(term) && key(c.definition) === key(src.card.definition));
+      if (!card) return;
+      let touched = false;
+      if (!(card.collocations || []).length && (src.card.collocations || []).length) {
+        card.collocations = src.card.collocations.slice(); touched = true;
+      }
+      if (!(card.related || []).length && (src.card.related || []).length) {
+        card.related = src.card.related.slice(); touched = true;
+      }
+      if (touched) { card.updatedAt = Date.now(); repaired++; }
+    });
+
+    STARTER_UPGRADES.additions.forEach(rule => {
+      const deck = state.decks.find(d => key(d.name) === key(rule.deck));
+      if (!deck) return;                                  /* deck renamed or deleted */
+      if (state.cards.some(c => key(c.term) === key(rule.term))) return;   /* already there */
+      shippedSenses(rule.term).forEach(s => {
+        state.cards.push(this._makeCard(Object.assign({}, s.card, { deckId: deck.id })));
+        added++;
+      });
+    });
+
+    /* Read once by the app so it can say what happened; never saved. */
+    if (repaired || added) this._starterUpgrade = { repaired: repaired, added: added };
   },
 
   save() {
@@ -152,9 +225,16 @@ const Store = {
 
   /* ---------- cards ------------------------------------------------------ */
   addCard(data, quiet) {
-    const card = {
+    const card = this._makeCard(data);
+    this.state.cards.push(card);
+    if (!quiet) this.save();
+    return card;
+  },
+
+  _makeCard(data) {
+    return {
       id: uid(),
-      deckId: data.deckId || (this.state.decks[0] && this.state.decks[0].id) || null,
+      deckId: data.deckId || (this.state && this.state.decks[0] && this.state.decks[0].id) || null,
       term: (data.term || '').trim(),
       pos: data.pos || '',
       /* A short label that tells this sense apart from the word's other
@@ -172,9 +252,6 @@ const Store = {
       createdAt: Date.now(),
       updatedAt: Date.now()
     };
-    this.state.cards.push(card);
-    if (!quiet) this.save();
-    return card;
   },
 
   updateCard(id, patch) {

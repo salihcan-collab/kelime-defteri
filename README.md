@@ -114,6 +114,13 @@ kelimeyi boşluğa çevirerek soru üretir.
 alıştırmalar üçüne de ihtiyaç duyar. Eksik alanlar kırmızı çerçeveyle işaretlenir.
 Çeviri, kategori, örnek cümle ve not isteğe bağlıdır.
 
+> **Uygulamayı bu değişiklikten önce kullanmaya başladıysan:** başlangıç desteleri yalnızca
+> boş bir koleksiyona dağıtılır, yani tarayıcında zaten kayıtlı kelimeler vardı ve yeni
+> içerik onlara ulaşmıyordu. Uygulamayı bir kez açman yeterli: iki-üç anlamı tek tanıma
+> sıkıştırılmış başlangıç kelimeleri **yerinde düzeltilir** (kartın kimliği, tekrar takvimi
+> ve istatistikleri korunur), eksik anlamlar yanına eklenir ve `object` gelir. Kendin
+> düzenlediğin hiçbir kelimeye dokunulmaz. Ne değiştiğini bir bildirimle görürsün.
+
 ### Birden çok anlamı olan kelimeler
 
 `object` hem "nesne" hem "amaç" hem de "itiraz etmek" demektir; `work out` üç ayrı anlam

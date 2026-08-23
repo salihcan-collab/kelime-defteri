@@ -155,3 +155,36 @@ const STARTER_DECKS = [
     ]
   }
 ];
+
+/* --------------------------------------------------------------------------
+   Starter content that changed after schema 1.
+
+   A collection created before that upgrade already exists in the browser, and
+   the starter decks are only ever dealt to an empty one — so those learners
+   would keep the old cards forever. This table lets the upgrade reach them,
+   without ever overwriting something they have since edited themselves.
+
+   The new wording is not repeated here: everything is looked up in
+   STARTER_DECKS above, so there is one source of truth for the content.
+   -------------------------------------------------------------------------- */
+const STARTER_UPGRADES = {
+  /* Cards that used to squeeze two or three meanings into one definition.
+     `oldDefinition` is exactly what shipped — a card whose definition still
+     reads that way has not been touched, so it is safe to repair. It keeps
+     its id, its schedule and its example, and becomes the sense that its
+     example sentence was already showing; the other senses are added beside it. */
+  splits: [
+    { term: 'turn down', oldDefinition: 'To refuse an offer, or to reduce volume.',        becomes: 'to refuse' },
+    { term: 'work out',  oldDefinition: 'To end well, or to exercise, or to calculate.',   becomes: 'to turn out well' },
+    { term: 'bring up',  oldDefinition: 'To mention a subject, or to raise a child.',      becomes: 'to mention' },
+    { term: 'catch up',  oldDefinition: 'To reach the same level, or to exchange news.',   becomes: 'to exchange news' }
+  ],
+
+  /* Words whose wording did not change but which gained collocations or
+     relations. Only empty fields are filled in. */
+  enrich: ['undermine', 'significant', 'implement', 'crucial'],
+
+  /* Words the starter decks did not contain at all. Added only to a starter
+     deck that is still there and does not already have the word. */
+  additions: [{ deck: 'Academic & Formal English', term: 'object' }]
+};
