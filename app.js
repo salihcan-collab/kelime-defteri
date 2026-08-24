@@ -1084,7 +1084,6 @@ function drawStudySetup(host) {
         '<div class="faint" style="margin-bottom:8px">Keyboard</div>' +
         '<div class="shortcut-row"><span>Reveal the answer</span><kbd>Space</kbd></div>' +
         '<div class="shortcut-row"><span>Rate: again / hard / good / easy</span><span><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> <kbd>4</kbd></span></div>' +
-        '<div class="shortcut-row"><span>Rate <b>Good</b> — the same keys again</span><span><kbd>Space</kbd> <kbd>Enter</kbd></span></div>' +
         '<div class="shortcut-row"><span>Hear the word</span><kbd>S</kbd></div>' +
         '<div class="shortcut-row"><span>Undo the last answer</span><kbd>U</kbd></div>' +
       '</div>' +
@@ -1153,21 +1152,10 @@ function drawStudyCard(host) {
 
   /* A translation is a word, so it gets the same weight as the English word it
      stands in for; a definition is a sentence and reads better one size down. */
-  /* Asking "what does object mean?" is unanswerable while the word has three
-     meanings. The part of speech in the chip row above narrows it without
-     giving anything away — but when the senses share a part of speech, as the
-     three work outs do, only the sentence can tell them apart, so it comes
-     out whether or not the setting asks for it.
-
-     The sense label itself is a gloss — "to refuse" is most of the answer —
-     so it waits until the card is turned, and then sits beside the word
-     rather than on a line of its own. */
-  const siblings = Store.siblings(card);
-  const posDecides = siblings.every(sb => sb.pos !== card.pos);
-  const needsSentence = !askTerm && siblings.length && !posDecides && card.example;
-  const contextExample = (needsSentence && !s.showExampleOnFront)
-    ? '<p class="fc-example" style="margin-top:16px">' + highlightTerm(card.example, card.term) + '</p>' : '';
-
+  /* The sense label is a gloss — "to refuse" is most of the answer — so it
+     waits until the card is turned, and then sits beside the word rather than
+     on a line of its own. Before that, the part of speech in the chip row is
+     what narrows a word with several meanings. */
   const termWithSense = (show) =>
     esc(card.term) + (show && senseLabel(card) ? '<em class="fc-sense">(' + esc(senseLabel(card)) + ')</em>' : '');
 
@@ -1175,7 +1163,7 @@ function drawStudyCard(host) {
     ? '<div class="row" style="gap:12px;align-items:center">' +
         '<div class="fc-term">' + termWithSense(session.revealed) + '</div>' +
         (TTS.ok ? '<button class="icon-btn tts-btn" data-act="say" title="Pronounce">' + ICONS.sound + '</button>' : '') +
-      '</div>' + contextExample + frontExample
+      '</div>' + frontExample
     : dir === 'translation-first'
       ? '<div class="fc-term">' + esc(card.translation) + '</div>' + frontExample
       : '<div class="fc-prompt">' + esc(card.definition) + '</div>' + frontExample;
@@ -1191,11 +1179,7 @@ function drawStudyCard(host) {
       /* Skip whatever was already on the front. */
       (card.definition && dir !== 'definition-first'
         ? '<div class="fc-block"><div class="k">Meaning</div><div class="v big">' + esc(card.definition) + '</div></div>' : '') +
-      /* Skip the sentence too when the front is already showing it in full —
-         a blanked-out one on the front is a different thing and still wants
-         the answer spelling it out below. */
-      (card.example && !(!askTerm && (s.showExampleOnFront || needsSentence))
-        ? '<div class="fc-block"><div class="k">Example</div><div class="v fc-example">' + highlightTerm(card.example, card.term) + '</div></div>' : '') +
+      (card.example ? '<div class="fc-block"><div class="k">Example</div><div class="v fc-example">' + highlightTerm(card.example, card.term) + '</div></div>' : '') +
       (card.translation && dir !== 'translation-first'
         ? '<div class="fc-block"><div class="k">Translation</div><div class="v">' + esc(card.translation) + '</div></div>' : '') +
       cardExtras(card) +
@@ -1206,12 +1190,12 @@ function drawStudyCard(host) {
       '<div class="study-head">' +
         '<button class="soft-btn tiny end-btn" data-act="quit">' + ICONS.finish +
           '<span>End session</span></button>' +
-        '<div class="bar" style="flex:1"><i style="width:' + progress + '%"></i></div>' +
-        '<div class="counts"><span class="c-due">' + remaining + ' left</span>' +
-          (session.ahead ? '<span class="c-new">ahead of schedule</span>' : '') + '</div>' +
         '<button class="soft-btn tiny toggle-btn' + (s.showExtras === false ? '' : ' on') + '" data-act="extras" ' +
           'title="Collocations, related words, word family and your notes on the back of the card">' +
           '<span class="dot"></span>Extras</button>' +
+        '<div class="bar" style="flex:1"><i style="width:' + progress + '%"></i></div>' +
+        '<div class="counts"><span class="c-due">' + remaining + ' left</span>' +
+          (session.ahead ? '<span class="c-new">ahead of schedule</span>' : '') + '</div>' +
         (session.undo && Store.canUndo() ? '<button class="soft-btn tiny" data-act="undo">Undo</button>' : '') +
       '</div>' +
 
@@ -1256,14 +1240,9 @@ function drawStudyCard(host) {
   };
 }
 
-/* Space and Enter answer "Good" — that is the whole point of a one-key review,
-   but nothing on screen used to say so, and an answer you did not know you gave
-   is worse than no shortcut at all. */
 function rateBtn(n, label, delay, cls) {
-  const isDefault = n === 3;
-  return '<button class="rate ' + cls + (isDefault ? ' is-default' : '') + '" data-rate="' + n + '">' +
-    '<span>' + label + '</span><small>' + delay + '</small>' +
-    '<kbd>' + n + (isDefault ? '<i>or space</i>' : '') + '</kbd></button>';
+  return '<button class="rate ' + cls + '" data-rate="' + n + '">' +
+    '<span>' + label + '</span><small>' + delay + '</small><kbd>' + n + '</kbd></button>';
 }
 
 function revealCard() {
@@ -2675,9 +2654,12 @@ function onKey(e) {
   if (modalOpen || typing) return;
 
   if (currentView === 'study' && session && !session.finished) {
+    /* Space turns the card over and nothing more. It used to answer "Good"
+       once the card was open, which meant a rating you never chose. */
     if (e.key === ' ' || e.key === 'Enter') {
+      if (session.revealed) return;
       e.preventDefault();
-      return session.revealed ? rateCard(3) : revealCard();
+      return revealCard();
     }
     if (['1', '2', '3', '4'].indexOf(e.key) !== -1 && session.revealed) {
       e.preventDefault(); return rateCard(parseInt(e.key, 10));

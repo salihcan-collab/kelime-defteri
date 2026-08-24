@@ -809,22 +809,18 @@ const head = (s) => console.log('\n— ' + s + ' —');
     return { front: front, back: back };
   });
   is(!cardStates.front.sense, 'the sense label is not on the front — it would be the answer');
-  is(cardStates.front.example, 'but the example is, because the senses share a part of speech');
+  is(!cardStates.front.example, 'and the front is left as it was, with no sentence forced onto it');
   is(/^\(.+\)$/.test(cardStates.back.sense || ''),
      `turning the card puts the sense beside the word ${cardStates.back.sense}`);
   is(cardStates.back.posChips === 1, 'and the part of speech appears once, not twice');
 
-  /* The sentence forced onto the front must not then be repeated below it. */
-  const noEcho = await page.evaluate(() => {
+  const backBlocks = await page.evaluate(() => {
     const v = document.getElementById('view-study');
-    const blocks = [...v.querySelectorAll('.fc-block .k')].map(x => x.textContent);
-    const sentences = v.querySelectorAll('.fc-example').length;
-    return { blocks: blocks, sentences: sentences };
+    return { blocks: [...v.querySelectorAll('.fc-block .k')].map(x => x.textContent),
+             sentences: v.querySelectorAll('.fc-example').length };
   });
-  is(noEcho.sentences === 1,
-     `the sentence is printed once, not twice (${noEcho.sentences})`);
-  is(noEcho.blocks.indexOf('Example') === -1,
-     `and the back drops the block the front already covers (${noEcho.blocks.join(', ')})`);
+  is(backBlocks.blocks.indexOf('Example') !== -1 && backBlocks.sentences === 1,
+     `the sentence stays where it always was, in the Example block (${backBlocks.blocks.join(', ')})`);
 
   const symbols = await page.evaluate(() => {
     Store.wipe();
@@ -872,30 +868,63 @@ const head = (s) => console.log('\n— ' + s + ' —');
   is(!toggled.withoutExtras && !toggled.onAfter, 'the switch turns it off mid-session');
   is(toggled.stillRevealed, 'and does not take you off the card you were on');
   is(toggled.saved === false, 'the choice is remembered');
+
+  const headOrder = await page.evaluate(async () => {
+    session = null;
+    Store.wipe();
+    Store.state.settings.showExtras = true;
+    Store.saveNow();
+    go('study', {});
+    startSession(null, false);
+    const read = () => [...document.querySelectorAll('#view-study .study-head > *')]
+      .map(el => el.dataset.act || el.className.split(' ')[0]);
+    const before = read();
+    revealCard(); rateCard(3);
+    await new Promise(r => setTimeout(r, 150));
+    return { before: before, after: read() };
+  });
+  is(headOrder.before.indexOf('extras') < headOrder.before.indexOf('bar'),
+     'the Extras switch sits before the progress bar');
+  is(headOrder.after[headOrder.after.length - 1] === 'undo',
+     `and Undo keeps the far end to itself once there is something to undo (${headOrder.after.join(' ')})`);
   await page.evaluate(() => { Store.state.settings.showExtras = true; Store.saveNow(); session = null; });
 
-  /* Space answers Good; the button has to say so. */
-  const defaultKey = await page.evaluate(async () => {
+  /* A key must never answer a card for you: Space turns it over and stops. */
+  const keys = await page.evaluate(async () => {
     session = null;
     Store.wipe();
     go('study', {});
     startSession(null, false);
-    revealCard();
+    const id = currentCard().id;
+    const press = (key) => document.dispatchEvent(new KeyboardEvent('keydown', { key: key, bubbles: true }));
+    press(' ');
+    await new Promise(r => setTimeout(r, 120));
+    const revealed = session.revealed;
+    press(' '); press('Enter');
+    await new Promise(r => setTimeout(r, 120));
     const v = document.getElementById('view-study');
-    const good = v.querySelector('.rate[data-rate="3"]');
-    const others = [...v.querySelectorAll('.rate')].filter(b => b.dataset.rate !== '3');
-    const before = Store.card(currentCard().id).srs.reps;
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
-    await new Promise(r => setTimeout(r, 150));
     return {
-      marked: good.classList.contains('is-default'),
-      saysSo: /space/i.test(good.textContent),
-      othersQuiet: others.every(b => !b.classList.contains('is-default') && !/space/i.test(b.textContent)),
-      reps: before
+      revealed: revealed,
+      answered: session.done,
+      sameCard: currentCard() && currentCard().id === id,
+      reps: Store.card(id).srs.reps,
+      allButtonsAlike: [...v.querySelectorAll('.rate')].every(btn =>
+        !/space|enter/i.test(btn.textContent) && !btn.classList.contains('is-default'))
     };
   });
-  is(defaultKey.marked && defaultKey.saysSo, 'the Good button is marked as what Space gives you');
-  is(defaultKey.othersQuiet, 'and the other three are not');
+  is(keys.revealed, 'Space still turns the card over');
+  is(keys.answered === 0 && keys.reps === 0 && keys.sameCard,
+     'but pressing it again answers nothing — the card is still waiting for you');
+  is(keys.allButtonsAlike, 'and no rating button is singled out as a default');
+
+  /* The number keys are still how you answer. */
+  const numberKey = await page.evaluate(async () => {
+    const id = currentCard().id;
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: '3', bubbles: true }));
+    await new Promise(r => setTimeout(r, 150));
+    return { answered: session.done, reps: Store.card(id).srs.reps };
+  });
+  is(numberKey.answered === 1 && numberKey.reps === 1, 'the number keys still rate the card');
   await page.evaluate(() => { session = null; Store.wipe(); Store.saveNow(); });
 
   /* ------------------------------------------------------------------ *
@@ -924,6 +953,25 @@ const head = (s) => console.log('\n— ' + s + ' —');
     [...document.querySelectorAll('#view-stats h2')].map(h => h.textContent));
   is(statsPanel.indexOf('By category') === -1 && statsPanel.indexOf('By part of speech') !== -1,
      'Progress groups by part of speech instead');
+
+  const purged = await page.evaluate(() => {
+    Store.wipe();
+    const fresh = Store.state.cards.every(c => !('category' in c));
+    /* an old collection that still had them */
+    const st = Store.state;
+    st.cards.forEach(c => { c.category = 'Work'; });
+    delete st.starterRevision;
+    localStorage.setItem('lexio.v1', JSON.stringify(st));
+    return { fresh: fresh, csvHeader: Store.exportCSV().split('\n')[0] };
+  });
+  is(purged.fresh, 'a new collection carries no category at all');
+  is(purged.csvHeader.indexOf('category') === -1, 'and CSV no longer has the column');
+  await page.reload();
+  await page.waitForTimeout(900);
+  const cleaned = await page.evaluate(() =>
+    Store.state.cards.filter(c => 'category' in c).length);
+  is(cleaned === 0, 'opening an older collection clears the ones it had stored');
+  await page.evaluate(() => { Store.wipe(); Store.saveNow(); });
   await page.evaluate(() => go('dashboard', {}));
 
   /* ------------------------------------------------------------------ *

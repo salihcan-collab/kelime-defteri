@@ -793,7 +793,3 @@ kbd{
 .toggle-btn.on{ color:var(--text); }
 .toggle-btn.on .dot{ background:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); }
 
-/* The rating that Space and Enter give you, marked as such. */
-.rate.is-default{ border-color:color-mix(in srgb, var(--accent) 45%, var(--border)); }
-.rate.is-default kbd{ display:inline-flex; align-items:baseline; gap:5px; }
-.rate kbd i{ font-style:normal; font-size:.82em; opacity:.72; letter-spacing:.02em; }

@@ -89,6 +89,8 @@ const Store = {
       if (!c.stats) c.stats = { seen: 0, correct: 0, wrong: 0 };
       /* Added in schema 2. Older backups simply have none of these. */
       if (typeof c.sense !== 'string') c.sense = '';
+      /* Categories were dropped: word families and decks do that job now. */
+      if ('category' in c) delete c.category;
       if (!Array.isArray(c.collocations)) c.collocations = [];
       if (!Array.isArray(c.related)) c.related = [];
       return c;
@@ -124,7 +126,7 @@ const Store = {
     /* Fields that carry content. A repaired card keeps everything else. */
     const contentOf = (src) => ({
       sense: src.sense || '', definition: src.definition || '',
-      translation: src.translation || '', category: src.category || '',
+      translation: src.translation || '',
       collocations: (src.collocations || []).slice(),
       related: (src.related || []).slice()
     });
@@ -265,7 +267,6 @@ const Store = {
       definition: (data.definition || '').trim(),
       example: (data.example || '').trim(),
       translation: (data.translation || '').trim(),
-      category: (data.category || '').trim(),
       collocations: (data.collocations || []).slice(),
       related: (data.related || []).slice(),
       notes: data.notes || '',
@@ -671,11 +672,11 @@ const Store = {
 
   exportCSV(deckId) {
     const rows = [['term', 'part of speech', 'sense', 'definition', 'example', 'translation',
-                   'category', 'collocations', 'synonyms', 'antonyms', 'deck']];
+                   'collocations', 'synonyms', 'antonyms', 'deck']];
     const rel = (c, kind) => (c.related || []).filter(r => r.kind === kind).map(r => r.text).join('; ');
     this.cardsOf(deckId).forEach(c => {
       const d = this.deck(c.deckId);
-      rows.push([c.term, c.pos, c.sense, c.definition, c.example, c.translation, c.category,
+      rows.push([c.term, c.pos, c.sense, c.definition, c.example, c.translation,
                  (c.collocations || []).join('; '), rel(c, 'syn'), rel(c, 'ant'), d ? d.name : '']);
     });
     return rows.map(r => r.map(v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"').join(',')).join('\n');
@@ -697,7 +698,6 @@ const Store = {
     const iDef  = start ? idx(['definition', 'meaning'], 2) : 2;
     const iEx   = start ? idx(['example', 'sentence', 'example sentence'], 3) : 3;
     const iTr   = start ? idx(['translation', 'turkish', 'çeviri'], 4) : 4;
-    const iCat  = start ? idx(['category', 'topic', 'tag'], 5) : 5;
     /* Columns added in schema 2 — only picked up when the file names them, so
        old headerless exports keep importing exactly as they used to. */
     const named = (names) => { for (const n of names) { const i = head.indexOf(n); if (i !== -1) return i; } return -1; };
@@ -724,7 +724,7 @@ const Store = {
       this.addCard({
         deckId: deckId,
         term: row[iTerm], pos: row[iPos] || '', definition: row[iDef] || '',
-        example: row[iEx] || '', translation: row[iTr] || '', category: row[iCat] || '',
+        example: row[iEx] || '', translation: row[iTr] || '',
         sense: at(row, iSense),
         collocations: list(at(row, iColl)),
         related: list(at(row, iSyn)).map(t => ({ kind: 'syn', text: t }))

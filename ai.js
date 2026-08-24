@@ -109,12 +109,11 @@ const AI = {
         '{"pos": one of [' + PARTS_OF_SPEECH.join(', ') + '],\n' +
         ' "definition": a clear English definition, max 18 words, no dictionary abbreviations,\n' +
         ' "example": one natural English sentence that CONTAINS the word "' + term + '" verbatim,\n' +
-        ' "translation": the ' + lang + ' translation (just the translation, no explanation),\n' +
-        ' "category": a short topic label in English, 1-2 words (e.g. Work, Feelings, Travel)}' }
+        ' "translation": the ' + lang + ' translation (just the translation, no explanation)}' }
     ], { temperature: 0.4, maxTokens: 320 });
     return {
       pos: res.pos || '', definition: res.definition || '', example: res.example || '',
-      translation: res.translation || '', category: res.category || ''
+      translation: res.translation || ''
     };
   },
 
@@ -126,7 +125,7 @@ const AI = {
       { role: 'user', content:
         'Create ' + count + ' useful English vocabulary items about "' + topic + '" at CEFR level ' + level + '.\n' +
         'Avoid very basic words the learner certainly knows. Return JSON:\n' +
-        '{"cards":[{"term":"","pos":"","definition":"","example":"","translation":"' + lang + ' translation","category":""}]}\n' +
+        '{"cards":[{"term":"","pos":"","definition":"","example":"","translation":"' + lang + ' translation"}]}\n' +
         'Each "example" must contain its "term" verbatim.' }
     ], { temperature: 0.85, maxTokens: 2000 });
     return (res.cards || []).filter(c => c && c.term);

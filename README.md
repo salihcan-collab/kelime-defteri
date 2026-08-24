@@ -115,8 +115,7 @@ yerini alır. Bu alt bölümü tamamen kapatmak istersen çalışma ekranının 
 
 Kelimenin birden çok anlamı varsa **anlam etiketi kart çevrilince** kelimenin yanında
 parantez içinde belirir (`turn down (to refuse)`); ön yüzde durmaz, çünkü etiketin kendisi
-cevabın yarısıdır. Ön yüzde ayırt ediciliği sözcük türü sağlar; anlamlar aynı türdeyse
-(üç `work out` gibi) örnek cümle ayar ne olursa olsun ön yüze çıkar.
+cevabın yarısıdır. Ön yüzde ayırt ediciliği sözcük türü sağlar.
 
 Örnek cümlenin kelimeyi **içermesi** önemlidir: "Fill in the blank" alıştırması cümledeki
 kelimeyi boşluğa çevirerek soru üretir.
@@ -334,8 +333,9 @@ Yine de bu dosyaları başkasıyla paylaşacaksan anahtarını önce Settings'te
 - **CSV içe aktarma:** Browse → **Import**. Sütun sırası:
   `term, part of speech, sense, definition, example, translation, collocations,
   synonyms, antonyms`. Başlık satırı varsa otomatik algılanır; başlık yoksa eski altı
-  sütunluk sıra (`term, part of speech, definition, example, translation, category`)
-  geçerlidir, yani eski dosyaların aynen çalışmaya devam eder. Collocations, synonyms ve
+  sütunluk sıra (`term, part of speech, definition, example, translation, +1 sütun`)
+  geçerlidir, yani eski dosyaların aynen çalışmaya devam eder — altıncı sütun artık
+  okunmaz, çünkü category kaldırıldı. Collocations, synonyms ve
   antonyms sütunlarında birden çok değer **noktalı virgülle** ayrılır.
   Dosya seçebilir veya satırları yapıştırabilirsin. Aynı kelimenin **farklı anlamı**
   ayrı satır olarak eklenir; yalnızca kelime, sözcük türü ve tanımı birebir aynı olan
@@ -354,7 +354,7 @@ tam olur).
 
 | Tuş | İşlev |
 |---|---|
-| `Space` `Enter` | Kart kapalıysa cevabı gösterir, açıksa **Good** verir (yani `3`) |
+| `Space` | Cevabı göster / devam et |
 | `1` `2` `3` `4` | Kartı değerlendir (again / hard / good / easy) veya test şıkkını seç |
 | `S` | Kelimeyi sesli oku |
 | `U` | Son cevabı geri al |
@@ -365,8 +365,8 @@ tam olur).
 | `Home` `End` | Sayfanın başına/sonuna git |
 | `↑` `↓` | Satır satır kaydır |
 
-`Space` ve `Enter` her zaman **Good** verir. Bunu tahmin etmek zorunda kalmayasın diye Good
-düğmesinin çerçevesi vurgulu ve tuş etiketinde `3 or space` yazıyor.
+`Space` yalnızca kartı çevirir; puanı **her zaman `1`–`4`** tuşlarıyla ya da düğmelerle
+verirsin. Yani farkında olmadan bir puan vermen mümkün değil.
 
 Uzun sayfalarda sağda kaydırma çubuğu çıkar; aşağı indiğinde sağ altta
 başa dönmek için yuvarlak bir düğme belirir.
