@@ -229,7 +229,7 @@ function senseCountChip(card) {
 }
 
 const REL_LABEL = { syn: 'synonym', ant: 'opposite' };
-const REL_MARK  = { syn: '\u2248', ant: '\u2260' };   /* ≈ means like this, ≠ means not this */
+const REL_MARK  = { syn: '\u2248', ant: '\u2715' };   /* ≈ means like this, ✕ means the opposite */
 
 function relationChips(card) {
   const rels = Store.relationsFor(card);
@@ -250,7 +250,6 @@ function relationChips(card) {
    crowd the card, so they share one quieter strip below a hairline and sit side
    by side while there is width for it. */
 function cardExtras(card) {
-  if (Store.state.settings.showExtras === false) return '';
   const rels = Store.relationsFor(card);
   const family = familyList(card);
   const parts = [];
@@ -259,8 +258,11 @@ function cardExtras(card) {
   if (family) parts.push(['Word family', family]);
   if (card.notes) parts.push(['Your note', '<p class="fx-note">' + esc(card.notes) + '</p>']);
   if (!parts.length) return '';
-  /* One thing on its own gets the full width; two or three share columns. */
-  return '<div class="fc-extras' + (parts.length === 1 ? ' one' : '') + '">' + parts.map(p =>
+  /* One thing on its own gets the full width; two or three share columns.
+     The strip is always built, and the switch only hides it — turning it off
+     mid-card must not redraw the card you are looking at. */
+  return '<div class="fc-extras' + (parts.length === 1 ? ' one' : '') +
+    (Store.state.settings.showExtras === false ? ' off' : '') + '">' + parts.map(p =>
     '<div class="fx"><div class="fx-k">' + p[0] + '</div>' + p[1] + '</div>').join('') + '</div>';
 }
 
@@ -783,7 +785,8 @@ function cardEditor(card, presetDeck) {
          for a card that already carries something down here. */
       '<details class="more-fields"' + (extrasFilled(card) ? ' open' : '') + '>' +
         '<summary>More fields' +
-          (extrasFilled(card) ? '<span class="more-count">' + extrasFilled(card) + '</span>' : '') +
+          (extrasFilled(card)
+            ? '<span class="more-count">' + extrasFilled(card) + ' filled in</span>' : '') +
         '</summary>' +
         '<div class="more-body">' +
           '<div class="field"><label>Collocations</label>' +
@@ -796,11 +799,11 @@ function cardEditor(card, presetDeck) {
             '<div class="field"><label>Antonyms</label>' +
               '<input type="text" id="cAnt" value="' + esc(card ? relText(card, 'ant') : '') + '" placeholder="unreliable"></div>' +
           '</div>' +
+          '<div id="relLinks"></div>' +
           '<div class="field"><label>Word family</label>' +
             '<input type="text" id="cFam" value="' + esc(card ? relText(card, 'family') : '') + '" placeholder="analysis, analytical">' +
             '<span class="help">Other forms of the same word. Naming one member is enough — ' +
               'the whole family finds itself.</span></div>' +
-          '<div id="relLinks"></div>' +
           '<div class="field"><label>Personal note</label>' +
             '<input type="text" id="cNote" value="' + esc(card ? card.notes : '') + '" placeholder="A memory hook, a false friend…"></div>' +
         '</div>' +
@@ -1228,9 +1231,16 @@ function drawStudyCard(host) {
   host.onclick = (e) => {
     if (e.target.closest('[data-act="say"]')) return TTS.speak(card.term);
     if (e.target.closest('[data-act="reveal"]')) return revealCard();
-    if (e.target.closest('[data-act="extras"]')) {
-      Store.state.settings.showExtras = Store.state.settings.showExtras === false;
-      Store.saveNow(); return render('study');
+    const extrasBtn = e.target.closest('[data-act="extras"]');
+    if (extrasBtn) {
+      const on = Store.state.settings.showExtras === false;
+      Store.state.settings.showExtras = on;
+      Store.saveNow();
+      /* Class flips only: the card, the answer and the scroll position stay. */
+      extrasBtn.classList.toggle('on', on);
+      const strip = host.querySelector('.fc-extras');
+      if (strip) strip.classList.toggle('off', !on);
+      return;
     }
     if (e.target.closest('[data-act="quit"]')) return endSession();
     if (e.target.closest('[data-act="undo"]')) return undoAnswer();
@@ -1540,8 +1550,11 @@ function buildQuestions(mode, pool, count, opts) {
                answer: card.term, question: 'Type the English word' };
     }
     if (mode === 'listening') {
+      /* A translation would give the whole word away here — you already know
+         what it means, you are trying to catch how it sounds. Letters are the
+         help that fits: the first one, then one more, up to three. */
       return { type: 'type', card: card, prompt: '', speak: card.term, pos: card.pos,
-               hint: card.translation || card.definition, answer: card.term,
+               letterHint: true, answer: card.term,
                question: 'Listen and type what you hear' };
     }
     if (mode === 'cloze') {
@@ -1669,6 +1682,11 @@ function drawQuizItem(host) {
   bindQuizEvents(host, item);
 }
 
+function deckLabel(card) {
+  const d = card && Store.deck(card.deckId);
+  return d ? d.emoji + ' ' + d.name : '';
+}
+
 function questionCard(inner, item) {
   const c = item.card;
   return '<div class="flashcard" style="min-height:auto;padding:28px 26px">' +
@@ -1676,7 +1694,9 @@ function questionCard(inner, item) {
       '<span class="chip">' + esc(item.question) + '</span>' +
       (item.pos ? '<span class="chip pos">' + esc(item.pos) + '</span>' : '') +
       '<div class="spacer"></div>' +
-      (c && c.pos ? '<span class="faint">' + esc(c.pos) + '</span>' : '') +
+      /* The deck, as on a study card — the part of speech is already a chip
+         on the left, and printing it twice says nothing new. */
+      (deckLabel(c) ? '<span class="faint">' + esc(deckLabel(c)) + '</span>' : '') +
     '</div>' + inner + hintHTML(item) + '</div>';
 }
 
@@ -1685,10 +1705,44 @@ function questionCard(inner, item) {
    Both states are always in the DOM: revealing one is a class toggle, which
    keeps the typed answer untouched and costs no layout shift. */
 function hintHTML(item) {
+  if (item.letterHint) return letterHintHTML(item);
   if (!item.hint) return '';
   return '<div class="hint-slot' + (quiz.hintShown ? ' revealed' : '') + '" id="hintSlot">' +
     '<div class="hint-text">' + ICONS.bulb + '<span>' + esc(item.hint) + '</span></div>' +
     '<button class="hint-btn" data-act="hint">' + ICONS.bulb + 'Show hint</button>' +
+  '</div>';
+}
+
+/* Never the whole word: one letter short of it at most, and never more than
+   three. A two-letter word gets one letter, a three-letter word gets two. */
+function maxLetterHints(answer) {
+  const letters = String(answer || '').replace(/[^\p{L}]/gu, '').length;
+  return Math.max(0, Math.min(3, letters - 1));
+}
+
+/* How much of the answer the letters given so far spell out — counted in
+   letters, so a space in "work out" costs nothing. */
+function letterPrefix(answer, n) {
+  let out = '', seen = 0;
+  for (let i = 0; i < answer.length && seen < n; i++) {
+    out += answer[i];
+    if (/\p{L}/u.test(answer[i])) seen++;
+  }
+  return out;
+}
+
+function letterHintHTML(item) {
+  const max = maxLetterHints(item.answer);
+  if (!max) return '';
+  const shown = Math.min(quiz.hintLetters || 0, max);
+  const spent = shown >= max;
+  return '<div class="hint-slot letters' + (shown ? ' revealed' : '') + '" id="hintSlot">' +
+    '<div class="hint-text">' + ICONS.bulb +
+      '<span>Starts with <b id="hintLetters">' + esc(letterPrefix(item.answer, shown)) + '</b></span>' +
+    '</div>' +
+    '<button class="hint-btn" data-act="hint" id="hintBtn"' + (spent ? ' disabled' : '') + '>' +
+      ICONS.bulb + (shown ? 'One more letter' : 'Show the first letter') +
+    '</button>' +
   '</div>';
 }
 
@@ -1811,8 +1865,20 @@ function bindQuizEvents(host, item) {
     if (e.target.closest('[data-act="explain"]')) return explainWrong(item);
     if (e.target.closest('[data-act="check"]')) return checkAnswer(item);
     if (e.target.closest('[data-act="hint"]')) {
-      quiz.hintShown = true;
       const slot = $('#hintSlot');
+      if (item.letterHint) {
+        const max = maxLetterHints(item.answer);
+        quiz.hintLetters = Math.min((quiz.hintLetters || 0) + 1, max);
+        const out = $('#hintLetters');
+        if (out) out.textContent = letterPrefix(item.answer, quiz.hintLetters);
+        const btn = $('#hintBtn');
+        if (btn) {
+          btn.innerHTML = ICONS.bulb + 'One more letter';
+          btn.disabled = quiz.hintLetters >= max;
+        }
+      } else {
+        quiz.hintShown = true;
+      }
       if (slot) slot.classList.add('revealed');   /* no re-render: nothing else moves */
       const typed = $('#qInput');
       if (typed) typed.focus();
@@ -1931,7 +1997,8 @@ function matchClick(item, side, id) {
 
 function nextQuizItem() {
   quiz.i++;
-  quiz.state = 'idle'; quiz.given = ''; quiz.lastResult = null; quiz.hintShown = false;
+  quiz.state = 'idle'; quiz.given = ''; quiz.lastResult = null;
+  quiz.hintShown = false; quiz.hintLetters = 0;
   quiz.match = null;                 /* the next matching board starts fresh */
   if (quiz.i >= quiz.items.length) return finishQuiz();
   render('practice');

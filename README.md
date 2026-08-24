@@ -112,6 +112,8 @@ ilişkili kelimeler, word family ve kendi notun bir çizginin altında, daha kü
 sütun hâlinde toplanır. Böylece cevap cevap gibi görünür, geri kalanı da kartı uzatmadan
 yerini alır. Bu alt bölümü tamamen kapatmak istersen çalışma ekranının üst çubuğundaki
 **Extras** düğmesine bas — çalışmanın ortasında da açıp kapatabilirsin, tercih kaydedilir.
+Düğme yalnızca ilgili bölümü gösterip gizler; kart yeniden çizilmez, bulunduğun yeri
+kaybetmezsin.
 
 Kelimenin birden çok anlamı varsa **anlam etiketi kart çevrilince** kelimenin yanında
 parantez içinde belirir (`turn down (to refuse)`); ön yüzde durmaz, çünkü etiketin kendisi
@@ -165,12 +167,13 @@ yanlışlıkla kopya oluşturamazsın, ama bilerek ikinci bir anlam eklemek tek 
 Bu alanlar — collocations, synonyms/antonyms, word family ve kişisel not — kelime kartı formunda
 **More fields** başlığı altında katlanmış durur; çoğu kelimede boş kaldıkları için form
 doldurduğun beş alandan ibaret kalır. Bir kelimede zaten doluysalar bölüm kendiliğinden
-açılır ve başlığın yanında kaç şey olduğu yazar.
+açılır ve başlığın yanında **"3 filled in"** gibi kaç alanın dolu olduğu yazar.
 
 - **Collocations** her satıra bir kalıp yazılır. Kartın arka yüzünde "Goes with" başlığı
   altında listelenir ve kalıbın içindeki kelime koyu gösterilir.
 - **Synonyms / Antonyms** virgülle yazılır. Kaydettiğin bir kelimeyi işaret ediyorsa
-  çip **dolu**, henüz eklemediğin bir kelimeyse **kesik çizgili** görünür.
+  çip **dolu**, henüz eklemediğin bir kelimeyse **kesik çizgili** görünür. Kartta eş anlamlı
+  `≈`, zıt anlamlı `✕` ile işaretlenir.
 - İlişki tek yönde yazılır ama iki yönde çalışır: `undermine` için "weaken" yazdığında,
   `weaken` kartı da `undermine`'ı gösterir. Aynı bilgi iki kez saklanmaz, bu yüzden bir
   kelimeyi sildiğinde diğerinde kırık bir bağlantı kalmaz — sadece düz metne döner.
@@ -223,11 +226,17 @@ Bir turun sonunda **"Practise the N I missed"** düğmesi yalnızca kaçırdığ
 tekrar sorar; çeldirici şıklar arasında o turda kaçırdığın diğer kelimeler de yer alır,
 çünkü karıştırdığın kelimeler genelde onlardır.
 
-**İpucu:** "Meaning → Word", "Type the word", "Fill in the blank" ve "Listening"
-alıştırmalarında sorunun altında bir **Show hint** düğmesi vardır. Türkçe çeviri (boşluk
-doldurmada İngilizce anlam) varsayılan olarak gizlidir, takıldığında tıklayıp görebilirsin.
-Puanı etkilemez, sayfayı da oynatmaz — yazdığın cevap ve imleç yerinde kalır.
+**İpucu:** "Meaning → Word", "Type the word" ve "Fill in the blank" alıştırmalarında sorunun
+altında bir **Show hint** düğmesi vardır. Türkçe çeviri (boşluk doldurmada İngilizce anlam)
+varsayılan olarak gizlidir, takıldığında tıklayıp görebilirsin. Puanı etkilemez, sayfayı da
+oynatmaz — yazdığın cevap ve imleç yerinde kalır.
 "Word → Meaning" alıştırmasında ipucu yoktur — çeviri doğrudan cevabın kendisi olurdu.
+
+**Listening'de ipucu farklıdır:** anlamı zaten biliyorsundur, sorun sesi yakalamaktır. Bu
+yüzden çeviri yerine **harf** verir: ilk basışta kelimenin ilk harfi, sonra bir harf daha,
+**en fazla üç harf**. Kelime kısaysa sınır da düşer — üç harflik kelimede iki, iki harflikte
+bir harf. Yani kelime hiçbir zaman senin yerine tamamlanmaz; üç harf dolduğunda düğme
+sönükleşir.
 
 Seslendirme, bilgisayarında zaten yüklü olan sesleri kullanır — internet gerekmez, ücretsizdir.
 

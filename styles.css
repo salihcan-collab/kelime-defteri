@@ -307,6 +307,8 @@ input[type=text],input[type=password],input[type=number],input[type=search],sele
 }
 input:focus,select:focus,textarea:focus{ border-color:var(--accent); background:var(--surface); box-shadow:0 0 0 3px var(--accent-soft); }
 textarea{ resize:vertical; min-height:76px; line-height:1.55; }
+/* An example of what to type should sit well behind what you have typed. */
+input::placeholder, textarea::placeholder{ color:var(--text-faint); opacity:.6; }
 select{ cursor:pointer; appearance:none;
   background-image:linear-gradient(45deg,transparent 50%,currentColor 50%),linear-gradient(135deg,currentColor 50%,transparent 50%);
   background-position:calc(100% - 17px) 52%, calc(100% - 12px) 52%;
@@ -726,6 +728,7 @@ kbd{
   margin-top:4px; padding-top:15px; border-top:1px solid var(--border-soft);
 }
 .fc-extras.one{ grid-template-columns:1fr; }
+.fc-extras.off{ display:none; }
 @media (max-width: 720px){ .fc-extras{ grid-template-columns:1fr; } }
 .fx-k{
   font-size:.64rem; text-transform:uppercase; letter-spacing:.09em;
@@ -764,8 +767,8 @@ kbd{
 .more-fields > summary:hover{ color:var(--text); }
 .more-fields > summary:focus-visible{ outline:2px solid var(--accent); outline-offset:3px; border-radius:6px; }
 .more-count{
-  font-size:.7rem; font-weight:700; line-height:1;
-  padding:3px 7px; border-radius:999px;
+  font-size:.68rem; font-weight:700; line-height:1; letter-spacing:.01em;
+  padding:4px 8px; border-radius:999px;
   background:var(--accent-soft); color:var(--accent);
 }
 .more-body{ padding-top:2px; animation:fade .2s ease; }
@@ -793,3 +796,10 @@ kbd{
 .toggle-btn.on{ color:var(--text); }
 .toggle-btn.on .dot{ background:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); }
 
+
+/* The letter-by-letter hint in the listening drill. */
+.hint-slot.letters .hint-text b{
+  font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  letter-spacing:.2em; font-weight:700; color:var(--text);
+}
+.hint-btn[disabled]{ opacity:.45; cursor:default; }

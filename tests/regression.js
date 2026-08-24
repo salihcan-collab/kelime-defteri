@@ -690,7 +690,7 @@ const head = (s) => console.log('\n— ' + s + ' —');
     return { open: d.open, count: (d.querySelector('.more-count') || {}).textContent };
   });
   is(reopened.open, 'a word that already uses those fields opens with them showing');
-  is(reopened.count === '5', `and the summary says how much is inside (${reopened.count})`);
+  is(reopened.count === '5 filled in', `and the summary says how much is inside (${reopened.count})`);
   await page.evaluate(() => closeModal());
   await page.waitForTimeout(200);
 
@@ -826,10 +826,10 @@ const head = (s) => console.log('\n— ' + s + ' —');
     Store.wipe();
     const c = Store.state.cards.find(x => x.term === 'significant');
     const html = relationChips(c);
-    return { syn: html.indexOf('\u2248') !== -1, ant: html.indexOf('\u2260') !== -1,
-             oldArrow: html.indexOf('\u2194') !== -1 };
+    return { syn: html.indexOf('\u2248') !== -1, ant: html.indexOf('\u2715') !== -1,
+             oldMarks: /[\u2194\u2260]/.test(html) };
   });
-  is(symbols.syn && symbols.ant && !symbols.oldArrow, 'a synonym is ≈ and an opposite is ≠');
+  is(symbols.syn && symbols.ant && !symbols.oldMarks, 'a synonym is ≈ and an opposite is ✕');
 
   const plain = await page.evaluate(() => {
     Store.wipe();
@@ -849,16 +849,25 @@ const head = (s) => console.log('\n— ' + s + ' —');
     go('study', {});
     startSession(null, false);
     revealCard();
+    /* The back fades in; measure once it has arrived, or opacity 0 reads as
+       hidden. */
+    await new Promise(r => setTimeout(r, 320));
     const v = document.getElementById('view-study');
-    const withExtras = !!v.querySelector('.fc-extras');
+    const seen = (el) => !!el && el.checkVisibility({ contentVisibilityAuto: true,
+                                                      opacityProperty: true, visibilityProperty: true });
+    const strip = v.querySelector('.fc-extras');
+    const withExtras = seen(strip);
     const btn = v.querySelector('[data-act="extras"]');
     const onBefore = btn.classList.contains('on');
+    /* Hold on to the node itself: if the switch redraws the view, this one is
+       thrown away and the check below notices. */
     btn.click();
     await new Promise(r => setTimeout(r, 150));
     const v2 = document.getElementById('view-study');
     return {
       withExtras: withExtras, onBefore: onBefore,
-      withoutExtras: !!v2.querySelector('.fc-extras'),
+      withoutExtras: seen(v2.querySelector('.fc-extras')),
+      sameNode: v2.querySelector('.fc-extras') === strip,
       onAfter: v2.querySelector('[data-act="extras"]').classList.contains('on'),
       stillRevealed: !!v2.querySelector('.fc-block'),
       saved: Store.state.settings.showExtras
@@ -866,6 +875,7 @@ const head = (s) => console.log('\n— ' + s + ' —');
   });
   is(toggled.withExtras && toggled.onBefore, 'the extras strip is on to begin with');
   is(!toggled.withoutExtras && !toggled.onAfter, 'the switch turns it off mid-session');
+  is(toggled.sameNode, 'without redrawing the card — the same elements are still there');
   is(toggled.stillRevealed, 'and does not take you off the card you were on');
   is(toggled.saved === false, 'the choice is remembered');
 
@@ -973,6 +983,92 @@ const head = (s) => console.log('\n— ' + s + ' —');
   is(cleaned === 0, 'opening an older collection clears the ones it had stored');
   await page.evaluate(() => { Store.wipe(); Store.saveNow(); });
   await page.evaluate(() => go('dashboard', {}));
+
+  /* ------------------------------------------------------------------ *
+     8i. The listening hint spells the word out.
+
+     A translation is no help when you already know the meaning and are trying
+     to catch the sound. Letters are: the first one, then one more, and never
+     enough of them to finish the word for you.
+   * ------------------------------------------------------------------ */
+  head('the listening hint gives letters, never the word');
+  const caps = await page.evaluate(() => ({
+    long: maxLetterHints('reliable'),
+    four: maxLetterHints('word'),
+    three: maxLetterHints('run'),
+    two: maxLetterHints('go'),
+    one: maxLetterHints('a'),
+    phrase: maxLetterHints('work out'),
+    prefixes: [1, 2, 3].map(n => letterPrefix('work out', n))
+  }));
+  is(caps.long === 3 && caps.four === 3, 'a long word gives at most three letters');
+  is(caps.three === 2 && caps.two === 1 && caps.one === 0,
+     `a short word gives one fewer than it has (${caps.three}, ${caps.two}, ${caps.one})`);
+  is(caps.phrase === 3 && caps.prefixes.join('|') === 'w|wo|wor',
+     'letters are counted, so a space in a phrase costs nothing');
+
+  const listening = await page.evaluate(async () => {
+    Store.wipe();
+    quizSetup.scope = 'all'; quizSetup.deckId = '';
+    go('practice', {});
+    const pool = practicePool(null, 'all').filter(c => c.term.length > 4);
+    quiz = newQuiz('listening', buildQuestions('listening', pool, 3, { cards: pool.slice(0, 3) }));
+    render('practice');
+    await new Promise(r => setTimeout(r, 250));
+    const item = quiz.items[0];
+    const read = () => {
+      const el = document.getElementById('hintLetters');
+      const btn = document.getElementById('hintBtn');
+      return { letters: el ? el.textContent : null,
+               label: btn ? btn.textContent.trim() : null,
+               spent: btn ? btn.disabled : null };
+    };
+    const steps = [read()];
+    const slot = document.getElementById('hintSlot');
+    const height = slot.getBoundingClientRect().height;
+    for (let i = 0; i < 4; i++) {
+      document.getElementById('hintBtn').click();
+      await new Promise(r => setTimeout(r, 60));
+      steps.push(read());
+    }
+    return { answer: item.answer, steps: steps, translationOffered: !!item.hint,
+             heightBefore: height, heightAfter: slot.getBoundingClientRect().height };
+  });
+  is(!listening.translationOffered, 'the translation is no longer what the hint offers');
+  is(listening.steps[0].letters === '' && /first letter/i.test(listening.steps[0].label || ''),
+     'it starts with nothing shown and offers the first letter');
+  is(listening.steps[1].letters === listening.answer.slice(0, 1) &&
+     listening.steps[2].letters === listening.answer.slice(0, 2) &&
+     listening.steps[3].letters === listening.answer.slice(0, 3),
+     `each press adds one letter (${listening.steps.slice(1, 4).map(x => x.letters).join(' → ')})`);
+  is(listening.steps[3].spent && listening.steps[4].letters === listening.steps[3].letters,
+     'and it stops at three — pressing again gives nothing more');
+  is(listening.steps[4].letters.length < listening.answer.length,
+     'the word is never spelled out in full');
+  is(Math.abs(listening.heightAfter - listening.heightBefore) < 2,
+     'revealing letters does not move the page');
+
+  /* A word too short to hint keeps the slot out of the way entirely. */
+  const tiny = await page.evaluate(() => {
+    quiz.hintLetters = 0;
+    return letterHintHTML({ letterHint: true, answer: 'a' }) === '';
+  });
+  is(tiny, 'a word with no letters to spare offers no hint button at all');
+
+  /* The question header used to print the part of speech twice. */
+  const header = await page.evaluate(() => {
+    Store.wipe();
+    quizSetup.scope = 'all'; quizSetup.deckId = '';
+    const pool = practicePool(null, 'all');
+    quiz = newQuiz('mc-meaning', buildQuestions('mc-meaning', pool, 1, { cards: pool.slice(0, 1) }));
+    render('practice');
+    const top = document.querySelector('#view-practice .fc-top');
+    return { texts: [...top.children].map(e => e.textContent.trim()).filter(Boolean),
+             pos: quiz.items[0].pos };
+  });
+  is(header.texts.filter(t => t === header.pos).length === 1,
+     `the question header names the part of speech once (${header.texts.join(' · ')})`);
+  await page.evaluate(() => { quiz = null; go('dashboard', {}); });
 
   /* ------------------------------------------------------------------ *
      9. Practice.
