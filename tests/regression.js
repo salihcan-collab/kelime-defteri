@@ -552,9 +552,11 @@ const head = (s) => console.log('\n— ' + s + ' —');
     st.version = 1;
     delete st.starterRevision;
     localStorage.setItem('lexio.v1', JSON.stringify(st));
-    return { words: st.cards.length, workOutId: wo.id };
+    return { words: st.cards.length, workOutId: wo.id,
+             objects: st.cards.filter(c => c.term === 'object').length };
   });
-  is(built.words === 66, `a schema-1 collection has ${built.words} words and no object`);
+  is(built.words < seedSize && built.objects === 0,
+     `a schema-1 collection has ${built.words} words of today's ${seedSize}, and no object`);
 
   await page.reload();
   await page.waitForTimeout(900);
@@ -614,11 +616,12 @@ const head = (s) => console.log('\n— ' + s + ' —');
   const stranded = await page.evaluate(() => ({
     objects: Store.sensesOf('object').length,
     workOut: Store.sensesOf('work out').length,
-    revision: Store.state.starterRevision
+    revision: Store.state.starterRevision,
+    expected: STARTER_REVISION
   }));
   is(stranded.objects === 3 && stranded.workOut === 3,
      'a collection already stamped with the current schema still receives the content');
-  is(stranded.revision === 1, 'and is marked so it is not upgraded twice');
+  is(stranded.revision === stranded.expected, 'and is marked so it is not upgraded twice');
 
   /* And the button that exists so no collection can ever be stranded again. */
   const manual = await page.evaluate(() => {
@@ -713,11 +716,215 @@ const head = (s) => console.log('\n— ' + s + ' —');
   });
   is(backShape.main.join(',') === 'Meaning,Example,Translation',
      `the answer is still three blocks (${backShape.main.join(', ')})`);
-  is(backShape.extras.join(',') === 'Goes with,Related,Your note',
-     'the phrases, related words and your note move below into one strip');
+  is(backShape.extras.join(',') === 'Collocations,Related,Your note',
+     `everything else moves below into one strip (${backShape.extras.join(', ')})`);
   is(backShape.columns === 2, 'that strip uses two columns rather than stacking');
   is(backShape.separated !== '0px', 'and is separated from the answer by a rule');
   await page.evaluate(() => { session = null; Store.wipe(); Store.saveNow(); });
+
+  /* ------------------------------------------------------------------ *
+     8f. Word families.
+
+     analyse / analysis / analytical / analytically are one word in four
+     shapes. No member is the head: the family is whatever set the family
+     links join up, followed in both directions and through as many hops as
+     it takes, so linking a new word to any one member is enough.
+   * ------------------------------------------------------------------ */
+  head('word families');
+  const fam = await page.evaluate(() => {
+    Store.wipe();
+    const of = (t) => {
+      const c = Store.state.cards.find(x => Store.headKey(x.term) === t);
+      return c ? Store.familyOf(c).map(m => m.term).sort() : null;
+    };
+    return {
+      analyse: of('analyse'),
+      analytically: of('analytically'),      /* two hops from analysis */
+      reliable: of('reliable'),              /* never links out itself */
+      significant: of('significant'),
+      lonely: of('borrow'),
+      name: Store.familyName(Store.familyOf(Store.state.cards.find(c => c.term === 'analyse'))
+              .concat([{ term: 'analyse' }]))
+    };
+  });
+  is(fam.analyse.join(',') === 'analysis,analytical,analytically',
+     `analyse sees its whole family (${fam.analyse.join(', ')})`);
+  is(fam.analytically.join(',') === 'analyse,analysis,analytical',
+     'and every member sees the same family, whichever one you look at');
+  is(fam.reliable.join(',') === 'reliability,reliably,rely',
+     `a word that declares nothing still has its family (${fam.reliable.join(', ')})`);
+  is(fam.significant.join(',') === 'significance,significantly', 'significant has its two forms');
+  is(fam.lonely.length === 0, 'a word with no family has none');
+  is(fam.name === 'analy-', `the family name is derived from the shared stem ("${fam.name}")`);
+
+  /* Senses of one word are not family, and a family link survives a member
+     being deleted the same way a synonym does. */
+  const famEdges = await page.evaluate(() => {
+    Store.wipe();
+    const obj = Store.state.cards.find(c => c.term === 'object');
+    const sensesAsFamily = Store.familyOf(obj).length;
+    const analysis = Store.state.cards.find(c => c.term === 'analysis');
+    Store.deleteCard(analysis.id);
+    const analyse = Store.state.cards.find(c => c.term === 'analyse');
+    const after = Store.familyOf(analyse);
+    return {
+      sensesAsFamily: sensesAsFamily,
+      stillWhole: after.map(m => m.term).sort(),
+      missingMarked: after.filter(m => m.missing).map(m => m.term)
+    };
+  });
+  is(famEdges.sensesAsFamily === 0, 'two senses of one word are senses, not a family');
+  is(famEdges.stillWhole.join(',') === 'analysis,analytical,analytically',
+     'deleting a member does not break the family apart');
+  is(famEdges.missingMarked.join(',') === 'analysis',
+     'the deleted member is shown as one you no longer have');
+
+  /* ------------------------------------------------------------------ *
+     8g. What the card shows, and when.
+   * ------------------------------------------------------------------ */
+  head('the flashcard says what it should, when it should');
+  const cardStates = await page.evaluate(async () => {
+    session = null;
+    Store.wipe();
+    Store.state.settings.studyDirection = 'term-first';
+    Store.state.settings.showExampleOnFront = false;
+    Store.state.settings.showExtras = true;
+    /* work out: three senses that share a part of speech, so only the
+       sentence can say which one is being asked. */
+    Store.state.cards = Store.sensesOf('work out');
+    Store.saveNow();
+    go('study', {});
+    startSession(null, false);
+    const v = document.getElementById('view-study');
+    const front = {
+      sense: !!v.querySelector('.fc-sense'),
+      example: !!v.querySelector('.fc-example'),
+      posChips: v.querySelectorAll('.fc-top .chip.pos').length
+    };
+    revealCard();
+    const back = {
+      sense: (v.querySelector('.fc-sense') || {}).textContent,
+      posChips: v.querySelectorAll('.chip.pos').length
+    };
+    return { front: front, back: back };
+  });
+  is(!cardStates.front.sense, 'the sense label is not on the front — it would be the answer');
+  is(cardStates.front.example, 'but the example is, because the senses share a part of speech');
+  is(/^\(.+\)$/.test(cardStates.back.sense || ''),
+     `turning the card puts the sense beside the word ${cardStates.back.sense}`);
+  is(cardStates.back.posChips === 1, 'and the part of speech appears once, not twice');
+
+  /* The sentence forced onto the front must not then be repeated below it. */
+  const noEcho = await page.evaluate(() => {
+    const v = document.getElementById('view-study');
+    const blocks = [...v.querySelectorAll('.fc-block .k')].map(x => x.textContent);
+    const sentences = v.querySelectorAll('.fc-example').length;
+    return { blocks: blocks, sentences: sentences };
+  });
+  is(noEcho.sentences === 1,
+     `the sentence is printed once, not twice (${noEcho.sentences})`);
+  is(noEcho.blocks.indexOf('Example') === -1,
+     `and the back drops the block the front already covers (${noEcho.blocks.join(', ')})`);
+
+  const symbols = await page.evaluate(() => {
+    Store.wipe();
+    const c = Store.state.cards.find(x => x.term === 'significant');
+    const html = relationChips(c);
+    return { syn: html.indexOf('\u2248') !== -1, ant: html.indexOf('\u2260') !== -1,
+             oldArrow: html.indexOf('\u2194') !== -1 };
+  });
+  is(symbols.syn && symbols.ant && !symbols.oldArrow, 'a synonym is ≈ and an opposite is ≠');
+
+  const plain = await page.evaluate(() => {
+    Store.wipe();
+    const c = Store.state.cards.find(x => x.term === 'significant');
+    return collocationList(c).indexOf('<b>') === -1;
+  });
+  is(plain, 'the collocations are listed without emphasis');
+
+  /* The switch that turns the whole strip off, reachable during a session. */
+  const toggled = await page.evaluate(async () => {
+    session = null;
+    Store.wipe();
+    const c = Store.state.cards.find(x => x.term === 'significant');
+    Store.state.cards = [c];
+    Store.state.settings.showExtras = true;
+    Store.saveNow();
+    go('study', {});
+    startSession(null, false);
+    revealCard();
+    const v = document.getElementById('view-study');
+    const withExtras = !!v.querySelector('.fc-extras');
+    const btn = v.querySelector('[data-act="extras"]');
+    const onBefore = btn.classList.contains('on');
+    btn.click();
+    await new Promise(r => setTimeout(r, 150));
+    const v2 = document.getElementById('view-study');
+    return {
+      withExtras: withExtras, onBefore: onBefore,
+      withoutExtras: !!v2.querySelector('.fc-extras'),
+      onAfter: v2.querySelector('[data-act="extras"]').classList.contains('on'),
+      stillRevealed: !!v2.querySelector('.fc-block'),
+      saved: Store.state.settings.showExtras
+    };
+  });
+  is(toggled.withExtras && toggled.onBefore, 'the extras strip is on to begin with');
+  is(!toggled.withoutExtras && !toggled.onAfter, 'the switch turns it off mid-session');
+  is(toggled.stillRevealed, 'and does not take you off the card you were on');
+  is(toggled.saved === false, 'the choice is remembered');
+  await page.evaluate(() => { Store.state.settings.showExtras = true; Store.saveNow(); session = null; });
+
+  /* Space answers Good; the button has to say so. */
+  const defaultKey = await page.evaluate(async () => {
+    session = null;
+    Store.wipe();
+    go('study', {});
+    startSession(null, false);
+    revealCard();
+    const v = document.getElementById('view-study');
+    const good = v.querySelector('.rate[data-rate="3"]');
+    const others = [...v.querySelectorAll('.rate')].filter(b => b.dataset.rate !== '3');
+    const before = Store.card(currentCard().id).srs.reps;
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+    await new Promise(r => setTimeout(r, 150));
+    return {
+      marked: good.classList.contains('is-default'),
+      saysSo: /space/i.test(good.textContent),
+      othersQuiet: others.every(b => !b.classList.contains('is-default') && !/space/i.test(b.textContent)),
+      reps: before
+    };
+  });
+  is(defaultKey.marked && defaultKey.saysSo, 'the Good button is marked as what Space gives you');
+  is(defaultKey.othersQuiet, 'and the other three are not');
+  await page.evaluate(() => { session = null; Store.wipe(); Store.saveNow(); });
+
+  /* ------------------------------------------------------------------ *
+     8h. Category is gone.
+   * ------------------------------------------------------------------ */
+  head('category removed');
+  await page.evaluate(() => { Store.wipe(); Store.saveNow(); go('browse', {}); });
+  await page.waitForTimeout(300);
+  const noCat = await page.evaluate(() => ({
+    filter: !document.getElementById('bCat'),
+    column: [...document.querySelectorAll('#view-browse .table th')].map(t => t.textContent),
+    editorField: null
+  }));
+  is(noCat.filter, 'the browse filter is gone');
+  is(noCat.column.indexOf('Category') === -1,
+     `the word list no longer has a Category column (${noCat.column.filter(Boolean).join(', ')})`);
+  await page.click('#view-browse [data-act="add"]');
+  await page.waitForTimeout(250);
+  const editorHasCat = await page.evaluate(() => !!document.getElementById('cCat'));
+  is(!editorHasCat, 'and the editor no longer asks for one');
+  await page.evaluate(() => closeModal());
+  await page.waitForTimeout(150);
+  await page.evaluate(() => go('stats', {}));
+  await page.waitForTimeout(350);
+  const statsPanel = await page.evaluate(() =>
+    [...document.querySelectorAll('#view-stats h2')].map(h => h.textContent));
+  is(statsPanel.indexOf('By category') === -1 && statsPanel.indexOf('By part of speech') !== -1,
+     'Progress groups by part of speech instead');
+  await page.evaluate(() => go('dashboard', {}));
 
   /* ------------------------------------------------------------------ *
      9. Practice.

@@ -33,6 +33,7 @@ const Store = {
         reviewPerDay: 120,
         studyDirection: 'term-first',   // term-first | translation-first | mixed
         showExampleOnFront: false,
+        showExtras: true,               // collocations, relations and notes on the card back
         autoSpeak: false,
         quizAffectsSrs: true,
         roundPercent: 20,               // share of the available words used in a practice round
@@ -327,14 +328,72 @@ const Store = {
       seen[key] = 1;
       out.push({ kind: kind, text: text, card: this.cardByTerm(text, card.id), via: from || null });
     };
-    (card.related || []).forEach(r => push(r.kind, r.text, null));
+    /* Family links are followed separately, by familyOf — a family is a whole
+       set, not a list of one-to-one links. */
+    (card.related || []).forEach(r => { if (r.kind !== 'family') push(r.kind, r.text, null); });
     this.state.cards.forEach(other => {
       if (other.id === card.id) return;
       (other.related || []).forEach(r => {
+        if (r.kind === 'family') return;
         if (this.headKey(r.text) === this.headKey(card.term)) push(r.kind, other.term, other.id);
       });
     });
     return out;
+  },
+
+  /* A word family — analyse, analysis, analytical, analytically — is the set of
+     words joined by family links, followed in every direction and through as
+     many hops as it takes. Nothing is a "head": whichever member you look at,
+     you see the same family, and adding a member reorders nothing. Because it
+     is the connected set that counts, linking each new word to any one member
+     is enough.
+
+     Cards that merely share a spelling are senses of one word, not family, so
+     they are left out. */
+  familyOf(card) {
+    if (!card) return [];
+    const key = (t) => this.headKey(t);
+    const self = key(card.term);
+    const byTerm = {};
+    this.state.cards.forEach(c => { (byTerm[key(c.term)] = byTerm[key(c.term)] || []).push(c); });
+
+    const reached = {}; reached[self] = 1;
+    const queue = [self];
+    while (queue.length) {
+      const term = queue.shift();
+      const step = (t) => { const k = key(t); if (t && !reached[k]) { reached[k] = 1; queue.push(k); } };
+      (byTerm[term] || []).forEach(c =>
+        (c.related || []).forEach(r => { if (r.kind === 'family') step(r.text); }));
+      this.state.cards.forEach(other =>
+        (other.related || []).forEach(r => {
+          if (r.kind === 'family' && key(r.text) === term) step(other.term);
+        }));
+    }
+
+    /* One entry per word, the senses of a member collapsed into it. */
+    const out = [];
+    Object.keys(reached).forEach(k => {
+      if (k === self) return;
+      const cards = byTerm[k];
+      if (cards && cards.length) out.push(cards[0]);
+      else out.push({ id: null, term: k, pos: '', missing: true });
+    });
+    return out.sort((a, b) => a.term.localeCompare(b.term));
+  },
+
+  /* What the family is called: the stem its members share, when they share
+     enough of one. Derived, never stored — a name that is computed cannot go
+     stale when a member is added or removed. */
+  familyName(members) {
+    const terms = members.map(m => this.headKey(m.term)).filter(Boolean).sort();
+    if (!terms.length) return '';
+    let prefix = terms[0];
+    terms.forEach(t => {
+      let i = 0;
+      while (i < prefix.length && i < t.length && prefix[i] === t[i]) i++;
+      prefix = prefix.slice(0, i);
+    });
+    return prefix.length >= 3 ? prefix + '-' : terms[0];
   },
 
   cardsOf(deckId) {
@@ -577,11 +636,6 @@ const Store = {
     return Math.round(100 * rows.filter(r => r.correct).length / rows.length);
   },
 
-  categories() {
-    const set = new Set();
-    this.state.cards.forEach(c => { if (c.category) set.add(c.category); });
-    return Array.from(set).sort();
-  },
 
   /* ---------- import / export ---------------------------------------------- */
   exportJSON() {

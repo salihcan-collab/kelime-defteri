@@ -101,16 +101,22 @@ kelime sürdürülebilir bir tempodur.
 - **Meaning** — İngilizce tanım
 - **Example sentence** — kelimeyi içeren doğal bir örnek cümle
 - **Translation** — Türkçe karşılığı
-- **Category** — konu etiketi (Work, Feelings, Travel…)
 - **Sense label** — kelimenin birden çok anlamı varsa hangisi olduğunu söyleyen kısa etiket
 - **Collocations** — kelimenin birlikte kullanıldığı kalıplar (`make a decision`)
 - **Synonyms / Antonyms** — eş ve zıt anlamlılar
+- **Word family** — aynı kelimenin diğer biçimleri (`analyse / analysis / analytical`)
 - **Personal note** — kendi hatırlatıcı notun (isteğe bağlı)
 
 Çalışma kartının arka yüzünde **anlam, örnek cümle ve çeviri** üstte durur; collocations,
-ilişkili kelimeler ve kendi notun bir çizginin altında, daha küçük punto ve iki sütun
-hâlinde toplanır. Böylece cevap cevap gibi görünür, geri kalanı da kartı uzatmadan yerini
-alır.
+ilişkili kelimeler, word family ve kendi notun bir çizginin altında, daha küçük punto ve iki
+sütun hâlinde toplanır. Böylece cevap cevap gibi görünür, geri kalanı da kartı uzatmadan
+yerini alır. Bu alt bölümü tamamen kapatmak istersen çalışma ekranının üst çubuğundaki
+**Extras** düğmesine bas — çalışmanın ortasında da açıp kapatabilirsin, tercih kaydedilir.
+
+Kelimenin birden çok anlamı varsa **anlam etiketi kart çevrilince** kelimenin yanında
+parantez içinde belirir (`turn down (to refuse)`); ön yüzde durmaz, çünkü etiketin kendisi
+cevabın yarısıdır. Ön yüzde ayırt ediciliği sözcük türü sağlar; anlamlar aynı türdeyse
+(üç `work out` gibi) örnek cümle ayar ne olursa olsun ön yüze çıkar.
 
 Örnek cümlenin kelimeyi **içermesi** önemlidir: "Fill in the blank" alıştırması cümledeki
 kelimeyi boşluğa çevirerek soru üretir.
@@ -157,7 +163,7 @@ yanlışlıkla kopya oluşturamazsın, ama bilerek ikinci bir anlam eklemek tek 
 
 ### Collocations ve ilişkili kelimeler
 
-Bu üç alan — collocations, synonyms/antonyms ve kişisel not — kelime kartı formunda
+Bu alanlar — collocations, synonyms/antonyms, word family ve kişisel not — kelime kartı formunda
 **More fields** başlığı altında katlanmış durur; çoğu kelimede boş kaldıkları için form
 doldurduğun beş alandan ibaret kalır. Bir kelimede zaten doluysalar bölüm kendiliğinden
 açılır ve başlığın yanında kaç şey olduğu yazar.
@@ -169,6 +175,21 @@ açılır ve başlığın yanında kaç şey olduğu yazar.
 - İlişki tek yönde yazılır ama iki yönde çalışır: `undermine` için "weaken" yazdığında,
   `weaken` kartı da `undermine`'ı gösterir. Aynı bilgi iki kez saklanmaz, bu yüzden bir
   kelimeyi sildiğinde diğerinde kırık bir bağlantı kalmaz — sadece düz metne döner.
+
+### Word family
+
+`analyse / analysis / analytical / analytically` aynı kelimenin dört biçimidir. Uygulamada
+bir ailenin **başı yoktur**: aile, family bağlarının birleştirdiği kümedir. Bağlar her iki
+yönde ve kaç adım gerekiyorsa o kadar takip edilir, bu yüzden **yeni bir kelimeyi ailenin
+herhangi bir üyesine bağlaman yeter** — geri kalanı kendiliğinden bulunur. Hangi üyeden
+bakarsan bak aynı aileyi görürsün ve yeni üye eklemek hiçbir şeyi yeniden düzenlemez.
+
+Ailenin adı da saklanmaz, üyelerin ortak kökünden hesaplanır (`analy-`) — hesaplanan bir ad
+üye eklenince eskimez. Aynı yazılışa sahip kartlar (bir kelimenin farklı anlamları) aileye
+dahil edilmez; onlar anlamdır, biçim değil. Sildiğin bir üye ailede soluk renkte durmaya
+devam eder, yani "bu biçim var ama bende yok" bilgisi kaybolmaz.
+
+Başlangıç destelerinde üç örnek aile var: `reliable`, `significant` ve `analyse`.
 
 Yeni kelime eklemek için herhangi bir ekranda **N** tuşuna basman yeterli.
 
@@ -311,7 +332,7 @@ Yine de bu dosyaları başkasıyla paylaşacaksan anahtarını önce Settings'te
 ## 9. Kelime aktarma
 
 - **CSV içe aktarma:** Browse → **Import**. Sütun sırası:
-  `term, part of speech, sense, definition, example, translation, category, collocations,
+  `term, part of speech, sense, definition, example, translation, collocations,
   synonyms, antonyms`. Başlık satırı varsa otomatik algılanır; başlık yoksa eski altı
   sütunluk sıra (`term, part of speech, definition, example, translation, category`)
   geçerlidir, yani eski dosyaların aynen çalışmaya devam eder. Collocations, synonyms ve
@@ -333,8 +354,8 @@ tam olur).
 
 | Tuş | İşlev |
 |---|---|
-| `Space` | Cevabı göster / devam et |
-| `1` `2` `3` `4` | Kartı değerlendir veya test şıkkını seç |
+| `Space` `Enter` | Kart kapalıysa cevabı gösterir, açıksa **Good** verir (yani `3`) |
+| `1` `2` `3` `4` | Kartı değerlendir (again / hard / good / easy) veya test şıkkını seç |
 | `S` | Kelimeyi sesli oku |
 | `U` | Son cevabı geri al |
 | `N` | Yeni kelime ekle |
@@ -343,6 +364,9 @@ tam olur).
 | `PageUp` `PageDown` | Sayfayı yukarı/aşağı kaydır |
 | `Home` `End` | Sayfanın başına/sonuna git |
 | `↑` `↓` | Satır satır kaydır |
+
+`Space` ve `Enter` her zaman **Good** verir. Bunu tahmin etmek zorunda kalmayasın diye Good
+düğmesinin çerçevesi vurgulu ve tuş etiketinde `3 or space` yazıyor.
 
 Uzun sayfalarda sağda kaydırma çubuğu çıkar; aşağı indiğinde sağ altta
 başa dönmek için yuvarlak bir düğme belirir.

@@ -49,6 +49,12 @@ const STARTER_DECKS = [
     description: 'High-frequency words for daily conversation, work and small talk (B1).',
     cards: [
       { term:'reliable', pos:'adjective', definition:'Able to be trusted to do what is expected or promised.', example:'She is the most reliable person on the team — she never misses a deadline.', translation:'güvenilir', category:'Character' },
+      { term:'rely', pos:'verb', definition:'To depend on someone or something to do what is needed.', example:'You can rely on her to finish the job on time.', translation:'güvenmek, bel bağlamak', category:'Character',
+        collocations:['rely on someone','rely heavily on'], related:[{kind:'family',text:'reliable'},{kind:'syn',text:'depend on'}] },
+      { term:'reliability', pos:'noun', definition:'How far something can be trusted to work every time.', example:'The reliability of the data was questioned.', translation:'güvenilirlik', category:'Character',
+        related:[{kind:'family',text:'reliable'}] },
+      { term:'reliably', pos:'adverb', definition:'In a way that can be trusted to happen every time.', example:'The train reliably arrives at seven.', translation:'güvenilir biçimde', category:'Character',
+        related:[{kind:'family',text:'reliable'}] },
       { term:'afford', pos:'verb', definition:'To have enough money or time for something.', example:'We cannot afford a new car this year.', translation:'(parasal olarak) gücü yetmek', category:'Money' },
       { term:'commute', pos:'noun', definition:'The regular journey between home and work.', example:'My commute takes about forty minutes each way.', translation:'işe gidiş-geliş yolculuğu', category:'Work' },
       { term:'overwhelmed', pos:'adjective', definition:'Feeling unable to cope because there is too much to deal with.', example:'I felt completely overwhelmed by the number of emails.', translation:'bunalmış, altında ezilmiş', category:'Feelings' },
@@ -99,6 +105,18 @@ const STARTER_DECKS = [
       { term:'considerable', pos:'adjective', definition:'Large in size, amount or importance.', example:'The project required a considerable amount of time.', translation:'hatırı sayılır, epeyce', category:'Quantity' },
       { term:'inevitable', pos:'adjective', definition:'Certain to happen and impossible to avoid.', example:'Some delay was inevitable given the scale of the work.', translation:'kaçınılmaz', category:'Description' },
       { term:'perspective', pos:'noun', definition:'A particular way of thinking about something.', example:'From an economic perspective, the decision makes sense.', translation:'bakış açısı', category:'Opinion' },
+      { term:'analyse', pos:'verb', definition:'To examine something in detail in order to understand it.', example:'The team analysed the results over three months.', translation:'çözümlemek, incelemek', category:'Analysis',
+        collocations:['analyse the data','analyse the results'], related:[{kind:'family',text:'analysis'}] },
+      { term:'analysis', pos:'noun', definition:'A detailed examination of something.', example:'Her analysis of the survey was thorough.', translation:'analiz, çözümleme', category:'Analysis',
+        collocations:['carry out an analysis','a detailed analysis'], related:[{kind:'family',text:'analyse'}] },
+      { term:'analytical', pos:'adjective', definition:'Using careful, step-by-step examination.', example:'He has an analytical mind and spots patterns quickly.', translation:'analitik, çözümleyici', category:'Analysis',
+        related:[{kind:'family',text:'analyse'}] },
+      { term:'analytically', pos:'adverb', definition:'In a careful, step-by-step way.', example:'She approached the problem analytically.', translation:'analitik biçimde', category:'Analysis',
+        related:[{kind:'family',text:'analytical'}] },
+      { term:'significance', pos:'noun', definition:'The importance or meaning of something.', example:'They discussed the significance of the findings.', translation:'önem, anlam', category:'Analysis',
+        related:[{kind:'family',text:'significant'}] },
+      { term:'significantly', pos:'adverb', definition:'By an amount large enough to matter.', example:'Scores improved significantly after the change.', translation:'önemli ölçüde', category:'Analysis',
+        related:[{kind:'family',text:'significant'}] },
       { term:'undermine', pos:'verb', definition:'To weaken something gradually.', example:'Repeated errors undermine the credibility of the study.', translation:'zayıflatmak, baltalamak', category:'Analysis',
         collocations:['undermine confidence','undermine credibility','undermine an argument'], related:[{kind:'syn',text:'weaken'},{kind:'ant',text:'strengthen'}] },
       { term:'object', pos:'noun', sense:'a thing', definition:'A thing that can be seen or touched.', example:'The telescope revealed a faint object near the horizon.', translation:'nesne, cisim', category:'Science',
@@ -172,7 +190,7 @@ const STARTER_DECKS = [
    content change, and then a content upgrade written later could never reach the
    collections that release had already stamped. This counter only ever moves when
    the words themselves move. */
-const STARTER_REVISION = 1;
+const STARTER_REVISION = 2;
 
 const STARTER_UPGRADES = {
   /* Cards that used to squeeze two or three meanings into one definition.
@@ -193,5 +211,18 @@ const STARTER_UPGRADES = {
 
   /* Words the starter decks did not contain at all. Added only to a starter
      deck that is still there and does not already have the word. */
-  additions: [{ deck: 'Academic & Formal English', term: 'object' }]
+  additions: [
+    { deck: 'Academic & Formal English', term: 'object' },
+    /* Three word families, each hung on a word the starter decks already had,
+       so an existing collection sees its own words gain a family. */
+    { deck: 'Everyday Essentials', term: 'rely' },
+    { deck: 'Everyday Essentials', term: 'reliability' },
+    { deck: 'Everyday Essentials', term: 'reliably' },
+    { deck: 'Academic & Formal English', term: 'analyse' },
+    { deck: 'Academic & Formal English', term: 'analysis' },
+    { deck: 'Academic & Formal English', term: 'analytical' },
+    { deck: 'Academic & Formal English', term: 'analytically' },
+    { deck: 'Academic & Formal English', term: 'significance' },
+    { deck: 'Academic & Formal English', term: 'significantly' }
+  ]
 };

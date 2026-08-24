@@ -172,7 +172,7 @@ function refreshChrome() {
 /* How well the word is known. Every card has exactly one level, and it says
    nothing about whether a review is due — that is shown separately, because
    a Learning card can be due or not, and so can a Mastered one. The coloured
-   dot also keeps it apart from a category named "Learning" or "New". */
+   dot also keeps the level apart from anything else on the row. */
 const LEVELS = {
   new:      { label: 'New',      cls: 'new' },
   learning: { label: 'Learning', cls: 'learning' },
@@ -198,9 +198,10 @@ function splitList(v)  { return String(v || '').split(/[,;]/).map(x => x.trim())
 function relText(card, kind) {
   return (card.related || []).filter(r => r.kind === kind).map(r => r.text).join(', ');
 }
-function parseRelations(synValue, antValue) {
+function parseRelations(synValue, antValue, familyValue) {
   return splitList(synValue).map(t => ({ kind: 'syn', text: t }))
-    .concat(splitList(antValue).map(t => ({ kind: 'ant', text: t })));
+    .concat(splitList(antValue).map(t => ({ kind: 'ant', text: t })))
+    .concat(splitList(familyValue).map(t => ({ kind: 'family', text: t })));
 }
 
 /* The short label that tells one sense from another. Falls back to the part of
@@ -228,6 +229,7 @@ function senseCountChip(card) {
 }
 
 const REL_LABEL = { syn: 'synonym', ant: 'opposite' };
+const REL_MARK  = { syn: '\u2248', ant: '\u2260' };   /* ≈ means like this, ≠ means not this */
 
 function relationChips(card) {
   const rels = Store.relationsFor(card);
@@ -239,7 +241,7 @@ function relationChips(card) {
     '<span class="chip rel ' + r.kind + (r.card ? ' known' : '') + '"' +
       ' title="' + esc(REL_LABEL[r.kind] || r.kind) +
       (r.card ? ' — saved in your collection' : ' — not saved as a word yet') + '">' +
-      (r.kind === 'ant' ? '↔ ' : '≈ ') + esc(r.text) +
+      (REL_MARK[r.kind] || '') + ' ' + esc(r.text) +
     '</span>').join('') + '</div>';
 }
 
@@ -248,10 +250,13 @@ function relationChips(card) {
    crowd the card, so they share one quieter strip below a hairline and sit side
    by side while there is width for it. */
 function cardExtras(card) {
+  if (Store.state.settings.showExtras === false) return '';
   const rels = Store.relationsFor(card);
+  const family = familyList(card);
   const parts = [];
-  if ((card.collocations || []).length) parts.push(['Goes with', collocationList(card)]);
+  if ((card.collocations || []).length) parts.push(['Collocations', collocationList(card)]);
   if (rels.length) parts.push(['Related', relationChips(card)]);
+  if (family) parts.push(['Word family', family]);
   if (card.notes) parts.push(['Your note', '<p class="fx-note">' + esc(card.notes) + '</p>']);
   if (!parts.length) return '';
   /* One thing on its own gets the full width; two or three share columns. */
@@ -259,11 +264,29 @@ function cardExtras(card) {
     '<div class="fx"><div class="fx-k">' + p[0] + '</div>' + p[1] + '</div>').join('') + '</div>';
 }
 
+/* The rest of the family, each with the part of speech that tells it apart —
+   seeing analyse, analysis, analytical together is most of the point. */
+function familyList(card) {
+  const members = Store.familyOf(card);
+  if (!members.length) return '';
+  return '<div class="fam-row">' + members.map(m =>
+    '<span class="fam' + (m.missing ? ' fam-missing' : '') + '">' + esc(m.term) +
+      (m.pos ? '<i>' + esc(shortPos(m.pos)) + '</i>' : '') +
+    '</span>').join('') + '</div>';
+}
+
+const POS_SHORT = { noun: 'n', verb: 'v', adjective: 'adj', adverb: 'adv',
+                    'phrasal verb': 'phr v', idiom: 'idiom', preposition: 'prep',
+                    conjunction: 'conj', pronoun: 'pron', determiner: 'det',
+                    interjection: 'interj', phrase: 'phr' };
+function shortPos(pos) { return POS_SHORT[pos] || pos; }
+
 function collocationList(card) {
   const list = card.collocations || [];
   if (!list.length) return '';
-  return '<ul class="colloc">' + list.map(c =>
-    '<li>' + highlightTerm(c, card.term) + '</li>').join('') + '</ul>';
+  /* No emphasis inside the phrases: the word is the title of the card, and
+     bolding it three more times just makes the list noisy. */
+  return '<ul class="colloc">' + list.map(c => '<li>' + esc(c) + '</li>').join('') + '</ul>';
 }
 function dueText(card) {
   if (card.srs.state === 'new') return 'not started';
@@ -641,7 +664,7 @@ function cardTable(cards) {
   return '<table class="table"><thead><tr>' +
     '<th class="col-word">Word</th><th class="col-type">Type</th>' +
     '<th class="col-meaning">Meaning</th><th class="col-translation">Translation</th>' +
-    '<th class="col-category">Category</th><th class="col-level">Level</th>' +
+    '<th class="col-level">Level</th>' +
     '<th class="col-next">Next review</th><th class="col-actions"></th>' +
     '</tr></thead><tbody>' +
     cards.map(c =>
@@ -650,7 +673,6 @@ function cardTable(cards) {
         '<td class="col-type">' + (c.pos ? '<span class="chip pos">' + esc(c.pos) + '</span>' : '') + '</td>' +
         '<td class="muted col-meaning"><span class="clamp2">' + esc(c.definition || '') + '</span></td>' +
         '<td class="col-translation"><span class="clamp2">' + esc(c.translation) + '</span></td>' +
-        '<td class="col-category">' + (c.category ? '<span class="chip cat">' + esc(c.category) + '</span>' : '') + '</td>' +
         '<td class="col-level">' + levelChip(c) + '</td>' +
         '<td class="col-next">' + dueCell(c) + '</td>' +
         '<td class="col-actions"><div class="tr-actions">' +
@@ -724,7 +746,6 @@ function extrasFilled(card) {
 
 function cardEditor(card, presetDeck) {
   const isNew = !card;
-  const cats = Store.categories();
   openModal({
     wide: true,
     title: isNew ? 'Add a word' : 'Edit word',
@@ -754,12 +775,9 @@ function cardEditor(card, presetDeck) {
       '<div class="inline-fields">' +
         '<div class="field"><label>Translation</label>' +
           '<input type="text" id="cTr" value="' + esc(card ? card.translation : '') + '" placeholder="Turkish meaning"></div>' +
-        '<div class="field"><label>Category</label>' +
-          '<input type="text" id="cCat" list="catList" value="' + esc(card ? card.category : '') + '" placeholder="e.g. Work">' +
-          '<datalist id="catList">' + cats.map(c => '<option value="' + esc(c) + '">').join('') + '</datalist></div>' +
+        '<div class="field"><label>Deck</label><select id="cDeck">' +
+          deckOptions(card ? card.deckId : (presetDeck || (Store.state.decks[0] || {}).id)) + '</select></div>' +
       '</div>' +
-      '<div class="field deck-field"><label>Deck</label><select id="cDeck">' +
-        deckOptions(card ? card.deckId : (presetDeck || (Store.state.decks[0] || {}).id)) + '</select></div>' +
       /* Everything a word can have but most words do not. Folded away so the
          form stays the five fields you actually fill in, and opened on its own
          for a card that already carries something down here. */
@@ -778,6 +796,10 @@ function cardEditor(card, presetDeck) {
             '<div class="field"><label>Antonyms</label>' +
               '<input type="text" id="cAnt" value="' + esc(card ? relText(card, 'ant') : '') + '" placeholder="unreliable"></div>' +
           '</div>' +
+          '<div class="field"><label>Word family</label>' +
+            '<input type="text" id="cFam" value="' + esc(card ? relText(card, 'family') : '') + '" placeholder="analysis, analytical">' +
+            '<span class="help">Other forms of the same word. Naming one member is enough — ' +
+              'the whole family finds itself.</span></div>' +
           '<div id="relLinks"></div>' +
           '<div class="field"><label>Personal note</label>' +
             '<input type="text" id="cNote" value="' + esc(card ? card.notes : '') + '" placeholder="A memory hook, a false friend…"></div>' +
@@ -796,10 +818,10 @@ function cardEditor(card, presetDeck) {
       const read = () => ({
         term: $('#cTerm').value.trim(), pos: $('#cPos').value, definition: $('#cDef').value.trim(),
         example: $('#cEx').value.trim(), translation: $('#cTr').value.trim(),
-        category: $('#cCat').value.trim(), deckId: $('#cDeck').value, notes: $('#cNote').value.trim(),
+        deckId: $('#cDeck').value, notes: $('#cNote').value.trim(),
         sense: $('#cSense').value.trim(),
         collocations: splitLines($('#cColl').value),
-        related: parseRelations($('#cSyn').value, $('#cAnt').value)
+        related: parseRelations($('#cSyn').value, $('#cAnt').value, $('#cFam').value)
       });
       /* A card is only useful if it has the word, what kind of word it is and
          what it means — the drills need all three. */
@@ -906,7 +928,6 @@ function cardEditor(card, presetDeck) {
           if (r.definition) $('#cDef').value = r.definition;
           if (r.example) $('#cEx').value = r.example;
           if (r.translation) $('#cTr').value = r.translation;
-          if (r.category && !$('#cCat').value) $('#cCat').value = r.category;
           toast('Filled in by AI — check it before saving', 'ok');
         } catch (err) { toast(err.message, 'err'); }
         fill.disabled = false; fill.innerHTML = original;
@@ -933,7 +954,7 @@ function cardEditor(card, presetDeck) {
       /* Which synonyms and antonyms point at words you actually have. */
       const showLinks = () => {
         const draft = Object.assign({}, card || {},
-          { term: $('#cTerm').value.trim(), related: parseRelations($('#cSyn').value, $('#cAnt').value) });
+          { term: $('#cTerm').value.trim(), related: parseRelations($('#cSyn').value, $('#cAnt').value, $('#cFam').value) });
         const rels = Store.relationsFor(draft);
         const linked = rels.filter(r => r.card);
         $('#relLinks').innerHTML = rels.length
@@ -958,7 +979,7 @@ function cardEditor(card, presetDeck) {
         });
         t.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); const a = $('#aiFill'); if (a) a.click(); } };
       }
-      ['cSyn', 'cAnt'].forEach(id => { const el = $('#' + id); if (el) el.addEventListener('input', showLinks); });
+      ['cSyn', 'cAnt', 'cFam'].forEach(id => { const el = $('#' + id); if (el) el.addEventListener('input', showLinks); });
       checkSenses();
       showLinks();
     }
@@ -999,7 +1020,7 @@ function aiDeckDialog() {
           const deck = Store.addDeck({ name: cap(topic), emoji: '✨', description: 'Generated with AI · ' + $('#gLevel').value });
           cards.forEach(c => Store.addCard({
             deckId: deck.id, term: c.term, pos: c.pos, definition: c.definition,
-            example: c.example, translation: c.translation, category: c.category || cap(topic)
+            example: c.example, translation: c.translation
           }, true));
           Store.saveNow();
           closeModal(); toast('Created "' + deck.name + '" with ' + cards.length + ' words', 'ok');
@@ -1063,6 +1084,7 @@ function drawStudySetup(host) {
         '<div class="faint" style="margin-bottom:8px">Keyboard</div>' +
         '<div class="shortcut-row"><span>Reveal the answer</span><kbd>Space</kbd></div>' +
         '<div class="shortcut-row"><span>Rate: again / hard / good / easy</span><span><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> <kbd>4</kbd></span></div>' +
+        '<div class="shortcut-row"><span>Rate <b>Good</b> — the same keys again</span><span><kbd>Space</kbd> <kbd>Enter</kbd></span></div>' +
         '<div class="shortcut-row"><span>Hear the word</span><kbd>S</kbd></div>' +
         '<div class="shortcut-row"><span>Undo the last answer</span><kbd>U</kbd></div>' +
       '</div>' +
@@ -1132,17 +1154,28 @@ function drawStudyCard(host) {
   /* A translation is a word, so it gets the same weight as the English word it
      stands in for; a definition is a sentence and reads better one size down. */
   /* Asking "what does object mean?" is unanswerable while the word has three
-     meanings — the part of speech and the sense label are what make it a
-     question rather than a guess. They give away no meaning of their own. */
-  const senseCue = (!askTerm && Store.siblings(card).length)
-    ? '<div class="fc-sense">' + (card.pos ? '<span class="chip pos">' + esc(card.pos) + '</span>' : '') +
-      senseChip(card) + '</div>' : '';
+     meanings. The part of speech in the chip row above narrows it without
+     giving anything away — but when the senses share a part of speech, as the
+     three work outs do, only the sentence can tell them apart, so it comes
+     out whether or not the setting asks for it.
+
+     The sense label itself is a gloss — "to refuse" is most of the answer —
+     so it waits until the card is turned, and then sits beside the word
+     rather than on a line of its own. */
+  const siblings = Store.siblings(card);
+  const posDecides = siblings.every(sb => sb.pos !== card.pos);
+  const needsSentence = !askTerm && siblings.length && !posDecides && card.example;
+  const contextExample = (needsSentence && !s.showExampleOnFront)
+    ? '<p class="fc-example" style="margin-top:16px">' + highlightTerm(card.example, card.term) + '</p>' : '';
+
+  const termWithSense = (show) =>
+    esc(card.term) + (show && senseLabel(card) ? '<em class="fc-sense">(' + esc(senseLabel(card)) + ')</em>' : '');
 
   const front = !askTerm
     ? '<div class="row" style="gap:12px;align-items:center">' +
-        '<div class="fc-term">' + esc(card.term) + '</div>' +
+        '<div class="fc-term">' + termWithSense(session.revealed) + '</div>' +
         (TTS.ok ? '<button class="icon-btn tts-btn" data-act="say" title="Pronounce">' + ICONS.sound + '</button>' : '') +
-      '</div>' + senseCue + frontExample
+      '</div>' + contextExample + frontExample
     : dir === 'translation-first'
       ? '<div class="fc-term">' + esc(card.translation) + '</div>' + frontExample
       : '<div class="fc-prompt">' + esc(card.definition) + '</div>' + frontExample;
@@ -1151,14 +1184,18 @@ function drawStudyCard(host) {
     '<div class="fc-body">' +
       (askTerm
         ? '<div class="fc-block"><div class="k">Word</div><div class="row" style="gap:10px">' +
-            '<span class="fc-term" style="font-size:1.7rem">' + esc(card.term) + '</span>' +
+            '<span class="fc-term" style="font-size:1.7rem">' + termWithSense(true) + '</span>' +
             (TTS.ok ? '<button class="icon-btn tts-btn" data-act="say">' + ICONS.sound + '</button>' : '') +
           '</div></div>'
         : '') +
       /* Skip whatever was already on the front. */
       (card.definition && dir !== 'definition-first'
         ? '<div class="fc-block"><div class="k">Meaning</div><div class="v big">' + esc(card.definition) + '</div></div>' : '') +
-      (card.example ? '<div class="fc-block"><div class="k">Example</div><div class="v fc-example">' + highlightTerm(card.example, card.term) + '</div></div>' : '') +
+      /* Skip the sentence too when the front is already showing it in full —
+         a blanked-out one on the front is a different thing and still wants
+         the answer spelling it out below. */
+      (card.example && !(!askTerm && (s.showExampleOnFront || needsSentence))
+        ? '<div class="fc-block"><div class="k">Example</div><div class="v fc-example">' + highlightTerm(card.example, card.term) + '</div></div>' : '') +
       (card.translation && dir !== 'translation-first'
         ? '<div class="fc-block"><div class="k">Translation</div><div class="v">' + esc(card.translation) + '</div></div>' : '') +
       cardExtras(card) +
@@ -1172,6 +1209,9 @@ function drawStudyCard(host) {
         '<div class="bar" style="flex:1"><i style="width:' + progress + '%"></i></div>' +
         '<div class="counts"><span class="c-due">' + remaining + ' left</span>' +
           (session.ahead ? '<span class="c-new">ahead of schedule</span>' : '') + '</div>' +
+        '<button class="soft-btn tiny toggle-btn' + (s.showExtras === false ? '' : ' on') + '" data-act="extras" ' +
+          'title="Collocations, related words, word family and your notes on the back of the card">' +
+          '<span class="dot"></span>Extras</button>' +
         (session.undo && Store.canUndo() ? '<button class="soft-btn tiny" data-act="undo">Undo</button>' : '') +
       '</div>' +
 
@@ -1179,7 +1219,6 @@ function drawStudyCard(host) {
         '<div class="fc-top">' +
           levelChip(card) +
           (card.pos ? '<span class="chip pos">' + esc(card.pos) + '</span>' : '') +
-          (card.category ? '<span class="chip cat">' + esc(card.category) + '</span>' : '') +
           '<div class="spacer"></div>' +
           (deck ? '<span class="faint">' + esc(deck.emoji + ' ' + deck.name) + '</span>' : '') +
         '</div>' +
@@ -1205,6 +1244,10 @@ function drawStudyCard(host) {
   host.onclick = (e) => {
     if (e.target.closest('[data-act="say"]')) return TTS.speak(card.term);
     if (e.target.closest('[data-act="reveal"]')) return revealCard();
+    if (e.target.closest('[data-act="extras"]')) {
+      Store.state.settings.showExtras = Store.state.settings.showExtras === false;
+      Store.saveNow(); return render('study');
+    }
     if (e.target.closest('[data-act="quit"]')) return endSession();
     if (e.target.closest('[data-act="undo"]')) return undoAnswer();
     if (e.target.closest('[data-act="edit"]')) return cardEditor(card);
@@ -1213,9 +1256,14 @@ function drawStudyCard(host) {
   };
 }
 
+/* Space and Enter answer "Good" — that is the whole point of a one-key review,
+   but nothing on screen used to say so, and an answer you did not know you gave
+   is worse than no shortcut at all. */
 function rateBtn(n, label, delay, cls) {
-  return '<button class="rate ' + cls + '" data-rate="' + n + '">' +
-    '<span>' + label + '</span><small>' + delay + '</small><kbd>' + n + '</kbd></button>';
+  const isDefault = n === 3;
+  return '<button class="rate ' + cls + (isDefault ? ' is-default' : '') + '" data-rate="' + n + '">' +
+    '<span>' + label + '</span><small>' + delay + '</small>' +
+    '<kbd>' + n + (isDefault ? '<i>or space</i>' : '') + '</kbd></button>';
 }
 
 function revealCard() {
@@ -1649,7 +1697,7 @@ function questionCard(inner, item) {
       '<span class="chip">' + esc(item.question) + '</span>' +
       (item.pos ? '<span class="chip pos">' + esc(item.pos) + '</span>' : '') +
       '<div class="spacer"></div>' +
-      (c && c.category ? '<span class="faint">' + esc(c.category) + '</span>' : '') +
+      (c && c.pos ? '<span class="faint">' + esc(c.pos) + '</span>' : '') +
     '</div>' + inner + hintHTML(item) + '</div>';
 }
 
@@ -1970,16 +2018,14 @@ function drawQuizResults(host) {
 /* ==========================================================================
    Browse
    ========================================================================== */
-let browseState = { q: '', deck: '', status: '', category: '', sort: 'recent' };
+let browseState = { q: '', deck: '', status: '', sort: 'recent' };
 
 function renderBrowse(host) {
-  const cats = Store.categories();
   let rows = Store.state.cards.slice();
   const q = browseState.q.toLowerCase().trim();
   if (q) rows = rows.filter(c =>
-    (c.term + ' ' + c.definition + ' ' + c.translation + ' ' + c.example + ' ' + c.category).toLowerCase().indexOf(q) !== -1);
+    (c.term + ' ' + c.sense + ' ' + c.definition + ' ' + c.translation + ' ' + c.example).toLowerCase().indexOf(q) !== -1);
   if (browseState.deck) rows = rows.filter(c => c.deckId === browseState.deck);
-  if (browseState.category) rows = rows.filter(c => c.category === browseState.category);
   if (browseState.status) rows = rows.filter(c => {
     if (browseState.status === 'due') return isDueNow(c);
     if (browseState.status === 'later') return c.srs.state !== 'new' && !isDueNow(c);
@@ -2012,9 +2058,6 @@ function renderBrowse(host) {
             .map(o => '<option value="' + o[0] + '"' + (browseState.status === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') +
         '</optgroup>' +
       '</select>' +
-      '<select id="bCat"><option value="">Any category</option>' +
-        cats.map(c => '<option' + (browseState.category === c ? ' selected' : '') + '>' + esc(c) + '</option>').join('') +
-      '</select>' +
       '<select id="bSort">' +
         [['recent', 'Newest first'], ['alpha', 'A → Z'], ['due', 'Due date'], ['hard', 'Hardest first'], ['strong', 'Best known']]
           .map(o => '<option value="' + o[0] + '"' + (browseState.sort === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') +
@@ -2044,7 +2087,6 @@ function renderBrowse(host) {
   $('#bQ').oninput = (e) => { clearTimeout(t); const v = e.target.value; t = setTimeout(() => { browseState.q = v; render('browse'); const i = $('#bQ'); if (i) { i.focus(); i.setSelectionRange(v.length, v.length); } }, 220); };
   $('#bDeck').onchange   = (e) => { browseState.deck = e.target.value; render('browse'); };
   $('#bStatus').onchange = (e) => { browseState.status = e.target.value; render('browse'); };
-  $('#bCat').onchange    = (e) => { browseState.category = e.target.value; render('browse'); };
   $('#bSort').onchange   = (e) => { browseState.sort = e.target.value; render('browse'); };
 }
 
@@ -2068,9 +2110,11 @@ function renderStats(host) {
   const totalReviews = Object.values(Store.state.daily).reduce((a, d) => a + d.reviews, 0);
   const hardest = all.filter(c => c.stats.wrong > 0)
     .sort((a, b) => (b.stats.wrong + b.srs.lapses * 2) - (a.stats.wrong + a.srs.lapses * 2)).slice(0, 8);
-  const byCat = {};
-  all.forEach(c => { const k = c.category || 'Uncategorised'; (byCat[k] = byCat[k] || { n: 0, s: 0 }); byCat[k].n++; byCat[k].s += SRS.strength(c.srs); });
-  const cats = Object.keys(byCat).sort((a, b) => byCat[b].n - byCat[a].n).slice(0, 10);
+  /* Grouped by what kind of word it is — the one grouping every card carries,
+     and the one that says something about where the effort is going. */
+  const byPos = {};
+  all.forEach(c => { const k = c.pos || 'unspecified'; (byPos[k] = byPos[k] || { n: 0, s: 0 }); byPos[k].n++; byPos[k].s += SRS.strength(c.srs); });
+  const posKeys = Object.keys(byPos).sort((a, b) => byPos[b].n - byPos[a].n).slice(0, 10);
   const w = (n) => (all.length ? 100 * n / all.length : 0) + '%';
 
   host.innerHTML =
@@ -2140,14 +2184,14 @@ function renderStats(host) {
               '<span class="chip due">' + c.stats.wrong + ' misses</span></div>').join('')
           : '<p class="faint">No mistakes recorded yet — keep going.</p>') +
       '</div>' +
-      '<div class="card"><div class="section-title" style="margin:0 0 8px"><h2>By category</h2></div>' +
-        (cats.length ? cats.map(k => {
-          const v = byCat[k];
+      '<div class="card"><div class="section-title" style="margin:0 0 8px"><h2>By part of speech</h2></div>' +
+        (posKeys.length ? posKeys.map(k => {
+          const v = byPos[k];
           return '<div style="padding:8px 0">' +
             '<div class="row between" style="margin-bottom:5px"><span style="font-size:.87rem">' + esc(k) + '</span>' +
             '<span class="faint">' + v.n + ' words · ' + Math.round(100 * v.s / v.n) + '% learned</span></div>' +
             '<div class="bar thin"><i style="width:' + Math.round(100 * v.s / v.n) + '%"></i></div></div>';
-        }).join('') : '<p class="faint">Add categories to your cards to see this breakdown.</p>') +
+        }).join('') : '<p class="faint">Add some words to see this breakdown.</p>') +
       '</div>' +
     '</div>';
 }
@@ -2468,7 +2512,8 @@ function importDialog() {
     title: 'Import words from a CSV file',
     body:
       '<p class="muted" style="margin-bottom:14px">Columns, in this order: ' +
-        '<b>term, part of speech, definition, example, translation, category</b>. ' +
+        '<b>term, part of speech, sense, definition, example, translation, ' +
+        'collocations, synonyms, antonyms</b>. ' +
         'A header row is detected automatically. Files exported from Lexio import cleanly.</p>' +
       '<div class="field"><label>Add the words to</label><select id="impDeck">' + deckOptions('', 'Create a new deck') + '</select></div>' +
       '<div class="field"><label>CSV file</label><input type="file" id="impFile" accept=".csv,.txt,text/csv"></div>' +
