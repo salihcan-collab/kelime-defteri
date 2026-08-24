@@ -107,6 +107,11 @@ kelime sürdürülebilir bir tempodur.
 - **Synonyms / Antonyms** — eş ve zıt anlamlılar
 - **Personal note** — kendi hatırlatıcı notun (isteğe bağlı)
 
+Çalışma kartının arka yüzünde **anlam, örnek cümle ve çeviri** üstte durur; collocations,
+ilişkili kelimeler ve kendi notun bir çizginin altında, daha küçük punto ve iki sütun
+hâlinde toplanır. Böylece cevap cevap gibi görünür, geri kalanı da kartı uzatmadan yerini
+alır.
+
 Örnek cümlenin kelimeyi **içermesi** önemlidir: "Fill in the blank" alıştırması cümledeki
 kelimeyi boşluğa çevirerek soru üretir.
 
@@ -151,6 +156,11 @@ olur — birini iyi biliyor, diğerini yeni öğreniyor olabilirsin. Ama kartlar
 yanlışlıkla kopya oluşturamazsın, ama bilerek ikinci bir anlam eklemek tek tıklık iştir.
 
 ### Collocations ve ilişkili kelimeler
+
+Bu üç alan — collocations, synonyms/antonyms ve kişisel not — kelime kartı formunda
+**More fields** başlığı altında katlanmış durur; çoğu kelimede boş kaldıkları için form
+doldurduğun beş alandan ibaret kalır. Bir kelimede zaten doluysalar bölüm kendiliğinden
+açılır ve başlığın yanında kaç şey olduğu yazar.
 
 - **Collocations** her satıra bir kalıp yazılır. Kartın arka yüzünde "Goes with" başlığı
   altında listelenir ve kalıbın içindeki kelime koyu gösterilir.

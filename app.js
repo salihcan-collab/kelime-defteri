@@ -243,6 +243,22 @@ function relationChips(card) {
     '</span>').join('') + '</div>';
 }
 
+/* Everything below the answer itself — the phrases the word lives in, the words
+   it sits next to, your own note. Given the same weight as the meaning they
+   crowd the card, so they share one quieter strip below a hairline and sit side
+   by side while there is width for it. */
+function cardExtras(card) {
+  const rels = Store.relationsFor(card);
+  const parts = [];
+  if ((card.collocations || []).length) parts.push(['Goes with', collocationList(card)]);
+  if (rels.length) parts.push(['Related', relationChips(card)]);
+  if (card.notes) parts.push(['Your note', '<p class="fx-note">' + esc(card.notes) + '</p>']);
+  if (!parts.length) return '';
+  /* One thing on its own gets the full width; two or three share columns. */
+  return '<div class="fc-extras' + (parts.length === 1 ? ' one' : '') + '">' + parts.map(p =>
+    '<div class="fx"><div class="fx-k">' + p[0] + '</div>' + p[1] + '</div>').join('') + '</div>';
+}
+
 function collocationList(card) {
   const list = card.collocations || [];
   if (!list.length) return '';
@@ -698,6 +714,14 @@ function deckEditor(deck) {
   });
 }
 
+/* How many of the folded fields this card already uses — decides whether the
+   section opens by itself, and is shown on the summary so nothing is hidden
+   without a trace. */
+function extrasFilled(card) {
+  if (!card) return 0;
+  return (card.collocations || []).length + (card.related || []).length + (card.notes ? 1 : 0);
+}
+
 function cardEditor(card, presetDeck) {
   const isNew = !card;
   const cats = Store.categories();
@@ -734,23 +758,31 @@ function cardEditor(card, presetDeck) {
           '<input type="text" id="cCat" list="catList" value="' + esc(card ? card.category : '') + '" placeholder="e.g. Work">' +
           '<datalist id="catList">' + cats.map(c => '<option value="' + esc(c) + '">').join('') + '</datalist></div>' +
       '</div>' +
-      '<div class="field"><label>Collocations</label>' +
-        '<textarea id="cColl" rows="2" placeholder="make a decision&#10;take a decision">' +
-          esc(card ? (card.collocations || []).join('\n') : '') + '</textarea>' +
-        '<span class="help">One per line — the word\u2019s usual partners. Used for fill-in-the-blank practice.</span></div>' +
-      '<div class="inline-fields">' +
-        '<div class="field"><label>Synonyms</label>' +
-          '<input type="text" id="cSyn" value="' + esc(card ? relText(card, 'syn') : '') + '" placeholder="reliable, trustworthy"></div>' +
-        '<div class="field"><label>Antonyms</label>' +
-          '<input type="text" id="cAnt" value="' + esc(card ? relText(card, 'ant') : '') + '" placeholder="unreliable"></div>' +
-      '</div>' +
-      '<div id="relLinks"></div>' +
-      '<div class="inline-fields">' +
-        '<div class="field"><label>Deck</label><select id="cDeck">' +
-          deckOptions(card ? card.deckId : (presetDeck || (Store.state.decks[0] || {}).id)) + '</select></div>' +
-        '<div class="field"><label>Personal note (optional)</label>' +
-          '<input type="text" id="cNote" value="' + esc(card ? card.notes : '') + '" placeholder="A memory hook, a false friend…"></div>' +
-      '</div>' +
+      '<div class="field deck-field"><label>Deck</label><select id="cDeck">' +
+        deckOptions(card ? card.deckId : (presetDeck || (Store.state.decks[0] || {}).id)) + '</select></div>' +
+      /* Everything a word can have but most words do not. Folded away so the
+         form stays the five fields you actually fill in, and opened on its own
+         for a card that already carries something down here. */
+      '<details class="more-fields"' + (extrasFilled(card) ? ' open' : '') + '>' +
+        '<summary>More fields' +
+          (extrasFilled(card) ? '<span class="more-count">' + extrasFilled(card) + '</span>' : '') +
+        '</summary>' +
+        '<div class="more-body">' +
+          '<div class="field"><label>Collocations</label>' +
+            '<textarea id="cColl" rows="2" placeholder="make a decision&#10;take a decision">' +
+              esc(card ? (card.collocations || []).join('\n') : '') + '</textarea>' +
+            '<span class="help">One per line — the word\u2019s usual partners.</span></div>' +
+          '<div class="inline-fields">' +
+            '<div class="field"><label>Synonyms</label>' +
+              '<input type="text" id="cSyn" value="' + esc(card ? relText(card, 'syn') : '') + '" placeholder="reliable, trustworthy"></div>' +
+            '<div class="field"><label>Antonyms</label>' +
+              '<input type="text" id="cAnt" value="' + esc(card ? relText(card, 'ant') : '') + '" placeholder="unreliable"></div>' +
+          '</div>' +
+          '<div id="relLinks"></div>' +
+          '<div class="field"><label>Personal note</label>' +
+            '<input type="text" id="cNote" value="' + esc(card ? card.notes : '') + '" placeholder="A memory hook, a false friend…"></div>' +
+        '</div>' +
+      '</details>' +
       (card ? '<p class="faint">Status: ' + card.srs.state + ' · seen ' + card.stats.seen + ' times · ' +
         card.stats.correct + ' correct / ' + card.stats.wrong + ' wrong · next ' + dueText(card) + '</p>' : '') +
       '<div id="dupWarn"></div>',
@@ -1129,11 +1161,7 @@ function drawStudyCard(host) {
       (card.example ? '<div class="fc-block"><div class="k">Example</div><div class="v fc-example">' + highlightTerm(card.example, card.term) + '</div></div>' : '') +
       (card.translation && dir !== 'translation-first'
         ? '<div class="fc-block"><div class="k">Translation</div><div class="v">' + esc(card.translation) + '</div></div>' : '') +
-      ((card.collocations || []).length
-        ? '<div class="fc-block"><div class="k">Goes with</div><div class="v">' + collocationList(card) + '</div></div>' : '') +
-      (Store.relationsFor(card).length
-        ? '<div class="fc-block"><div class="k">Related</div><div class="v">' + relationChips(card) + '</div></div>' : '') +
-      (card.notes ? '<div class="fc-block"><div class="k">Your note</div><div class="v muted">' + esc(card.notes) + '</div></div>' : '') +
+      cardExtras(card) +
     '</div>';
 
   host.innerHTML =

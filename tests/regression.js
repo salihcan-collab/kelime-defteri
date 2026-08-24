@@ -637,6 +637,89 @@ const head = (s) => console.log('\n— ' + s + ' —');
   await page.evaluate(() => { Store.wipe(); Store.saveNow(); });
 
   /* ------------------------------------------------------------------ *
+     8e. Keeping the word editor and the card back readable.
+
+     Senses, collocations and relations added five more things to a form that
+     already had eight, and five stacked blocks to a card that had three.
+   * ------------------------------------------------------------------ */
+  head('the editor and the card stay compact');
+  await page.evaluate(() => { Store.wipe(); Store.saveNow(); go('browse', {}); });
+  await page.waitForTimeout(250);
+  await page.click('#view-browse [data-act="add"]');
+  await page.waitForTimeout(300);
+  const blank = await page.evaluate(() => {
+    const d = document.querySelector('.more-fields');
+    return {
+      exists: !!d, open: d && d.open,
+      inputsExist: ['cColl', 'cSyn', 'cAnt', 'cNote'].every(id => !!document.getElementById(id)),
+      /* A closed <details> is laid out but not rendered in Chrome, so client
+         rects and offsetParent both lie about it — checkVisibility does not. */
+      collocationsVisible: document.getElementById('cColl')
+        .checkVisibility({ contentVisibilityAuto: true, opacityProperty: true, visibilityProperty: true })
+    };
+  });
+  is(blank.exists && !blank.open, 'a new word opens with the extra fields folded away');
+  is(!blank.collocationsVisible, 'the folded fields are genuinely out of sight');
+  is(blank.inputsExist, 'but still in the form, so nothing typed can be lost');
+
+  await page.click('.more-fields > summary');
+  await page.waitForTimeout(200);
+  await page.fill('#cTerm', 'zzzcompact');
+  await page.selectOption('#cPos', 'noun');
+  await page.fill('#cDef', 'A word used to test the folded fields.');
+  await page.fill('#cColl', 'a zzzcompact form\nkeep it zzzcompact');
+  await page.fill('#cSyn', 'reliable');
+  await page.fill('#cAnt', 'crowded');
+  await page.fill('#cNote', 'a note of my own');
+  await page.click('.modal-foot [data-act="save"]');
+  await page.waitForTimeout(300);
+  const storedExtras = await page.evaluate(() => {
+    const c = Store.state.cards.find(x => x.term === 'zzzcompact');
+    return c && { coll: c.collocations.length, rel: c.related.length, note: c.notes };
+  });
+  is(storedExtras && storedExtras.coll === 2 && storedExtras.rel === 2 && storedExtras.note === 'a note of my own',
+     'everything typed in the folded section is saved');
+
+  await page.evaluate(() => cardEditor(Store.state.cards.find(c => c.term === 'zzzcompact')));
+  await page.waitForTimeout(300);
+  const reopened = await page.evaluate(() => {
+    const d = document.querySelector('.more-fields');
+    return { open: d.open, count: (d.querySelector('.more-count') || {}).textContent };
+  });
+  is(reopened.open, 'a word that already uses those fields opens with them showing');
+  is(reopened.count === '5', `and the summary says how much is inside (${reopened.count})`);
+  await page.evaluate(() => closeModal());
+  await page.waitForTimeout(200);
+
+  /* The card back: the answer stays the answer, the rest goes quiet. */
+  const backShape = await page.evaluate(() => {
+    session = null;
+    Store.wipe();
+    const c = Store.state.cards.find(x => x.term === 'significant');
+    c.notes = 'a note';
+    Store.state.cards = [c];
+    Store.saveNow();
+    go('study', {});
+    startSession(null, false);
+    revealCard();
+    const v = document.getElementById('view-study');
+    const ex = v.querySelector('.fc-extras');
+    return {
+      main: [...v.querySelectorAll('.fc-block .k')].map(x => x.textContent),
+      extras: [...v.querySelectorAll('.fx-k')].map(x => x.textContent),
+      columns: ex ? getComputedStyle(ex).gridTemplateColumns.split(' ').length : 0,
+      separated: ex ? getComputedStyle(ex).borderTopWidth : '0px'
+    };
+  });
+  is(backShape.main.join(',') === 'Meaning,Example,Translation',
+     `the answer is still three blocks (${backShape.main.join(', ')})`);
+  is(backShape.extras.join(',') === 'Goes with,Related,Your note',
+     'the phrases, related words and your note move below into one strip');
+  is(backShape.columns === 2, 'that strip uses two columns rather than stacking');
+  is(backShape.separated !== '0px', 'and is separated from the answer by a rule');
+  await page.evaluate(() => { session = null; Store.wipe(); Store.saveNow(); });
+
+  /* ------------------------------------------------------------------ *
      9. Practice.
 
      The bug: "practice the 3 I missed" built questions with three choices,
