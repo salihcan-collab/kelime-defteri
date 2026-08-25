@@ -205,7 +205,7 @@ Yeni kelime eklemek için herhangi bir ekranda **N** tuşuna basman yeterli.
 | **Meaning → Word** | Anlamı görürsün, doğru kelimeyi seçersin |
 | **Type the word** | Anlamdan yola çıkıp kelimeyi yazarsın (tek harflik yazım hatası affedilir) |
 | **Fill in the blank** | Örnek cümledeki boşluğu doldurursun |
-| **Matching pairs** | Kelimelerle karşılıklarını eşleştirirsin (en fazla 6'lık tahtalara bölünür; sağ sütunda her zaman bir fazla seçenek olur ki son kelime kendiliğinden ortaya çıkmasın) |
+| **Matching pairs** | Kelimelerle karşılıklarını eşleştirirsin. Soldaki sütun kelimeler, sağdaki anlamlar; başlıklar ve sol kenardaki renkli çizgi ikisini ayırır. En fazla 6'lık tahtalara bölünür; sağ sütunda her zaman bir fazla seçenek olur ki son kelime kendiliğinden ortaya çıkmasın |
 | **Listening** | Kelime sesli okunur, duyduğunu yazarsın |
 | **AI quiz** | Yapay zekâ o kelimeler için yepyeni bağlam soruları yazar |
 | **Writing coach** | Kendi cümleni yazarsın, yapay zekâ puanlar ve düzeltir |
