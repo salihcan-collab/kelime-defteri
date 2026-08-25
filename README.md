@@ -235,8 +235,8 @@ oynatmaz — yazdığın cevap ve imleç yerinde kalır.
 **Listening'de ipucu farklıdır:** anlamı zaten biliyorsundur, sorun sesi yakalamaktır. Bu
 yüzden çeviri yerine **harf** verir: ilk basışta kelimenin ilk harfi, sonra bir harf daha,
 **en fazla üç harf**. Kelime kısaysa sınır da düşer — üç harflik kelimede iki, iki harflikte
-bir harf. Yani kelime hiçbir zaman senin yerine tamamlanmaz; üç harf dolduğunda düğme
-sönükleşir.
+bir harf. Düğme harfler açıldıkça yerinde kalır, üç harf dolduğunda sönükleşir. Yani kelime
+hiçbir zaman senin yerine tamamlanmaz.
 
 Seslendirme, bilgisayarında zaten yüklü olan sesleri kullanır — internet gerekmez, ücretsizdir.
 

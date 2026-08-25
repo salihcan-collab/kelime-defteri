@@ -690,7 +690,19 @@ const head = (s) => console.log('\n— ' + s + ' —');
     return { open: d.open, count: (d.querySelector('.more-count') || {}).textContent };
   });
   is(reopened.open, 'a word that already uses those fields opens with them showing');
-  is(reopened.count === '5 filled in', `and the summary says how much is inside (${reopened.count})`);
+  const statusPlace = await page.evaluate(() => {
+    const note = document.querySelector('.modal-foot .foot-note');
+    const body = document.getElementById('modalBody');
+    return { inFoot: !!note && /^Status:/.test(note.textContent),
+             inBody: /Status:/.test(body.textContent),
+             visibleWithoutScrolling: !!note &&
+               note.getBoundingClientRect().bottom <= window.innerHeight + 1 };
+  });
+  is(statusPlace.inFoot && !statusPlace.inBody,
+     'the card\'s status moved out of the scrolling form into the footer');
+  is(statusPlace.visibleWithoutScrolling, 'so it is on screen without scrolling to the bottom');
+  is(reopened.count === '4 filled in',
+     `and the summary counts boxes, not the lines in them (${reopened.count})`);
   await page.evaluate(() => closeModal());
   await page.waitForTimeout(200);
 
@@ -826,10 +838,34 @@ const head = (s) => console.log('\n— ' + s + ' —');
     Store.wipe();
     const c = Store.state.cards.find(x => x.term === 'significant');
     const html = relationChips(c);
-    return { syn: html.indexOf('\u2248') !== -1, ant: html.indexOf('\u2715') !== -1,
-             oldMarks: /[\u2194\u2260]/.test(html) };
+    return { syn: html.indexOf('\u2248') !== -1, ant: html.indexOf('\u00d7') !== -1,
+             oldMarks: /[\u2194\u2260\u2715]/.test(html) };
   });
-  is(symbols.syn && symbols.ant && !symbols.oldMarks, 'a synonym is ≈ and an opposite is ✕');
+  is(symbols.syn && symbols.ant && !symbols.oldMarks, 'a synonym is ≈ and an opposite is ×');
+
+  const chipMetrics = await page.evaluate(() => {
+    Store.wipe();
+    const host = document.createElement('div');
+    host.innerHTML = relationChips(Store.state.cards.find(c => c.term === 'undermine'));
+    document.getElementById('view-study').appendChild(host);
+    const read = [...host.querySelectorAll('.chip.rel')].map(c => {
+      const cs = getComputedStyle(c);
+      const mark = c.querySelector('.mark');
+      const ms = getComputedStyle(mark);
+      return { size: cs.fontSize, weight: cs.fontWeight,
+               markSize: ms.fontSize, markWidth: ms.width, h: c.getBoundingClientRect().height };
+    });
+    host.remove();
+    return read;
+  });
+  is(chipMetrics.length === 2 &&
+     chipMetrics[0].size === chipMetrics[1].size &&
+     chipMetrics[0].weight === chipMetrics[1].weight,
+     `a synonym and an opposite are set in the same type (${chipMetrics[0].size}, ${chipMetrics[0].weight})`);
+  is(chipMetrics[0].markSize === chipMetrics[1].markSize &&
+     chipMetrics[0].markWidth === chipMetrics[1].markWidth,
+     `and their marks occupy the same box (${chipMetrics[0].markWidth})`);
+  is(Math.abs(chipMetrics[0].h - chipMetrics[1].h) < 0.5, 'so the two chips are the same height');
 
   const plain = await page.evaluate(() => {
     Store.wipe();
@@ -1016,12 +1052,16 @@ const head = (s) => console.log('\n— ' + s + ' —');
     render('practice');
     await new Promise(r => setTimeout(r, 250));
     const item = quiz.items[0];
+    const seen = (el) => !!el && el.checkVisibility({ contentVisibilityAuto: true,
+                                                      opacityProperty: true, visibilityProperty: true });
     const read = () => {
       const el = document.getElementById('hintLetters');
       const btn = document.getElementById('hintBtn');
       return { letters: el ? el.textContent : null,
                label: btn ? btn.textContent.trim() : null,
-               spent: btn ? btn.disabled : null };
+               spent: btn ? btn.disabled : null,
+               /* the button used to vanish the moment the pill appeared */
+               buttonVisible: seen(btn) };
     };
     const steps = [read()];
     const slot = document.getElementById('hintSlot');
@@ -1041,6 +1081,8 @@ const head = (s) => console.log('\n— ' + s + ' —');
      listening.steps[2].letters === listening.answer.slice(0, 2) &&
      listening.steps[3].letters === listening.answer.slice(0, 3),
      `each press adds one letter (${listening.steps.slice(1, 4).map(x => x.letters).join(' → ')})`);
+  is(listening.steps.slice(0, 4).every(x => x.buttonVisible),
+     'the button stays put after the first letter, so you can ask for another');
   is(listening.steps[3].spent && listening.steps[4].letters === listening.steps[3].letters,
      'and it stops at three — pressing again gives nothing more');
   is(listening.steps[4].letters.length < listening.answer.length,

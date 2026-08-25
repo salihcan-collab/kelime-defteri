@@ -229,7 +229,7 @@ function senseCountChip(card) {
 }
 
 const REL_LABEL = { syn: 'synonym', ant: 'opposite' };
-const REL_MARK  = { syn: '\u2248', ant: '\u2715' };   /* ≈ means like this, ✕ means the opposite */
+const REL_MARK  = { syn: '\u2248', ant: '\u00d7' };   /* ≈ means like this, × means the opposite */
 
 function relationChips(card) {
   const rels = Store.relationsFor(card);
@@ -241,7 +241,7 @@ function relationChips(card) {
     '<span class="chip rel ' + r.kind + (r.card ? ' known' : '') + '"' +
       ' title="' + esc(REL_LABEL[r.kind] || r.kind) +
       (r.card ? ' — saved in your collection' : ' — not saved as a word yet') + '">' +
-      (REL_MARK[r.kind] || '') + ' ' + esc(r.text) +
+      '<i class="mark">' + (REL_MARK[r.kind] || '') + '</i>' + esc(r.text) +
     '</span>').join('') + '</div>';
 }
 
@@ -743,7 +743,11 @@ function deckEditor(deck) {
    without a trace. */
 function extrasFilled(card) {
   if (!card) return 0;
-  return (card.collocations || []).length + (card.related || []).length + (card.notes ? 1 : 0);
+  const has = (kind) => (card.related || []).some(r => r.kind === kind);
+  /* Fields, not entries — three collocations still fill one box. */
+  return ((card.collocations || []).length ? 1 : 0) +
+         (has('syn') ? 1 : 0) + (has('ant') ? 1 : 0) + (has('family') ? 1 : 0) +
+         (card.notes ? 1 : 0);
 }
 
 function cardEditor(card, presetDeck) {
@@ -768,7 +772,7 @@ function cardEditor(card, presetDeck) {
         '<span class="help" id="senseHelp"></span></div>' +
       (AI.available()
         ? '<button class="ghost-btn tiny" id="aiFill" style="margin:-4px 0 14px">' + ICONS.spark + 'Auto-fill the rest with AI</button>'
-        : '<p class="faint" style="margin:-4px 0 14px">Tip: connect an AI assistant in Settings to fill these fields automatically.</p>') +
+        : '<p class="help" style="margin:-8px 0 14px">Tip: connect an AI assistant in Settings to fill these fields automatically.</p>') +
       '<div class="field"><label>Meaning (English definition) <em class="req">required</em></label>' +
         '<textarea id="cDef" placeholder="A clear, short definition">' + esc(card ? card.definition : '') + '</textarea></div>' +
       '<div class="field"><label>Example sentence</label>' +
@@ -808,10 +812,13 @@ function cardEditor(card, presetDeck) {
             '<input type="text" id="cNote" value="' + esc(card ? card.notes : '') + '" placeholder="A memory hook, a false friend…"></div>' +
         '</div>' +
       '</details>' +
-      (card ? '<p class="faint">Status: ' + card.srs.state + ' · seen ' + card.stats.seen + ' times · ' +
-        card.stats.correct + ' correct / ' + card.stats.wrong + ' wrong · next ' + dueText(card) + '</p>' : '') +
       '<div id="dupWarn"></div>',
     foot:
+      /* Above the buttons rather than at the bottom of a form you have to
+         scroll: how the card is doing is worth seeing while you edit it. */
+      (card ? '<div class="foot-note">Status: ' + card.srs.state + ' · seen ' + card.stats.seen +
+        ' times · ' + card.stats.correct + ' correct / ' + card.stats.wrong + ' wrong · next ' +
+        dueText(card) + '</div>' : '') +
       (isNew ? '' : '<button class="danger-btn" data-act="del">Delete</button>') +
       '<div class="spacer"></div>' +
       '<button class="ghost-btn" data-act="cancel">Cancel</button>' +
@@ -961,7 +968,7 @@ function cardEditor(card, presetDeck) {
         const rels = Store.relationsFor(draft);
         const linked = rels.filter(r => r.card);
         $('#relLinks').innerHTML = rels.length
-          ? '<p class="faint" style="margin:-8px 0 14px">' +
+          ? '<p class="help" style="margin:-8px 0 14px">' +
               (linked.length ? linked.length + ' of ' + rels.length + ' linked to words you have. ' : '') +
               'Words you have not added yet are kept as plain text.</p>'
           : '';
