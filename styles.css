@@ -307,6 +307,9 @@ input[type=text],input[type=password],input[type=number],input[type=search],sele
 }
 input:focus,select:focus,textarea:focus{ border-color:var(--accent); background:var(--surface); box-shadow:0 0 0 3px var(--accent-soft); }
 textarea{ resize:vertical; min-height:76px; line-height:1.55; }
+/* Several components set their own display, which would otherwise win over the
+   browser's rule for the hidden attribute. */
+[hidden]{ display:none !important; }
 /* An example of what to type should sit well behind what you have typed. */
 input::placeholder, textarea::placeholder{ color:var(--text-faint); opacity:.6; }
 select{ cursor:pointer; appearance:none;

@@ -1182,8 +1182,11 @@ function drawStudyCard(host) {
      waits until the card is turned, and then sits beside the word rather than
      on a line of its own. Before that, the part of speech in the chip row is
      what narrows a word with several meanings. */
+  /* Both states are in the DOM from the start; turning the card is a matter of
+     unhiding, not of drawing the screen again. */
   const termWithSense = (show) =>
-    esc(card.term) + (show && senseLabel(card) ? '<em class="fc-sense">(' + esc(senseLabel(card)) + ')</em>' : '');
+    esc(card.term) + (senseLabel(card)
+      ? '<em class="fc-sense"' + (show ? '' : ' hidden') + '>(' + esc(senseLabel(card)) + ')</em>' : '');
 
   const front = !askTerm
     ? '<div class="row" style="gap:12px;align-items:center">' +
@@ -1195,7 +1198,7 @@ function drawStudyCard(host) {
       : '<div class="fc-prompt">' + esc(card.definition) + '</div>' + frontExample;
 
   const back =
-    '<div class="fc-body">' +
+    '<div class="fc-body"' + (session.revealed ? '' : ' hidden') + '>' +
       (askTerm
         ? '<div class="fc-block"><div class="k">Word</div><div class="row" style="gap:10px">' +
             '<span class="fc-term" style="font-size:1.7rem">' + termWithSense(true) + '</span>' +
@@ -1232,16 +1235,17 @@ function drawStudyCard(host) {
           '<div class="spacer"></div>' +
           (deck ? '<span class="faint">' + esc(deck.emoji + ' ' + deck.name) + '</span>' : '') +
         '</div>' +
-        front +
-        (session.revealed ? back : '<div class="fc-hint">Press <kbd>Space</kbd> or tap the button below</div>') +
+        front + back +
+        '<div class="fc-hint"' + (session.revealed ? ' hidden' : '') + '>' +
+          'Press <kbd>Space</kbd> or tap the button below</div>' +
       '</div>' +
 
-      (session.revealed
-        ? '<div class="rate-row">' +
-            rateBtn(1, 'Again', prev[1], 'again') + rateBtn(2, 'Hard', prev[2], 'hard') +
-            rateBtn(3, 'Good', prev[3], 'good') + rateBtn(4, 'Easy', prev[4], 'easy') +
-          '</div>'
-        : '<button class="primary-btn" style="width:100%;padding:14px" data-act="reveal">Show answer</button>') +
+      '<div class="rate-row"' + (session.revealed ? '' : ' hidden') + '>' +
+        rateBtn(1, 'Again', prev[1], 'again') + rateBtn(2, 'Hard', prev[2], 'hard') +
+        rateBtn(3, 'Good', prev[3], 'good') + rateBtn(4, 'Easy', prev[4], 'easy') +
+      '</div>' +
+      '<button class="primary-btn" style="width:100%;padding:14px" data-act="reveal"' +
+        (session.revealed ? ' hidden' : '') + '>Show answer</button>' +
 
       '<div class="row between faint">' +
         '<span>' + session.done + ' answered · ' + Math.round((Date.now() - session.startedAt) / 60000) + ' min</span>' +
@@ -1290,6 +1294,13 @@ function confetti() {
   cv.style.height = window.innerHeight + 'px';
   document.body.appendChild(cv);
 
+  /* Centre it on the reading area rather than the window: the sidebar is not
+     part of the page you are looking at, and a burst centred on the window
+     lands noticeably to its left. */
+  const area = document.getElementById('scrollArea');
+  const box = area ? area.getBoundingClientRect() : { left: 0, width: window.innerWidth };
+  const cx = (box.left + box.width / 2) * dpr;
+
   const ctx = cv.getContext('2d');
   /* A spread of hues rather than the interface palette — the point of confetti
      is that it does not match anything. The theme's own accent joins in so it
@@ -1304,10 +1315,10 @@ function confetti() {
   for (let i = 0; i < 130; i++) {
     bits.push({
       /* thrown from a narrow band in the middle, not across the whole page */
-      x: w * (0.5 + (Math.random() - 0.5) * 0.2),
+      x: cx + (Math.random() - 0.5) * w * 0.24,
       y: h * (0.46 + Math.random() * 0.05),
-      vx: (Math.random() - 0.5) * 4.4 * dpr,
-      vy: (-6 - Math.random() * 5) * dpr,
+      vx: (Math.random() - 0.5) * 5.3 * dpr,
+      vy: (-6.6 - Math.random() * 5.5) * dpr,
       w: (4 + Math.random() * 5) * dpr,
       h: (7 + Math.random() * 7) * dpr,
       a: Math.random() * Math.PI, va: (Math.random() - 0.5) * 0.16,
@@ -1360,7 +1371,21 @@ function revealCard() {
   session.revealed = true;
   const card = currentCard();
   if (Store.state.settings.autoSpeak && card) TTS.speak(card.term);
-  render('study');
+
+  /* Unhide what was already there. Redrawing the view would rebuild the card
+     under the pointer and throw away the scroll position for no gain. */
+  const host = $('#view-study');
+  const open = host && host.querySelector('.fc-body');
+  if (!open) return render('study');
+  const show = (sel, on) => {
+    const el = host.querySelector(sel);
+    if (el) el.hidden = !on;
+  };
+  show('.fc-body', true);
+  show('.fc-sense', true);
+  show('.fc-hint', false);
+  show('[data-act="reveal"]', false);
+  show('.rate-row', true);
 }
 
 function rateCard(rating) {
@@ -1792,11 +1817,11 @@ function drawQuizItem(host) {
     '<div class="study-head">' +
       '<button class="soft-btn tiny end-btn" data-act="quit">' + ICONS.finish +
         '<span>End practice</span></button>' +
-      '<div class="bar" style="flex:1"><i style="width:' + progress + '%"></i></div>' +
-      '<div class="counts"><span class="c-due">' +
+      '<div class="bar" style="flex:1"><i id="qBar" style="width:' + progress + '%"></i></div>' +
+      '<div class="counts"><span class="c-due" id="qCount">' +
         (matching ? doneCount + ' / ' + totalCount + ' matched'
                   : (quiz.i + 1) + ' / ' + quiz.items.length) + '</span>' +
-        '<span class="c-new">' + quiz.correct + ' correct</span></div>' +
+        '<span class="c-new" id="qCorrect">' + quiz.correct + ' correct</span></div>' +
     '</div>';
 
   let body = '';
@@ -1891,7 +1916,7 @@ function mcHTML(item) {
         return '<button class="opt' + cls + '" data-opt="' + esc(o) + '"' + (answered ? ' disabled' : '') + '>' +
           '<span class="key">' + letters[n] + '</span><span>' + esc(o) + '</span></button>';
       }).join('') +
-    '</div>' + (answered ? feedbackHTML(item) : '');
+    '</div><div id="qFeedback">' + (answered ? feedbackHTML(item) : '') + '</div>';
 }
 
 function typeHTML(item) {
@@ -1907,9 +1932,11 @@ function typeHTML(item) {
     '<div class="row" style="gap:9px;flex-wrap:nowrap">' +
       '<input type="text" id="qInput" placeholder="Type your answer…" autocomplete="off" autocapitalize="off" ' +
         'spellcheck="false"' + (answered ? ' disabled' : '') + ' value="' + esc(quiz.given || '') + '">' +
-      (answered ? '' : '<button class="primary-btn" data-act="check">Check</button>') +
+      '<button class="primary-btn" data-act="check"' + (answered ? ' hidden' : '') + '>Check</button>' +
     '</div>' +
-    (answered ? feedbackHTML(item) : '<p class="faint">Spelling is checked, but a single typo is forgiven.</p>');
+    '<div id="qFeedback">' + (answered ? feedbackHTML(item) : '') + '</div>' +
+    '<p class="faint" id="qTypeNote"' + (answered ? ' hidden' : '') + '>' +
+      'Spelling is checked, but a single typo is forgiven.</p>';
 }
 
 function writeHTML(item) {
@@ -1925,7 +1952,7 @@ function writeHTML(item) {
         'Get feedback</button></div>'
       : '') +
     (quiz.state === 'grading' ? '<div class="ai-thinking">' + ICONS.loader + 'The AI is reading your sentence…</div>' : '') +
-    (answered ? feedbackHTML(item) : '');
+    '<div id="qFeedback">' + (answered ? feedbackHTML(item) : '') + '</div>';
 }
 
 function feedbackHTML(item) {
@@ -2041,11 +2068,56 @@ function bindQuizEvents(host, item) {
   if (wr && quiz.state === 'idle') wr.focus();
 }
 
+/* Marking the question you just answered, without rebuilding it. Redrawing
+   would swap out the very button under the pointer and lose the caret, the
+   scroll position and the focus ring for nothing. */
+function showAnswerInPlace(item) {
+  const host = $('#view-practice');
+  const slot = host && host.querySelector('#qFeedback');
+  if (!slot) return render('practice');
+
+  if (item.type === 'mc') {
+    host.querySelectorAll('.opt').forEach(btn => {
+      const o = btn.dataset.opt;
+      btn.disabled = true;
+      if (normalize(o) === normalize(item.answer)) btn.classList.add('correct');
+      else if (o === quiz.given) btn.classList.add('wrong');
+    });
+  } else {
+    const typed = host.querySelector('#qInput') || host.querySelector('#qWrite');
+    if (typed) typed.disabled = true;
+    ['[data-act="check"]', '#qTypeNote', '.ai-thinking'].forEach(sel => {
+      const el = host.querySelector(sel);
+      if (el) el.hidden = true;
+    });
+  }
+  slot.innerHTML = feedbackHTML(item);
+  refreshQuizHead();
+}
+
+/* The counters and the bar move on an answer, so they are the one part of the
+   head that has to be told. */
+function refreshQuizHead() {
+  const host = $('#view-practice');
+  if (!host || !quiz) return;
+  const item = quiz.items[quiz.i];
+  const matching = item && item.type === 'matching';
+  const done = matching ? quiz.pairsDone : quiz.i + (quiz.state === 'answered' ? 1 : 0);
+  const total = matching ? quiz.pairsTotal : quiz.items.length;
+  const bar = host.querySelector('#qBar');
+  const count = host.querySelector('#qCount');
+  const correct = host.querySelector('#qCorrect');
+  if (bar) bar.style.width = pct(done, total) + '%';
+  if (count) count.textContent = matching ? done + ' / ' + total + ' matched'
+                                          : (quiz.i + 1) + ' / ' + quiz.items.length;
+  if (correct) correct.textContent = quiz.correct + ' correct';
+}
+
 function answerMC(item, given) {
   quiz.given = given;
   const ok = normalize(given) === normalize(item.answer);
   recordAnswer(item, ok, given);
-  render('practice');
+  showAnswerInPlace(item);
 }
 
 function checkAnswer(item) {
@@ -2060,7 +2132,7 @@ function checkAnswer(item) {
   }
   quiz.given = val;
   recordAnswer(item, g === 'exact' || g === 'close', val, g === 'close');
-  render('practice');
+  showAnswerInPlace(item);
 }
 
 async function gradeWriting(item) {
@@ -2078,8 +2150,9 @@ async function gradeWriting(item) {
   } catch (err) {
     quiz.state = 'idle';
     toast(err.message, 'err');
+    return render('practice');
   }
-  render('practice');
+  showAnswerInPlace(item);
 }
 
 function recordAnswer(item, ok, given, close, extra) {
@@ -2097,7 +2170,10 @@ async function explainWrong(item) {
   try {
     const text = await AI.explain(item.card, quiz.given || '');
     quiz.lastResult.aiFeedback = text;
-    render('practice');
+    /* Only the feedback block gains a paragraph — the question above it is
+       already answered and has no reason to be redrawn. */
+    const slot = $('#qFeedback');
+    if (slot) slot.innerHTML = feedbackHTML(item); else render('practice');
   } catch (err) { toast(err.message, 'err'); if (btn) { btn.disabled = false; btn.innerHTML = ICONS.spark + 'Why?'; } }
 }
 

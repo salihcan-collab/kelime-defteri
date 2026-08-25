@@ -853,21 +853,26 @@ const head = (s) => console.log('\n— ' + s + ' —');
     go('study', {});
     startSession(null, false);
     const v = document.getElementById('view-study');
+    /* Both sides live in the DOM now, so what matters is what is on show. */
+    const seen = (el) => !!el && el.checkVisibility({ contentVisibilityAuto: true,
+                                                     opacityProperty: true, visibilityProperty: true });
     const front = {
-      sense: !!v.querySelector('.fc-sense'),
-      example: !!v.querySelector('.fc-example'),
+      sense: seen(v.querySelector('.fc-sense')),
+      example: [...v.querySelectorAll('.fc-example')].some(seen),
       posChips: v.querySelectorAll('.fc-top .chip.pos').length
     };
     revealCard();
+    await new Promise(r => setTimeout(r, 60));
     const back = {
       sense: (v.querySelector('.fc-sense') || {}).textContent,
+      senseShown: seen(v.querySelector('.fc-sense')),
       posChips: v.querySelectorAll('.chip.pos').length
     };
     return { front: front, back: back };
   });
   is(!cardStates.front.sense, 'the sense label is not on the front — it would be the answer');
   is(!cardStates.front.example, 'and the front is left as it was, with no sentence forced onto it');
-  is(/^\(.+\)$/.test(cardStates.back.sense || ''),
+  is(cardStates.back.senseShown && /^\(.+\)$/.test(cardStates.back.sense || ''),
      `turning the card puts the sense beside the word ${cardStates.back.sense}`);
   is(cardStates.back.posChips === 1, 'and the part of speech appears once, not twice');
 
@@ -1420,7 +1425,7 @@ const head = (s) => console.log('\n— ' + s + ' —');
   const cleanup = await page.evaluate(async () => {
     const cv = document.querySelector('canvas.confetti');
     const pointer = cv ? getComputedStyle(cv).pointerEvents : 'none';
-    await new Promise(r => setTimeout(r, 3200));
+    await new Promise(r => setTimeout(r, 5200));
     return { pointer: pointer, left: document.querySelectorAll('canvas.confetti').length };
   });
   is(cleanup.pointer === 'none', 'the canvas never swallows a click');
@@ -1465,6 +1470,146 @@ const head = (s) => console.log('\n— ' + s + ' —');
   });
   is(cleanup.left === 0, 'and takes itself off the page when it settles');
   await page.evaluate(() => { quiz = null; session = null; Store.wipe(); Store.saveNow(); go('dashboard', {}); });
+
+  /* ------------------------------------------------------------------ *
+     8n. Answering opens the card rather than redrawing the screen.
+   * ------------------------------------------------------------------ */
+  head('turning a card and answering a question happen in place');
+  const inPlace = await page.evaluate(async () => {
+    session = null; quiz = null;
+    Store.wipe(); Store.saveNow();
+    go('study', {});
+    startSession(null, false);
+    /* the card fades in; measure once it has arrived, or opacity 0 reads as
+       hidden for everything on it */
+    await new Promise(r => setTimeout(r, 320));
+    const v = document.getElementById('view-study');
+    const card = v.querySelector('.flashcard');
+    const top = v.querySelector('.fc-top');
+    const seen = (el) => !!el && el.checkVisibility({ contentVisibilityAuto: true,
+                                                     opacityProperty: true, visibilityProperty: true });
+    const before = {
+      body: seen(v.querySelector('.fc-body')),
+      hint: seen(v.querySelector('.fc-hint')),
+      rates: seen(v.querySelector('.rate-row')),
+      button: seen(v.querySelector('[data-act="reveal"]'))
+    };
+    revealCard();
+    await new Promise(r => setTimeout(r, 80));
+    const v2 = document.getElementById('view-study');
+    return {
+      before: before,
+      after: {
+        body: seen(v2.querySelector('.fc-body')),
+        hint: seen(v2.querySelector('.fc-hint')),
+        rates: seen(v2.querySelector('.rate-row')),
+        button: seen(v2.querySelector('[data-act="reveal"]'))
+      },
+      sameCard: v2.querySelector('.flashcard') === card,
+      sameTop: v2.querySelector('.fc-top') === top
+    };
+  });
+  is(!inPlace.before.body && inPlace.before.hint && !inPlace.before.rates && inPlace.before.button,
+     'a fresh card shows its front, the prompt and the Show answer button');
+  is(inPlace.after.body && !inPlace.after.hint && inPlace.after.rates && !inPlace.after.button,
+     'revealing swaps all four of those over');
+  is(inPlace.sameCard && inPlace.sameTop,
+     'and the card itself is never rebuilt — the same elements are still there');
+
+  const answeredInPlace = await page.evaluate(async () => {
+    session = null; quiz = null;
+    Store.wipe();
+    quizSetup.scope = 'all'; quizSetup.deckId = ''; quizSetup.mode = 'mc-meaning';
+    go('practice', {});
+    const pool = practicePool(null, 'all');
+    quiz = newQuiz('mc-meaning', buildQuestions('mc-meaning', pool, 4, {}));
+    render('practice');
+    const host = document.getElementById('view-practice');
+    const item = quiz.items[0];
+    const opts = [...host.querySelectorAll('.opt')];
+    const chosen = opts.find(b => b.dataset.opt !== item.answer) || opts[0];
+    const card = host.querySelector('.flashcard');
+    const bar = host.querySelector('#qBar');
+    const widthBefore = bar.style.width;
+    const feedbackBefore = host.querySelector('#qFeedback').innerHTML.length;
+
+    answerMC(item, chosen.dataset.opt);
+    await new Promise(r => setTimeout(r, 80));
+
+    const host2 = document.getElementById('view-practice');
+    const marked = [...host2.querySelectorAll('.opt')];
+    return {
+      sameCard: host2.querySelector('.flashcard') === card,
+      sameOptions: marked[0] === opts[0] && marked.length === opts.length,
+      sameBar: host2.querySelector('#qBar') === bar,
+      allDisabled: marked.every(b => b.disabled),
+      oneCorrect: marked.filter(b => b.classList.contains('correct')).length === 1,
+      oneWrong: marked.filter(b => b.classList.contains('wrong')).length === 1,
+      feedbackGrew: host2.querySelector('#qFeedback').innerHTML.length > feedbackBefore,
+      barMoved: bar.style.width !== widthBefore,
+      counter: host2.querySelector('#qCount').textContent
+    };
+  });
+  is(answeredInPlace.sameCard && answeredInPlace.sameOptions && answeredInPlace.sameBar,
+     'answering a question leaves the question, its options and the bar in place');
+  is(answeredInPlace.allDisabled && answeredInPlace.oneCorrect && answeredInPlace.oneWrong,
+     'the right answer and the one you picked are marked, and none can be clicked again');
+  is(answeredInPlace.feedbackGrew, 'the feedback appears below them');
+  is(answeredInPlace.barMoved, `and the progress bar keeps up (${answeredInPlace.counter})`);
+
+  /* Typing works the same way. */
+  const typedInPlace = await page.evaluate(async () => {
+    quiz = null;
+    const pool = practicePool(null, 'all');
+    quiz = newQuiz('typing', buildQuestions('typing', pool, 3, {}));
+    render('practice');
+    const host = document.getElementById('view-practice');
+    const input = host.querySelector('#qInput');
+    const note = host.querySelector('#qTypeNote');
+    const check = host.querySelector('[data-act="check"]');
+    const seen = (el) => !!el && el.checkVisibility({ contentVisibilityAuto: true,
+                                                     opacityProperty: true, visibilityProperty: true });
+    input.value = 'zzzdefinitelywrong';
+    checkAnswer(quiz.items[0]);
+    await new Promise(r => setTimeout(r, 80));
+    const host2 = document.getElementById('view-practice');
+    return { sameInput: host2.querySelector('#qInput') === input,
+             disabled: input.disabled, noteHidden: !seen(note), checkHidden: !seen(check),
+             feedback: host2.querySelector('#qFeedback').textContent.indexOf('Not quite') !== -1 };
+  });
+  is(typedInPlace.sameInput && typedInPlace.disabled,
+     'the box you typed into is the same box, now locked');
+  is(typedInPlace.noteHidden && typedInPlace.checkHidden,
+     'the Check button and the spelling note step aside');
+  is(typedInPlace.feedback, 'and the answer is shown where the note was');
+  await page.evaluate(() => { quiz = null; session = null; Store.wipe(); Store.saveNow(); go('dashboard', {}); });
+
+  /* The burst is centred on the page you are reading, not on the window. */
+  const centred = await page.evaluate(async () => {
+    document.querySelectorAll('canvas.confetti').forEach(c => c.remove());
+    confetti();
+    await new Promise(r => setTimeout(r, 260));
+    const cv = document.querySelector('canvas.confetti');
+    const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data;
+    let sum = 0, n = 0;
+    for (let y = 0; y < cv.height; y += 3) {
+      for (let x = 0; x < cv.width; x += 3) {
+        if (d[(y * cv.width + x) * 4 + 3] > 200) { sum += x; n++; }
+      }
+    }
+    const area = document.getElementById('scrollArea').getBoundingClientRect();
+    const dpr = cv.width / window.innerWidth;
+    const centre = n ? (sum / n) / dpr : 0;
+    document.querySelectorAll('canvas.confetti').forEach(c => c.remove());
+    return { centre: Math.round(centre),
+             areaCentre: Math.round(area.left + area.width / 2),
+             windowCentre: Math.round(window.innerWidth / 2) };
+  });
+  is(Math.abs(centred.centre - centred.areaCentre) < 60,
+     `the burst is centred on the reading area (${centred.centre} against ${centred.areaCentre})`);
+  is(centred.areaCentre !== centred.windowCentre &&
+     Math.abs(centred.centre - centred.areaCentre) < Math.abs(centred.centre - centred.windowCentre),
+     `which is not where the window's centre is (${centred.windowCentre})`);
 
   /* ------------------------------------------------------------------ *
      9. Practice.

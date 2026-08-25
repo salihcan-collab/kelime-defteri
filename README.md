@@ -240,6 +240,11 @@ kelime ister, çünkü orada eşleşen taraflar o kelimelerin kendisidir.
 altında bir **Show hint** düğmesi vardır. Türkçe çeviri (boşluk doldurmada İngilizce anlam)
 varsayılan olarak gizlidir, takıldığında tıklayıp görebilirsin. Puanı etkilemez, sayfayı da
 oynatmaz — yazdığın cevap ve imleç yerinde kalır.
+
+Aynı şey kartı çevirmek ve soruyu cevaplamak için de geçerli: **Show answer** dediğinde ya da
+bir şıkka tıkladığında ekran yeniden çizilmez, zaten orada olan bölümler açılır. Bu yüzden
+kaydırma konumun, yazdığın metin ve imlecin yeri bozulmaz; tıkladığın düğme de ayağının
+altından çekilmez.
 "Word → Meaning" alıştırmasında ipucu yoktur — çeviri doğrudan cevabın kendisi olurdu.
 
 **Listening'de ipucu farklıdır:** anlamı zaten biliyorsundur, sorun sesi yakalamaktır. Bu
@@ -250,7 +255,7 @@ sönükleşir ve üzerine gelince tepki vermez. Yani kelime hiçbir zaman senin 
 tamamlanmaz.
 
 Bir çalışmayı ya da alıştırmayı **sonuna kadar götürdüğünde** özet ekranında ağır ağır düşen,
-rengârenk bir konfeti patlar. **End session / End practice** ile yarıda bıraktığında patlamaz — kutlanan şey bitirmek.
+rengârenk bir konfeti patlar. Sayfanın (kenar çubuğunun değil) ortasından atılır. **End session / End practice** ile yarıda bıraktığında patlamaz — kutlanan şey bitirmek.
 Sisteminde "hareketi azalt" ayarı açıksa animasyon hiç çalışmaz.
 
 Seslendirme, bilgisayarında zaten yüklü olan sesleri kullanır — internet gerekmez, ücretsizdir.
