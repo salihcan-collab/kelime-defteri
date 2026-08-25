@@ -693,14 +693,32 @@ const head = (s) => console.log('\n— ' + s + ' —');
   const statusPlace = await page.evaluate(() => {
     const note = document.querySelector('.modal-foot .foot-note');
     const body = document.getElementById('modalBody');
+    const foot = document.querySelector('.modal-foot');
+    /* Compare centres, not tops: the note is shorter than the buttons, so it
+       sits on the same row with a different top. A pixel of slack absorbs
+       sub-pixel rounding between elements of different heights. */
+    const centres = [...foot.children].map(el => {
+      const r = el.getBoundingClientRect();
+      return (r.top + r.bottom) / 2;
+    });
+    const spread = Math.max(...centres) - Math.min(...centres);
+    const kids = [...foot.children];
+    const iNote = kids.indexOf(note);
+    const iDel = kids.findIndex(el => el.dataset && el.dataset.act === 'del');
+    const iSave = kids.findIndex(el => el.dataset && el.dataset.act === 'save');
     return { inFoot: !!note && /^Status:/.test(note.textContent),
              inBody: /Status:/.test(body.textContent),
              visibleWithoutScrolling: !!note &&
-               note.getBoundingClientRect().bottom <= window.innerHeight + 1 };
+               note.getBoundingClientRect().bottom <= window.innerHeight + 1,
+             oneRow: spread <= 1, spread: Math.round(spread * 10) / 10,
+             between: iDel > -1 && iNote > iDel && iNote < iSave };
   });
   is(statusPlace.inFoot && !statusPlace.inBody,
      'the card\'s status moved out of the scrolling form into the footer');
   is(statusPlace.visibleWithoutScrolling, 'so it is on screen without scrolling to the bottom');
+  is(statusPlace.oneRow,
+     `and shares the buttons' row rather than adding one (${statusPlace.spread}px apart)`);
+  is(statusPlace.between, 'sitting between Delete and the Cancel/Save pair');
   is(reopened.count === '4 filled in',
      `and the summary counts boxes, not the lines in them (${reopened.count})`);
   await page.evaluate(() => closeModal());
@@ -732,6 +750,28 @@ const head = (s) => console.log('\n— ' + s + ' —');
      `everything else moves below into one strip (${backShape.extras.join(', ')})`);
   is(backShape.columns === 2, 'that strip uses two columns rather than stacking');
   is(backShape.separated !== '0px', 'and is separated from the answer by a rule');
+
+  const headingGaps = await page.evaluate(() => {
+    session = null;
+    Store.wipe();
+    const c = Store.state.cards.find(x => x.term === 'reliable');
+    c.collocations = ['a reliable friend'];
+    Store.state.cards = [c].concat(Store.familyOf(c).filter(m => m.id).map(m => Store.card(m.id)));
+    Store.saveNow();
+    go('study', {});
+    startSession(null, false);
+    revealCard();
+    return [...document.querySelectorAll('#view-study .fx')].map(fx => {
+      const k = fx.querySelector('.fx-k');
+      const body = k.nextElementSibling;
+      const line = body.querySelector('li, .fam, .chip') || body;
+      return { heading: k.textContent,
+               gap: Math.round((line.getBoundingClientRect().top - k.getBoundingClientRect().bottom) * 10) / 10 };
+    });
+  });
+  is(headingGaps.length >= 2 && new Set(headingGaps.map(g => g.gap)).size === 1,
+     `every heading sits the same distance above its first line (${headingGaps.map(g => g.heading + ' ' + g.gap + 'px').join(', ')})`);
+  await page.evaluate(() => { session = null; Store.wipe(); Store.saveNow(); });
   await page.evaluate(() => { session = null; Store.wipe(); Store.saveNow(); });
 
   /* ------------------------------------------------------------------ *
@@ -1071,8 +1111,13 @@ const head = (s) => console.log('\n— ' + s + ' —');
       await new Promise(r => setTimeout(r, 60));
       steps.push(read());
     }
+    const kids = [...slot.children];
+    const btn = document.getElementById('hintBtn');
+    const quiet = getComputedStyle(btn).borderStyle === 'dashed' && btn.disabled;
     return { answer: item.answer, steps: steps, translationOffered: !!item.hint,
-             heightBefore: height, heightAfter: slot.getBoundingClientRect().height };
+             heightBefore: height, heightAfter: slot.getBoundingClientRect().height,
+             buttonLeadsAsElsewhere: kids.indexOf(btn) === 0,
+             spentButtonStaysQuiet: quiet };
   });
   is(!listening.translationOffered, 'the translation is no longer what the hint offers');
   is(listening.steps[0].letters === '' && /first letter/i.test(listening.steps[0].label || ''),
@@ -1083,6 +1128,9 @@ const head = (s) => console.log('\n— ' + s + ' —');
      `each press adds one letter (${listening.steps.slice(1, 4).map(x => x.letters).join(' → ')})`);
   is(listening.steps.slice(0, 4).every(x => x.buttonVisible),
      'the button stays put after the first letter, so you can ask for another');
+  is(listening.buttonLeadsAsElsewhere,
+     'and it leads the row, in the place every other drill puts its hint button');
+  is(listening.spentButtonStaysQuiet, 'a spent button no longer lights up under the pointer');
   is(listening.steps[3].spent && listening.steps[4].letters === listening.steps[3].letters,
      'and it stops at three — pressing again gives nothing more');
   is(listening.steps[4].letters.length < listening.answer.length,
@@ -1111,6 +1159,55 @@ const head = (s) => console.log('\n— ' + s + ' —');
   is(header.texts.filter(t => t === header.pos).length === 1,
      `the question header names the part of speech once (${header.texts.join(' · ')})`);
   await page.evaluate(() => { quiz = null; go('dashboard', {}); });
+
+  /* ------------------------------------------------------------------ *
+     8j. The top-right button while a session is already running.
+   * ------------------------------------------------------------------ */
+  head('the top button says where you are');
+  const topLabel = await page.evaluate(async () => {
+    const read = () => {
+      const b = document.getElementById('topStudyBtn');
+      return { text: b.querySelector('span').textContent, disabled: b.disabled,
+               plain: b.classList.contains('is-state') };
+    };
+    session = null; quiz = null;
+    Store.wipe(); Store.saveNow();
+    go('dashboard', {});
+    const idle = read();
+
+    go('study', {});
+    const beforeStart = read();
+    startSession(null, false);
+    refreshChrome();
+    const studying = read();
+
+    /* leaving the session behind puts the button back to work */
+    go('browse', {});
+    const away = read();
+
+    go('practice', {});
+    quizSetup.scope = 'all'; quizSetup.deckId = '';
+    const pool = practicePool(null, 'all');
+    quiz = newQuiz('mc-meaning', buildQuestions('mc-meaning', pool, 3, {}));
+    render('practice'); refreshChrome();
+    const practising = read();
+
+    quiz = null; session = null; go('dashboard', {}); refreshChrome();
+    return { idle: idle, beforeStart: beforeStart, studying: studying,
+             away: away, practising: practising, back: read() };
+  });
+  is(topLabel.idle.text === 'Start studying' && !topLabel.idle.disabled,
+     'with nothing running it offers to start');
+  is(topLabel.beforeStart.text === 'Start studying',
+     'the study screen on its own does not change it');
+  is(topLabel.studying.text === 'Studying' && topLabel.studying.disabled && topLabel.studying.plain,
+     'during a session it reports "Studying" and stops being a button');
+  is(topLabel.practising.text === 'Practising' && topLabel.practising.disabled,
+     'during a practice round it reports "Practising"');
+  is(topLabel.away.text === 'Start studying' && !topLabel.away.disabled,
+     'on another screen it goes back to being the way in');
+  is(topLabel.back.text === 'Start studying' && !topLabel.back.disabled,
+     'and once the session is over it works again');
 
   /* ------------------------------------------------------------------ *
      9. Practice.

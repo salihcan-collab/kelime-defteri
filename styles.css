@@ -441,7 +441,7 @@ input[type=range]::-moz-range-thumb{
   border-color:var(--border); border-style:dashed; color:var(--text-faint);
   transition:opacity .18s ease, color .15s, border-color .15s;
 }
-.hint-btn:hover{ border-style:solid; border-color:var(--accent); color:var(--accent); }
+.hint-btn:not([disabled]):hover{ border-style:solid; border-color:var(--accent); color:var(--accent); }
 .hint-btn svg, .hint-text svg{ width:16px; height:16px; flex:none; }
 .hint-text{
   background:var(--accent-soft); border-color:var(--accent-soft); color:var(--text);
@@ -637,8 +637,9 @@ input[type=range]::-moz-range-thumb{
 .modal-foot{ display:flex; justify-content:flex-end; gap:9px; padding:14px 20px; border-top:1px solid var(--border-soft); flex-wrap:wrap; }
 .modal-foot:empty{ display:none; }
 .foot-note{
-  flex:1 0 100%; order:-1; margin-bottom:2px;
+  flex:1 1 auto; min-width:0; align-self:center;
   font-size:.73rem; line-height:1.5; color:var(--text-faint);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
 }
 
 .to-top{
@@ -783,7 +784,7 @@ kbd{
 .deck-field{ max-width:340px; }
 
 /* ---------- word family ---------------------------------------------------- */
-.fam-row{ display:flex; flex-wrap:wrap; gap:6px 14px; margin-top:1px; }
+.fam-row{ display:flex; flex-wrap:wrap; gap:6px 14px; }
 .fam{ font-size:.88rem; color:var(--text-dim); white-space:nowrap; }
 .fam i{ font-style:normal; font-size:.74em; color:var(--text-faint); margin-left:4px; }
 .fam-missing{ opacity:.55; }
@@ -817,3 +818,11 @@ kbd{
   display:inline-block; min-width:4.2em;
 }
 .hint-btn[disabled]{ opacity:.45; cursor:default; }
+
+/* The top-right button while a session is already running: a label, not a
+   control, so it stops inviting a click that would do nothing. */
+#topStudyBtn.is-state{
+  background:transparent; color:var(--text-dim);
+  border:1px solid var(--border); box-shadow:none; cursor:default;
+}
+#topStudyBtn.is-state svg{ opacity:.6; }

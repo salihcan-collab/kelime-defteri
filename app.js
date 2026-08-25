@@ -165,6 +165,16 @@ function refreshChrome() {
   badge.dataset.zero = total === 0 ? '1' : '0';
   const st = Store.streak();
   $('#streakDays').textContent = st.current;
+
+  /* "Start studying" while you are already studying is a button with nothing
+     to do. In that case it stops being a button and says where you are. */
+  const busy =
+    (currentView === 'study' && session && !session.finished) ? 'Studying' :
+    (currentView === 'practice' && quiz && !quiz.finished) ? 'Practising' : '';
+  const top = $('#topStudyBtn');
+  top.classList.toggle('is-state', !!busy);
+  top.disabled = !!busy;
+  top.querySelector('span').textContent = busy || 'Start studying';
   document.title = (total ? '(' + total + ') ' : '') + 'Lexio — Vocabulary Trainer';
 }
 
@@ -814,13 +824,18 @@ function cardEditor(card, presetDeck) {
       '</details>' +
       '<div id="dupWarn"></div>',
     foot:
-      /* Above the buttons rather than at the bottom of a form you have to
-         scroll: how the card is doing is worth seeing while you edit it. */
-      (card ? '<div class="foot-note">Status: ' + card.srs.state + ' · seen ' + card.stats.seen +
-        ' times · ' + card.stats.correct + ' correct / ' + card.stats.wrong + ' wrong · next ' +
-        dueText(card) + '</div>' : '') +
       (isNew ? '' : '<button class="danger-btn" data-act="del">Delete</button>') +
-      '<div class="spacer"></div>' +
+      /* In the gap the spacer used to hold: on the buttons' own row, so it
+         costs the dialog no height at all. */
+      (card
+        ? '<div class="foot-note" title="' + esc('Status: ' + card.srs.state + ' · seen ' +
+            card.stats.seen + ' times · ' + card.stats.correct + ' correct / ' + card.stats.wrong +
+            ' wrong · next ' + dueText(card)) + '">' +
+            'Status: ' + card.srs.state + ' · seen ' + card.stats.seen + ' times · ' +
+            card.stats.correct + ' correct / ' + card.stats.wrong + ' wrong · next ' +
+            dueText(card) +
+          '</div>'
+        : '<div class="spacer"></div>') +
       '<button class="ghost-btn" data-act="cancel">Cancel</button>' +
       (isNew ? '<button class="ghost-btn" data-act="save-more">Save &amp; add another</button>' : '') +
       '<button class="primary-btn" data-act="save">Save</button>',
@@ -1743,13 +1758,15 @@ function letterHintHTML(item) {
   if (!max) return '';
   const shown = Math.min(quiz.hintLetters || 0, max);
   const spent = shown >= max;
+  /* The button first, where every other drill puts it; the letters appear
+     beside it rather than in its place. */
   return '<div class="hint-slot letters' + (shown ? ' revealed' : '') + '" id="hintSlot">' +
-    '<div class="hint-text">' + ICONS.bulb +
-      '<span>Starts with <b id="hintLetters">' + esc(letterPrefix(item.answer, shown)) + '</b></span>' +
-    '</div>' +
     '<button class="hint-btn" data-act="hint" id="hintBtn"' + (spent ? ' disabled' : '') + '>' +
       ICONS.bulb + (shown ? 'One more letter' : 'Show the first letter') +
     '</button>' +
+    '<div class="hint-text">' + ICONS.bulb +
+      '<span>Starts with <b id="hintLetters">' + esc(letterPrefix(item.answer, shown)) + '</b></span>' +
+    '</div>' +
   '</div>';
 }
 

@@ -235,8 +235,9 @@ oynatmaz — yazdığın cevap ve imleç yerinde kalır.
 **Listening'de ipucu farklıdır:** anlamı zaten biliyorsundur, sorun sesi yakalamaktır. Bu
 yüzden çeviri yerine **harf** verir: ilk basışta kelimenin ilk harfi, sonra bir harf daha,
 **en fazla üç harf**. Kelime kısaysa sınır da düşer — üç harflik kelimede iki, iki harflikte
-bir harf. Düğme harfler açıldıkça yerinde kalır, üç harf dolduğunda sönükleşir. Yani kelime
-hiçbir zaman senin yerine tamamlanmaz.
+bir harf. Düğme diğer alıştırmalardaki gibi solda durur, harfler yanında belirir; üç harf dolduğunda
+sönükleşir ve üzerine gelince tepki vermez. Yani kelime hiçbir zaman senin yerine
+tamamlanmaz.
 
 Seslendirme, bilgisayarında zaten yüklü olan sesleri kullanır — internet gerekmez, ücretsizdir.
 
@@ -376,6 +377,10 @@ tam olur).
 
 `Space` yalnızca kartı çevirir; puanı **her zaman `1`–`4`** tuşlarıyla ya da düğmelerle
 verirsin. Yani farkında olmadan bir puan vermen mümkün değil.
+
+Çalışma ya da alıştırma sürerken sağ üstteki **Start studying** düğmesi düğme olmaktan
+çıkar ve nerede olduğunu söyler: **Studying** veya **Practising**. Başka bir ekrana
+geçtiğinde yeniden çalışır hâle gelir.
 
 Uzun sayfalarda sağda kaydırma çubuğu çıkar; aşağı indiğinde sağ altta
 başa dönmek için yuvarlak bir düğme belirir.
