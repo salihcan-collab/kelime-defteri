@@ -694,14 +694,17 @@ const head = (s) => console.log('\n— ' + s + ' —');
     const note = document.querySelector('.modal-foot .foot-note');
     const body = document.getElementById('modalBody');
     const foot = document.querySelector('.modal-foot');
-    /* Compare centres, not tops: the note is shorter than the buttons, so it
-       sits on the same row with a different top. A pixel of slack absorbs
-       sub-pixel rounding between elements of different heights. */
-    const centres = [...foot.children].map(el => {
-      const r = el.getBoundingClientRect();
-      return (r.top + r.bottom) / 2;
-    });
-    const spread = Math.max(...centres) - Math.min(...centres);
+    /* The note is tucked up under the rule, so its centre is deliberately not
+       the buttons'. What must hold is that it costs the footer no height: the
+       content box is still exactly one button tall. */
+    const cs = getComputedStyle(foot);
+    const inner = foot.getBoundingClientRect().height -
+      parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+    const btn = foot.querySelector('button').getBoundingClientRect().height;
+    const extra = inner - btn;      /* px the note adds to the row, if any */
+    /* and it sits above the buttons rather than beside them */
+    const noteTop = note ? note.getBoundingClientRect().top : 0;
+    const btnTop = foot.querySelector('button').getBoundingClientRect().top;
     const kids = [...foot.children];
     const iNote = kids.indexOf(note);
     const iDel = kids.findIndex(el => el.dataset && el.dataset.act === 'del');
@@ -710,15 +713,17 @@ const head = (s) => console.log('\n— ' + s + ' —');
              inBody: /Status:/.test(body.textContent),
              visibleWithoutScrolling: !!note &&
                note.getBoundingClientRect().bottom <= window.innerHeight + 1,
-             oneRow: spread <= 1, spread: Math.round(spread * 10) / 10,
+             oneRow: extra <= 2, extra: Math.round(extra * 10) / 10,
+             tuckedUp: noteTop < btnTop,
              between: iDel > -1 && iNote > iDel && iNote < iSave };
   });
   is(statusPlace.inFoot && !statusPlace.inBody,
      'the card\'s status moved out of the scrolling form into the footer');
   is(statusPlace.visibleWithoutScrolling, 'so it is on screen without scrolling to the bottom');
   is(statusPlace.oneRow,
-     `and shares the buttons' row rather than adding one (${statusPlace.spread}px apart)`);
+     `and costs the footer no extra height (${statusPlace.extra}px added to the row)`);
   is(statusPlace.between, 'sitting between Delete and the Cancel/Save pair');
+  is(statusPlace.tuckedUp, 'tucked up under the rule rather than on the buttons\' line');
   is(reopened.count === '4 filled in',
      `and the summary counts boxes, not the lines in them (${reopened.count})`);
   await page.evaluate(() => closeModal());
@@ -1177,9 +1182,10 @@ const head = (s) => console.log('\n— ' + s + ' —');
 
     go('study', {});
     const beforeStart = read();
-    startSession(null, false);
-    refreshChrome();
+    startSession(null, false);         /* no refreshChrome of our own here */
     const studying = read();
+    revealCard(); rateCard(3);
+    const afterAnswering = read();
 
     /* leaving the session behind puts the button back to work */
     go('browse', {});
@@ -1188,26 +1194,121 @@ const head = (s) => console.log('\n— ' + s + ' —');
     go('practice', {});
     quizSetup.scope = 'all'; quizSetup.deckId = '';
     const pool = practicePool(null, 'all');
-    quiz = newQuiz('mc-meaning', buildQuestions('mc-meaning', pool, 3, {}));
-    render('practice'); refreshChrome();
+    quizSetup.mode = 'mc-meaning';
+    startQuiz();                       /* the real entry point, as the button uses it */
     const practising = read();
+    answerMC(quiz.items[0], quiz.items[0].options[0]);
+    const practisingAfter = read();
 
     quiz = null; session = null; go('dashboard', {}); refreshChrome();
     return { idle: idle, beforeStart: beforeStart, studying: studying,
-             away: away, practising: practising, back: read() };
+             afterAnswering: afterAnswering, away: away,
+             practising: practising, practisingAfter: practisingAfter, back: read() };
   });
   is(topLabel.idle.text === 'Start studying' && !topLabel.idle.disabled,
      'with nothing running it offers to start');
   is(topLabel.beforeStart.text === 'Start studying',
      'the study screen on its own does not change it');
   is(topLabel.studying.text === 'Studying' && topLabel.studying.disabled && topLabel.studying.plain,
-     'during a session it reports "Studying" and stops being a button');
+     'it says "Studying" the moment the session starts, not after the first answer');
+  is(topLabel.afterAnswering.text === 'Studying', 'and stays that way once you answer one');
   is(topLabel.practising.text === 'Practising' && topLabel.practising.disabled,
-     'during a practice round it reports "Practising"');
+     'starting a practice round says "Practising" straight away');
+  is(topLabel.practisingAfter.text === 'Practising', 'and stays that way through the round');
   is(topLabel.away.text === 'Start studying' && !topLabel.away.disabled,
      'on another screen it goes back to being the way in');
   is(topLabel.back.text === 'Start studying' && !topLabel.back.disabled,
      'and once the session is over it works again');
+
+  /* ------------------------------------------------------------------ *
+     8k. A small selection still asks a proper question.
+
+     The bug: wrong answers came only from the words being practised, so a deck
+     of two gave two options and a deck of one could not start at all.
+   * ------------------------------------------------------------------ */
+  head('wrong answers come from the whole collection');
+  const small = await page.evaluate(() => {
+    Store.wipe();
+    Store.state.settings.optionCount = 4;
+    quizSetup.scope = 'all';
+    /* a deck holding a single word */
+    const deck = Store.addDeck({ name: 'zzztiny', emoji: '🔹', description: 'one word' }, true);
+    const only = Store.addCard({ term: 'zzzlonely', pos: 'noun', definition: 'the only word in its deck',
+                                 translation: 'tek', deckId: deck.id }, true);
+    Store.saveNow();
+    quizSetup.deckId = deck.id;
+    const pool = practicePool(deck.id, 'all');
+    const out = { pool: pool.length, blocked: startBlocker(pool, 'mc-meaning'),
+                  matchBlocked: startBlocker(pool, 'matching') };
+    ['mc-meaning', 'mc-word'].forEach(mode => {
+      const q = buildQuestions(mode, pool, 1, { cards: [only] });
+      out[mode] = q[0] ? q[0].options.length : 0;
+      out[mode + 'HasAnswer'] = q[0] ? q[0].options.indexOf(q[0].answer) !== -1 : false;
+      out[mode + 'Unique'] = q[0] ? new Set(q[0].options).size === q[0].options.length : false;
+    });
+    return out;
+  });
+  is(small.pool === 1 && !small.blocked,
+     'a deck of one word can start a multiple-choice drill');
+  is(small.matchBlocked !== '', `matching still needs two of them (${small.matchBlocked})`);
+  is(small['mc-meaning'] === 4 && small['mc-word'] === 4,
+     `it still gets four options (${small['mc-meaning']}, ${small['mc-word']})`);
+  is(small['mc-meaningHasAnswer'] && small['mc-wordHasAnswer'], 'with the right answer among them');
+  is(small['mc-meaningUnique'] && small['mc-wordUnique'], 'and no option repeated');
+
+  const twoWords = await page.evaluate(() => {
+    Store.state.settings.optionCount = 5;
+    const deck = Store.state.decks.find(d => d.name === 'zzztiny');
+    Store.addCard({ term: 'zzzsecond', pos: 'noun', definition: 'the second word in that deck',
+                    translation: 'ikinci', deckId: deck.id }, true);
+    Store.saveNow();
+    const pool = practicePool(deck.id, 'all');
+    const q = buildQuestions('mc-meaning', pool, 2, { cards: pool });
+    const outside = q.map(x => x.options.filter(o =>
+      !pool.some(c => (c.definition || c.translation) === o)).length);
+    return { pool: pool.length, counts: q.map(x => x.options.length), outside: outside,
+             matchOk: startBlocker(pool, 'matching') === '' };
+  });
+  is(twoWords.counts.every(n => n === 5),
+     `a deck of two gives five options, not two (${twoWords.counts.join(', ')})`);
+  is(twoWords.outside.every(n => n > 0),
+     'the extra options are borrowed from outside the selection');
+  is(twoWords.matchOk, 'and two words is enough for matching');
+  await page.evaluate(() => {
+    Store.state.settings.optionCount = 4;
+    quizSetup.deckId = ''; Store.wipe(); Store.saveNow();
+  });
+
+  /* ------------------------------------------------------------------ *
+     8l. Telling the two sides of a matching board apart.
+   * ------------------------------------------------------------------ */
+  head('a matching board says which column is which');
+  const board = await page.evaluate(() => {
+    Store.wipe();
+    quizSetup.scope = 'all'; quizSetup.deckId = '';
+    go('practice', {});
+    const pool = practicePool(null, 'all');
+    quiz = newQuiz('matching', buildQuestions('matching', pool, 6, {}));
+    render('practice');
+    const cols = [...document.querySelectorAll('#view-practice .match-col')];
+    const read = (c) => {
+      const item = c.querySelector('.match-item');
+      const cs = getComputedStyle(item);
+      return { side: c.className.replace('match-col', '').trim(),
+               heading: (c.querySelector('.match-head') || {}).textContent,
+               edge: cs.borderLeftColor, edgeWidth: cs.borderLeftWidth,
+               weight: cs.fontWeight, bg: cs.backgroundColor };
+    };
+    return cols.map(read);
+  });
+  is(board.length === 2 && board[0].heading === 'Word' && board[1].heading === 'Meaning',
+     `each column is labelled (${board.map(c => c.heading).join(' / ')})`);
+  is(board[0].side === 'words' && board[1].side === 'meanings', 'and knows which side it is');
+  is(board[0].edge !== board[1].edge,
+     'the words carry a coloured edge the meanings do not');
+  is(board[0].weight !== board[1].weight,
+     `and are set heavier (${board[0].weight} against ${board[1].weight})`);
+  await page.evaluate(() => { quiz = null; Store.wipe(); Store.saveNow(); go('dashboard', {}); });
 
   /* ------------------------------------------------------------------ *
      9. Practice.

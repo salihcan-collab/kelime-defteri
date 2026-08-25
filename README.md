@@ -226,6 +226,11 @@ Bir turun sonunda **"Practise the N I missed"** düğmesi yalnızca kaçırdığ
 tekrar sorar; çeldirici şıklar arasında o turda kaçırdığın diğer kelimeler de yer alır,
 çünkü karıştırdığın kelimeler genelde onlardır.
 
+**Şıklar nereden gelir:** Çoktan seçmeli sorularda yanlış şıklar önce çalıştığın kelimelerden,
+yetmezse **koleksiyonun geri kalanından** seçilir. Bu yüzden tek kelimelik bir destede bile
+soru dört (ya da ayara göre beş) şıkla sorulur. Sadece **Matching** seçtiğin kümede en az iki
+kelime ister, çünkü orada eşleşen taraflar o kelimelerin kendisidir.
+
 **İpucu:** "Meaning → Word", "Type the word" ve "Fill in the blank" alıştırmalarında sorunun
 altında bir **Show hint** düğmesi vardır. Türkçe çeviri (boşluk doldurmada İngilizce anlam)
 varsayılan olarak gizlidir, takıldığında tıklayıp görebilirsin. Puanı etkilemez, sayfayı da

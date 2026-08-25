@@ -1137,6 +1137,7 @@ function startSession(deckId, ahead) {
   };
   session.total = session.queue.length;
   render('study');
+  refreshChrome();          /* the top-right button reports the session at once */
 }
 
 function endSession() {
@@ -1405,6 +1406,7 @@ function renderPractice(host) {
 function drawPracticeSetup(host) {
   const pool = practicePool(quizSetup.deckId, quizSetup.scope);
   const aiOn = AI.available();
+  const blocked = startBlocker(pool, quizSetup.mode);
   host.innerHTML =
     '<div class="grid g2" style="margin-bottom:18px;align-items:start">' +
       '<div class="card">' +
@@ -1444,14 +1446,10 @@ function drawPracticeSetup(host) {
         '</button>').join('') +
     '</div>' +
     '<div class="row" style="margin-top:20px;justify-content:flex-end">' +
-      '<button class="primary-btn" data-act="start"' + (pool.length < minWordsFor(quizSetup.mode) ? ' disabled' : '') + '>' +
+      '<button class="primary-btn" data-act="start"' + (blocked ? ' disabled' : '') + '>' +
         ICONS.play + 'Start practice</button>' +
     '</div>' +
-    (pool.length < minWordsFor(quizSetup.mode)
-      ? '<p class="faint" style="text-align:right;margin-top:8px">' +
-        (pool.length ? 'This drill builds multiple-choice options from other words — add at least two.'
-                     : 'No words match these filters yet.') + '</p>'
-      : '');
+    (blocked ? '<p class="faint" style="text-align:right;margin-top:8px">' + esc(blocked) + '</p>' : '');
 
   host.onclick = (e) => {
     const m = e.target.closest('[data-mode]');
@@ -1515,6 +1513,15 @@ function distractors(card, pool, key, n, prefer) {
   take((prefer || []).filter(c => c.id !== card.id));
   take(pool.filter(c => c.pos && c.pos === card.pos));
   take(pool);
+  /* A deck of two words would otherwise ask a two-option question. The wrong
+     answers do not have to be words you are practising — only plausible — so
+     the rest of the collection fills the gap. */
+  if (picked.length < n) {
+    const inPool = new Set(pool.map(c => c.id));
+    const rest = Store.state.cards.filter(c => !inPool.has(c.id));
+    take(rest.filter(c => c.pos && c.pos === card.pos));
+    take(rest);
+  }
   return picked;
 }
 
@@ -1544,8 +1551,9 @@ function buildQuestions(mode, pool, count, opts) {
     out.forEach(board => {
       const used = {};
       board.cards.forEach(c => { used[c.id] = 1; used[String(meaningOf(c)).toLowerCase()] = 1; });
-      const spares = pool.filter(c =>
+      const spare = (list) => list.filter(c =>
         !used[c.id] && meaningOf(c) && !used[String(meaningOf(c)).toLowerCase()]);
+      const spares = spare(pool).length ? spare(pool) : spare(Store.state.cards);
       board.decoy = spares.length ? sample(spares, 1)[0] : null;
     });
     return out;
@@ -1593,9 +1601,22 @@ function buildQuestions(mode, pool, count, opts) {
   }).filter(Boolean);
 }
 
-/* Multiple-choice drills need other words to build plausible options from. */
+/* Multiple-choice drills need other words to build plausible options from —
+   but those words can come from anywhere in the collection, so one word in the
+   selection is enough. Matching is the exception: it pairs the words you chose
+   against each other, so it needs two of them. */
 const NEEDS_OPTIONS = ['mc-meaning', 'mc-word', 'matching', 'ai-quiz'];
-function minWordsFor(mode) { return NEEDS_OPTIONS.indexOf(mode) !== -1 ? 2 : 1; }
+function minWordsFor(mode) { return mode === 'matching' ? 2 : 1; }
+function minCollectionFor(mode) { return NEEDS_OPTIONS.indexOf(mode) !== -1 ? 2 : 1; }
+
+/* Why the drill cannot start, in words, or '' when it can. */
+function startBlocker(pool, mode) {
+  if (!pool.length) return 'No words match these filters yet.';
+  if (pool.length < minWordsFor(mode)) return 'Matching needs at least two words in this selection.';
+  if (Store.state.cards.length < minCollectionFor(mode))
+    return 'This drill needs other words to build wrong answers from — add a second word.';
+  return '';
+}
 
 /* One place that knows how to set up a round, so matching's pair totals are
    never forgotten. */
@@ -1639,6 +1660,7 @@ async function startQuiz() {
   }
   if (!quiz.items.length) { quiz = null; toast('Could not build questions from these words', 'err'); return render('practice'); }
   render('practice');
+  refreshChrome();
 }
 
 /* ---------- answer checking ------------------------------------------------ */
@@ -1865,10 +1887,17 @@ function matchingHTML(item) {
   /* Flashes are keyed by side + id: on a miss the two tiles are different
      words, and the same id also exists in the opposite column. */
   const flashed = (side, id) => (m.flash && m.flash.keys.indexOf(side + id) !== -1) ? ' ' + m.flash.kind : '';
-  const col = (rows, side) => '<div class="match-col">' + rows.map(r =>
-    '<button class="match-item' + (m.done.indexOf(r.id) !== -1 ? ' done' : '') +
-      (m.sel && m.sel.side === side && m.sel.id === r.id ? ' sel' : '') + flashed(side, r.id) +
-      '" data-side="' + side + '" data-id="' + r.id + '">' + esc(r.text) + '</button>').join('') + '</div>';
+  /* The two columns hold different kinds of thing — words on the left,
+     meanings on the right — and used to be told apart only by where they sat.
+     A heading and a coloured edge say which is which even mid-drag of the eye. */
+  const col = (rows, side, heading) =>
+    '<div class="match-col ' + (side === 'l' ? 'words' : 'meanings') + '">' +
+      '<div class="match-head">' + heading + '</div>' +
+      rows.map(r =>
+        '<button class="match-item' + (m.done.indexOf(r.id) !== -1 ? ' done' : '') +
+          (m.sel && m.sel.side === side && m.sel.id === r.id ? ' sel' : '') + flashed(side, r.id) +
+          '" data-side="' + side + '" data-id="' + r.id + '">' + esc(r.text) + '</button>').join('') +
+    '</div>';
   return '<div class="card">' +
     '<div class="row between" style="margin-bottom:14px">' +
       '<p class="muted">Match each word with its meaning</p>' +
@@ -1876,7 +1905,8 @@ function matchingHTML(item) {
         (boards > 1 ? ' · board ' + (quiz.i + 1) + ' of ' + boards : '') +
         (m.misses ? ' · ' + m.misses + ' miss' + (m.misses === 1 ? '' : 'es') : '') + '</span>' +
     '</div>' +
-    '<div class="match-grid">' + col(m.left, 'l') + col(m.right, 'r') + '</div></div>';
+    '<div class="match-grid">' + col(m.left, 'l', 'Word') +
+      col(m.right, 'r', 'Meaning') + '</div></div>';
 }
 
 /* ---------- interaction ------------------------------------------------------ */
@@ -2080,7 +2110,8 @@ function drawQuizResults(host) {
       if (mode === 'matching' && missed.length < 2) mode = 'mc-meaning';
       quiz = newQuiz(mode, buildQuestions(mode, pool, missed.length, { cards: missed, prefer: missed }));
       if (!quiz.items.length) { quiz = null; toast('Could not rebuild those questions', 'err'); }
-      return render('practice');
+      render('practice');
+      return refreshChrome();
     }
   };
 }
