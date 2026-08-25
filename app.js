@@ -1291,45 +1291,52 @@ function confetti() {
   document.body.appendChild(cv);
 
   const ctx = cv.getContext('2d');
+  /* A spread of hues rather than the interface palette — the point of confetti
+     is that it does not match anything. The theme's own accent joins in so it
+     still belongs to the app. */
   const root = getComputedStyle(document.documentElement);
-  const colours = ['--accent', '--good', '--warn', '--accent-2', '--accent']
-    .map(v => (root.getPropertyValue(v) || '').trim()).filter(Boolean);
-  if (!colours.length) colours.push('#6366f1');
+  const accent = (root.getPropertyValue('--accent') || '').trim();
+  const colours = ['#f43f5e', '#f59e0b', '#facc15', '#22c55e', '#14b8a6',
+                   '#38bdf8', '#6366f1', '#a855f7', '#ec4899', '#fb923c'];
+  if (accent) colours.push(accent, accent);
 
   const bits = [];
-  for (let i = 0; i < 150; i++) {
+  for (let i = 0; i < 130; i++) {
     bits.push({
-      x: w * (0.5 + (Math.random() - 0.5) * 0.55),
-      y: h * (0.44 + Math.random() * 0.06),
-      vx: (Math.random() - 0.5) * 12 * dpr,
-      vy: (-9 - Math.random() * 10) * dpr,
+      /* thrown from a narrow band in the middle, not across the whole page */
+      x: w * (0.5 + (Math.random() - 0.5) * 0.2),
+      y: h * (0.46 + Math.random() * 0.05),
+      vx: (Math.random() - 0.5) * 4.4 * dpr,
+      vy: (-6 - Math.random() * 5) * dpr,
       w: (4 + Math.random() * 5) * dpr,
       h: (7 + Math.random() * 7) * dpr,
-      a: Math.random() * Math.PI, va: (Math.random() - 0.5) * 0.34,
-      c: colours[i % colours.length]
+      a: Math.random() * Math.PI, va: (Math.random() - 0.5) * 0.16,
+      c: colours[Math.floor(Math.random() * colours.length)]
     });
   }
 
-  const gravity = 0.34 * dpr;
+  /* Light gravity and light drag: the pieces hang in the air on the way down
+     rather than being flicked off the screen. */
+  const gravity = 0.13 * dpr;
   const start = performance.now();
   const frame = (now) => {
     const life = now - start;
     ctx.clearRect(0, 0, w, h);
     let alive = 0;
     for (const b of bits) {
-      b.vy += gravity; b.vx *= 0.995;
+      b.vy += gravity; b.vx *= 0.992; b.vy *= 0.995;
       b.x += b.vx; b.y += b.vy; b.a += b.va;
       if (b.y < h + 40) alive++;
       ctx.save();
       ctx.translate(b.x, b.y);
       ctx.rotate(b.a);
-      ctx.globalAlpha = Math.max(0, 1 - Math.max(0, life - 1700) / 900);
+      ctx.globalAlpha = Math.max(0, 1 - Math.max(0, life - 3200) / 1300);
       ctx.fillStyle = b.c;
       /* the height wobbles with the spin, so each piece reads as a flat flake */
       ctx.fillRect(-b.w / 2, -b.h / 2, b.w, b.h * (0.35 + 0.65 * Math.abs(Math.cos(b.a))));
       ctx.restore();
     }
-    if (alive && life < 2700) requestAnimationFrame(frame);
+    if (alive && life < 4600) requestAnimationFrame(frame);
     else cv.remove();
   };
   requestAnimationFrame(frame);
@@ -1444,7 +1451,7 @@ const MODES = [
     icon:'<svg viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg>' },
   { id:'cloze', name:'Fill in the blank', desc:'Complete the example sentence with the missing word.',
     icon:'<svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h5M13 12h7M4 17h16"/></svg>' },
-  { id:'matching', name:'Matching pairs', desc:'Pair words with their translations on small boards.',
+  { id:'matching', name:'Matching translations', desc:'Pair words with their translations on small boards.',
     icon:'<svg viewBox="0 0 24 24"><rect x="3" y="4" width="7" height="7" rx="1"/><rect x="14" y="4" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>' },
   { id:'matching-def', name:'Matching meanings', desc:'Pair words with their English definitions — the harder board.',
     icon:'<svg viewBox="0 0 24 24"><rect x="3" y="4" width="7" height="7" rx="1"/><path d="M14 6h7M14 9h5"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 16h7M14 19h5"/></svg>' },
@@ -1967,10 +1974,8 @@ function matchingHTML(item) {
      words, and the same id also exists in the opposite column. */
   const flashed = (side, id) => (m.flash && m.flash.keys.indexOf(side + id) !== -1) ? ' ' + m.flash.kind : '';
   /* The two columns hold different kinds of thing and used to be told apart
-     only by where they sat. A heading names each one, the right-hand column is
-     the quieter of the two, and the tiles are cut like puzzle pieces — a tab on
-     every word, a notch in every answer — so which side is which is legible
-     before a single word has been read. */
+     only by where they sat. A heading names each one and the right-hand column
+     is the quieter of the two. */
   const col = (rows, side, heading) =>
     '<div class="match-col ' + (side === 'l' ? 'words' : 'meanings') + '">' +
       '<div class="match-head">' + heading + '</div>' +

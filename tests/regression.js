@@ -1294,13 +1294,11 @@ const head = (s) => console.log('\n— ' + s + ' —');
     const read = (c) => {
       const item = c.querySelector('.match-item');
       const cs = getComputedStyle(item);
-      const tab = getComputedStyle(item, '::after');
-      const notch = getComputedStyle(item, '::before');
       return { side: c.className.replace('match-col', '').trim(),
                heading: (c.querySelector('.match-head') || {}).textContent,
-               colour: cs.color,
-               tab: tab.content !== 'none' ? tab.width + '/' + tab.borderRadius : 'none',
-               notch: notch.content !== 'none' ? notch.width + '/' + notch.borderRadius : 'none' };
+               colour: cs.color, padding: cs.paddingLeft + '/' + cs.paddingRight,
+               tab: getComputedStyle(item, '::after').content,
+               notch: getComputedStyle(item, '::before').content };
     };
     return cols.map(read);
   });
@@ -1309,10 +1307,10 @@ const head = (s) => console.log('\n— ' + s + ' —');
   is(board[0].side === 'words' && board[1].side === 'meanings', 'and knows which side it is');
   is(board[0].colour !== board[1].colour,
      'the answers are the quieter half of the board');
-  is(board[0].tab !== 'none' && board[0].notch === 'none',
-     `every word grows a tab on its right (${board[0].tab})`);
-  is(board[1].notch !== 'none' && board[1].tab === 'none',
-     `and every answer has a notch bitten out of its left (${board[1].notch})`);
+  is(board.every(c => c.tab === 'none' && c.notch === 'none'),
+     'the tiles are plain — nothing is drawn on their edges');
+  is(board[0].padding === board[1].padding,
+     `and both columns are padded alike (${board[0].padding})`);
   const forms = await page.evaluate(() => {
     Store.wipe();
     quizSetup.scope = 'all'; quizSetup.deckId = '';
@@ -1426,6 +1424,45 @@ const head = (s) => console.log('\n— ' + s + ' —');
     return { pointer: pointer, left: document.querySelectorAll('canvas.confetti').length };
   });
   is(cleanup.pointer === 'none', 'the canvas never swallows a click');
+
+  /* Slower, tighter and more colourful than the first attempt. */
+  const burst = await page.evaluate(async () => {
+    document.querySelectorAll('canvas.confetti').forEach(c => c.remove());
+    confetti();
+    await new Promise(r => setTimeout(r, 900));
+    const cv = document.querySelector('canvas.confetti');
+    if (!cv) return { missing: true };
+    const ctx = cv.getContext('2d');
+    const img = ctx.getImageData(0, 0, cv.width, cv.height);
+    const seen = {};
+    let minX = cv.width, maxX = 0, lit = 0;
+    for (let y = 0; y < cv.height; y += 3) {
+      for (let x = 0; x < cv.width; x += 3) {
+        const i = (y * cv.width + x) * 4;
+        if (img.data[i + 3] < 200) continue;
+        lit++;
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        seen[img.data[i] + ',' + img.data[i + 1] + ',' + img.data[i + 2]] = 1;
+      }
+    }
+    return { lit: lit, colours: Object.keys(seen).length,
+             spread: lit ? (maxX - minX) / cv.width : 0 };
+  });
+  is(!burst.missing && burst.lit > 0, 'the pieces are actually painted');
+  is(burst.colours >= 8, `and come in a spread of colours (${burst.colours} distinct)`);
+  is(burst.spread < 0.75,
+     `thrown from the middle rather than across the page (${Math.round(burst.spread * 100)}% of the width)`);
+
+  const stillUp = await page.evaluate(async () => {
+    await new Promise(r => setTimeout(r, 1800));
+    return document.querySelectorAll('canvas.confetti').length;
+  });
+  is(stillUp === 1, 'and are still falling well after the old burst had finished');
+  await page.evaluate(async () => {
+    await new Promise(r => setTimeout(r, 3200));
+    document.querySelectorAll('canvas.confetti').forEach(c => c.remove());
+  });
   is(cleanup.left === 0, 'and takes itself off the page when it settles');
   await page.evaluate(() => { quiz = null; session = null; Store.wipe(); Store.saveNow(); go('dashboard', {}); });
 

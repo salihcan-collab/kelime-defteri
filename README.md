@@ -205,7 +205,7 @@ Yeni kelime eklemek için herhangi bir ekranda **N** tuşuna basman yeterli.
 | **Meaning → Word** | Anlamı görürsün, doğru kelimeyi seçersin |
 | **Type the word** | Anlamdan yola çıkıp kelimeyi yazarsın (tek harflik yazım hatası affedilir) |
 | **Fill in the blank** | Örnek cümledeki boşluğu doldurursun |
-| **Matching pairs** | Kelimeleri **Türkçe karşılıklarıyla** eşleştirirsin |
+| **Matching translations** | Kelimeleri **Türkçe karşılıklarıyla** eşleştirirsin |
 | **Matching meanings** | Aynı tahta, ama bu kez **İngilizce tanımla** eşleştirirsin — daha zoru |
 | **Listening** | Kelime sesli okunur, duyduğunu yazarsın |
 | **AI quiz** | Yapay zekâ o kelimeler için yepyeni bağlam soruları yazar |
@@ -228,10 +228,8 @@ tekrar sorar; çeldirici şıklar arasında o turda kaçırdığın diğer kelim
 çünkü karıştırdığın kelimeler genelde onlardır.
 
 **Eşleştirme tahtası:** Solda kelimeler, sağda karşılıkları. Başlıklar hangi sütunun ne
-olduğunu söyler, sağ sütun daha soluk durur ve kutular **yapboz parçası** gibi kesilmiştir —
-her kelimenin sağında bir çıkıntı, her karşılığın solunda ona uyan bir çentik. Tahtalar en
-fazla 6 kelimeye bölünür ve sağ sütunda her zaman bir fazla seçenek bulunur ki son kelime
-kendiliğinden ortaya çıkmasın.
+olduğunu söyler ve sağ sütun daha soluk durur. Tahtalar en fazla 6 kelimeye bölünür ve sağ
+sütunda her zaman bir fazla seçenek bulunur ki son kelime kendiliğinden ortaya çıkmasın.
 
 **Şıklar nereden gelir:** Çoktan seçmeli sorularda yanlış şıklar önce çalıştığın kelimelerden,
 yetmezse **koleksiyonun geri kalanından** seçilir. Bu yüzden tek kelimelik bir destede bile
@@ -251,8 +249,8 @@ bir harf. Düğme diğer alıştırmalardaki gibi solda durur, harfler yanında 
 sönükleşir ve üzerine gelince tepki vermez. Yani kelime hiçbir zaman senin yerine
 tamamlanmaz.
 
-Bir çalışmayı ya da alıştırmayı **sonuna kadar götürdüğünde** özet ekranında kısa bir konfeti
-patlar. **End session / End practice** ile yarıda bıraktığında patlamaz — kutlanan şey bitirmek.
+Bir çalışmayı ya da alıştırmayı **sonuna kadar götürdüğünde** özet ekranında ağır ağır düşen,
+rengârenk bir konfeti patlar. **End session / End practice** ile yarıda bıraktığında patlamaz — kutlanan şey bitirmek.
 Sisteminde "hareketi azalt" ayarı açıksa animasyon hiç çalışmaz.
 
 Seslendirme, bilgisayarında zaten yüklü olan sesleri kullanır — internet gerekmez, ücretsizdir.
