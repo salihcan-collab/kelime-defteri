@@ -451,21 +451,50 @@ input[type=range]::-moz-range-thumb{
 .hint-slot.revealed .hint-text{ opacity:1; visibility:visible; }
 .hint-slot.revealed .hint-btn{ opacity:0; visibility:hidden; pointer-events:none; }
 
-.match-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.match-grid{ display:grid; grid-template-columns:1fr 1fr; gap:28px; }
 .match-col{ display:flex; flex-direction:column; gap:8px; }
 .match-head{
   font-size:.64rem; text-transform:uppercase; letter-spacing:.09em;
   font-weight:700; color:var(--text-faint); margin-bottom:1px;
 }
-/* Words carry the accent edge and the heavier type; meanings are the quieter
-   half, so a glance tells you which column you are in. */
-.match-col.words .match-item{
-  border-left:3px solid var(--accent); font-weight:650;
-}
-.match-col.meanings .match-item{
-  border-left:3px solid transparent; background:var(--surface-2); color:var(--text-dim);
-}
+/* The answers are the quieter half of the board. */
+.match-col.meanings .match-item{ color:var(--text-dim); }
 .match-col.meanings .match-item:hover:not(:disabled){ color:var(--text); }
+
+/* Puzzle edges. Every word grows a tab on its right, every answer has a notch
+   bitten out of its left, so the two columns read as pieces that belong
+   together. Each is a circle sitting on the tile's own edge, clipped to the
+   half that shows and nudged 2px over the border so the seam disappears; the
+   tab inherits the tile's background, which means it follows every hover,
+   selected and correct state without a rule of its own. */
+.match-item{ position:relative; }
+.match-col.words .match-item{ padding-right:18px; }
+.match-col.meanings .match-item{ padding-left:24px; }
+
+.match-col.words .match-item::after,
+.match-col.meanings .match-item::before{
+  content:''; position:absolute; top:50%; width:22px; height:22px;
+  margin-top:-11px; border-radius:50%; border:1px solid var(--border);
+  transition:border-color .14s, background .14s;
+}
+.match-col.words .match-item::after{
+  /* one pixel over the tile's own right border, so the seam is covered */
+  right:-11px; background:inherit;
+  clip-path:inset(0 0 0 calc(50% - 1px));
+}
+.match-col.meanings .match-item::before{
+  /* the tile's left border sits just inside its edge, so an exact half
+     already covers it — any more would leave a step at the mouth */
+  left:-11px; background:var(--surface);       /* the board behind the tile */
+  clip-path:inset(0 0 0 50%);
+}
+.match-item:hover:not(:disabled)::after,
+.match-item:hover:not(:disabled)::before{ border-color:var(--accent); }
+.match-item.sel::after, .match-item.sel::before{ border-color:var(--accent); }
+.match-item.hit::after, .match-item.hit::before{ border-color:var(--good); }
+.match-item.miss::after, .match-item.miss::before{ border-color:var(--bad); }
+.match-item.done::after, .match-item.done::before{ border-style:dashed; }
+.match-item.done.hit::after, .match-item.done.hit::before{ border-style:solid; }
 .match-item{ padding:11px 13px; border-radius:11px; border:1px solid var(--border); background:var(--surface);
   cursor:pointer; font-size:.88rem; transition:.14s; text-align:left; }
 .match-item:hover:not(:disabled){ border-color:var(--accent); }
@@ -841,3 +870,9 @@ kbd{
   border:1px solid var(--border); box-shadow:none; cursor:default;
 }
 #topStudyBtn.is-state svg{ opacity:.6; }
+
+/* The burst over a finished session. Nothing under it is blocked. */
+.confetti{
+  position:fixed; inset:0; z-index:200;
+  pointer-events:none; user-select:none;
+}

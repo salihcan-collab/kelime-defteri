@@ -1294,21 +1294,140 @@ const head = (s) => console.log('\n— ' + s + ' —');
     const read = (c) => {
       const item = c.querySelector('.match-item');
       const cs = getComputedStyle(item);
+      const tab = getComputedStyle(item, '::after');
+      const notch = getComputedStyle(item, '::before');
       return { side: c.className.replace('match-col', '').trim(),
                heading: (c.querySelector('.match-head') || {}).textContent,
-               edge: cs.borderLeftColor, edgeWidth: cs.borderLeftWidth,
-               weight: cs.fontWeight, bg: cs.backgroundColor };
+               colour: cs.color,
+               tab: tab.content !== 'none' ? tab.width + '/' + tab.borderRadius : 'none',
+               notch: notch.content !== 'none' ? notch.width + '/' + notch.borderRadius : 'none' };
     };
     return cols.map(read);
   });
-  is(board.length === 2 && board[0].heading === 'Word' && board[1].heading === 'Meaning',
+  is(board.length === 2 && board[0].heading === 'Word' && board[1].heading === 'Translation',
      `each column is labelled (${board.map(c => c.heading).join(' / ')})`);
   is(board[0].side === 'words' && board[1].side === 'meanings', 'and knows which side it is');
-  is(board[0].edge !== board[1].edge,
-     'the words carry a coloured edge the meanings do not');
-  is(board[0].weight !== board[1].weight,
-     `and are set heavier (${board[0].weight} against ${board[1].weight})`);
+  is(board[0].colour !== board[1].colour,
+     'the answers are the quieter half of the board');
+  is(board[0].tab !== 'none' && board[0].notch === 'none',
+     `every word grows a tab on its right (${board[0].tab})`);
+  is(board[1].notch !== 'none' && board[1].tab === 'none',
+     `and every answer has a notch bitten out of its left (${board[1].notch})`);
+  const forms = await page.evaluate(() => {
+    Store.wipe();
+    quizSetup.scope = 'all'; quizSetup.deckId = '';
+    const pool = practicePool(null, 'all');
+    const read = (mode) => {
+      quiz = newQuiz(mode, buildQuestions(mode, pool, 6, {}));
+      render('practice');
+      const item = quiz.items[0];
+      const right = quiz.match.right.map(r => r.text);
+      const card = item.cards[0];
+      return { heading: [...document.querySelectorAll('.match-head')].map(h => h.textContent).join('/'),
+               matchesTranslation: right.indexOf(card.translation) !== -1,
+               matchesDefinition: right.indexOf(card.definition) !== -1,
+               prompt: document.querySelector('#view-practice .muted').textContent };
+    };
+    const byTranslation = read('matching');
+    quiz = null;
+    const byDefinition = read('matching-def');
+    quiz = null;
+    return { byTranslation: byTranslation, byDefinition: byDefinition,
+             offered: MODES.filter(m => m.id.indexOf('matching') === 0).map(m => m.id) };
+  });
+  is(forms.offered.join(',') === 'matching,matching-def',
+     'both forms of the drill are on offer');
+  is(forms.byTranslation.matchesTranslation && !forms.byTranslation.matchesDefinition,
+     `the first pairs against the translation (${forms.byTranslation.heading})`);
+  is(forms.byDefinition.matchesDefinition && !forms.byDefinition.matchesTranslation,
+     `the second pairs against the English meaning (${forms.byDefinition.heading})`);
+  is(/translation$/.test(forms.byTranslation.prompt) && /meaning$/.test(forms.byDefinition.prompt),
+     'and each says which it is asking for');
   await page.evaluate(() => { quiz = null; Store.wipe(); Store.saveNow(); go('dashboard', {}); });
+
+  /* ------------------------------------------------------------------ *
+     8m. Finishing is not the same as stopping.
+   * ------------------------------------------------------------------ */
+  head('a finished session gets a burst, an abandoned one does not');
+  const cheered = await page.evaluate(async () => {
+    const canvases = () => document.querySelectorAll('canvas.confetti').length;
+    const settle = () => new Promise(r => setTimeout(r, 400));
+
+    /* walked away from */
+    session = null;
+    Store.wipe();
+    Store.state.cards = Store.state.cards.slice(0, 3);
+    Store.saveNow();
+    go('study', {});
+    startSession(null, false);
+    revealCard(); rateCard(3);
+    endSession();
+    await settle();
+    const afterQuitting = canvases();
+
+    /* carried to the end */
+    session = null;
+    go('study', {});
+    startSession(null, false);
+    let guard = 0;
+    while (session && !session.finished && guard++ < 60) { revealCard(); rateCard(4); }
+    const completedFlag = session && session.completed;
+    await settle();
+    const afterFinishing = canvases();
+
+    /* re-rendering the same summary must not set it off again */
+    render('study');
+    render('study');
+    await settle();
+    const afterRerender = canvases();
+    return { afterQuitting: afterQuitting, afterFinishing: afterFinishing,
+             afterRerender: afterRerender, completedFlag: completedFlag };
+  });
+  is(cheered.afterQuitting === 0, 'ending a session early passes without ceremony');
+  is(cheered.completedFlag === true && cheered.afterFinishing === 1,
+     'reaching the last card sets off the confetti');
+  is(cheered.afterRerender === 1, 'and redrawing the summary does not set it off again');
+
+  const quizCheer = await page.evaluate(async () => {
+    const canvases = () => document.querySelectorAll('canvas.confetti').length;
+    const settle = () => new Promise(r => setTimeout(r, 400));
+    /* the study burst is still in the air; it is not this test's business */
+    document.querySelectorAll('canvas.confetti').forEach(c => c.remove());
+    session = null; quiz = null;
+    Store.wipe();
+    quizSetup.scope = 'all'; quizSetup.deckId = '';
+    go('practice', {});
+    const pool = practicePool(null, 'all');
+
+    quiz = newQuiz('mc-meaning', buildQuestions('mc-meaning', pool, 3, {}));
+    render('practice');
+    finishQuiz(false);                     /* End practice */
+    await settle();
+    const afterQuitting = canvases();
+
+    document.querySelectorAll('canvas.confetti').forEach(c => c.remove());
+    quiz = newQuiz('mc-meaning', buildQuestions('mc-meaning', pool, 2, {}));
+    render('practice');
+    quiz.i = quiz.items.length - 1;
+    nextQuizItem();                        /* the last question answered */
+    await settle();
+    return { afterQuitting: afterQuitting, afterFinishing: canvases(),
+             completedFlag: quiz.completed };
+  });
+  is(quizCheer.afterQuitting === 0, 'the same holds for a practice round left early');
+  is(quizCheer.completedFlag === true && quizCheer.afterFinishing === 1,
+     'and a round played to its last question is cheered');
+
+  /* Nothing is left behind on screen, and nothing is clickable through it. */
+  const cleanup = await page.evaluate(async () => {
+    const cv = document.querySelector('canvas.confetti');
+    const pointer = cv ? getComputedStyle(cv).pointerEvents : 'none';
+    await new Promise(r => setTimeout(r, 3200));
+    return { pointer: pointer, left: document.querySelectorAll('canvas.confetti').length };
+  });
+  is(cleanup.pointer === 'none', 'the canvas never swallows a click');
+  is(cleanup.left === 0, 'and takes itself off the page when it settles');
+  await page.evaluate(() => { quiz = null; session = null; Store.wipe(); Store.saveNow(); go('dashboard', {}); });
 
   /* ------------------------------------------------------------------ *
      9. Practice.

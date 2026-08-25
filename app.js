@@ -1273,6 +1273,76 @@ function drawStudyCard(host) {
   };
 }
 
+/* A short burst for a session carried to the end. Reaching the last card is
+   the thing worth marking — walking away with End session is not — so it fires
+   on completion only, and once: a re-render of the same summary must not set
+   it off again.
+
+   Canvas, no library, removed the moment the last piece is off the bottom. */
+function confetti() {
+  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const cv = document.createElement('canvas');
+  cv.className = 'confetti';
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const w = cv.width = Math.floor(window.innerWidth * dpr);
+  const h = cv.height = Math.floor(window.innerHeight * dpr);
+  cv.style.width = window.innerWidth + 'px';
+  cv.style.height = window.innerHeight + 'px';
+  document.body.appendChild(cv);
+
+  const ctx = cv.getContext('2d');
+  const root = getComputedStyle(document.documentElement);
+  const colours = ['--accent', '--good', '--warn', '--accent-2', '--accent']
+    .map(v => (root.getPropertyValue(v) || '').trim()).filter(Boolean);
+  if (!colours.length) colours.push('#6366f1');
+
+  const bits = [];
+  for (let i = 0; i < 150; i++) {
+    bits.push({
+      x: w * (0.5 + (Math.random() - 0.5) * 0.55),
+      y: h * (0.44 + Math.random() * 0.06),
+      vx: (Math.random() - 0.5) * 12 * dpr,
+      vy: (-9 - Math.random() * 10) * dpr,
+      w: (4 + Math.random() * 5) * dpr,
+      h: (7 + Math.random() * 7) * dpr,
+      a: Math.random() * Math.PI, va: (Math.random() - 0.5) * 0.34,
+      c: colours[i % colours.length]
+    });
+  }
+
+  const gravity = 0.34 * dpr;
+  const start = performance.now();
+  const frame = (now) => {
+    const life = now - start;
+    ctx.clearRect(0, 0, w, h);
+    let alive = 0;
+    for (const b of bits) {
+      b.vy += gravity; b.vx *= 0.995;
+      b.x += b.vx; b.y += b.vy; b.a += b.va;
+      if (b.y < h + 40) alive++;
+      ctx.save();
+      ctx.translate(b.x, b.y);
+      ctx.rotate(b.a);
+      ctx.globalAlpha = Math.max(0, 1 - Math.max(0, life - 1700) / 900);
+      ctx.fillStyle = b.c;
+      /* the height wobbles with the spin, so each piece reads as a flat flake */
+      ctx.fillRect(-b.w / 2, -b.h / 2, b.w, b.h * (0.35 + 0.65 * Math.abs(Math.cos(b.a))));
+      ctx.restore();
+    }
+    if (alive && life < 2700) requestAnimationFrame(frame);
+    else cv.remove();
+  };
+  requestAnimationFrame(frame);
+}
+
+/* Fire once per finished session. The flag lives on the session itself, so
+   leaving the summary and coming back does not repeat it. */
+function cheer(state) {
+  if (!state || !state.completed || state.cheered) return;
+  state.cheered = true;
+  setTimeout(confetti, 150);
+}
+
 function rateBtn(n, label, delay, cls) {
   return '<button class="rate ' + cls + '" data-rate="' + n + '">' +
     '<span>' + label + '</span><small>' + delay + '</small><kbd>' + n + '</kbd></button>';
@@ -1303,7 +1373,7 @@ function rateCard(rating) {
     const pos = rating === 1 ? Math.min(3, session.queue.length) : Math.min(9, session.queue.length);
     session.queue.splice(pos, 0, card);
   }
-  if (!session.queue.length) return endSession();
+  if (!session.queue.length) { session.completed = true; return endSession(); }
   render('study'); refreshChrome();
 }
 
@@ -1330,6 +1400,7 @@ function undoAnswer() {
 }
 
 function drawStudySummary(host) {
+  cheer(session);
   const mins = Math.max(1, Math.round((Date.now() - session.startedAt) / 60000));
   const acc = session.done ? clamp(pct(session.good, session.done), 0, 100) : 0;
   const words = Object.keys(session.counts || {}).length;
@@ -1373,8 +1444,10 @@ const MODES = [
     icon:'<svg viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg>' },
   { id:'cloze', name:'Fill in the blank', desc:'Complete the example sentence with the missing word.',
     icon:'<svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h5M13 12h7M4 17h16"/></svg>' },
-  { id:'matching', name:'Matching pairs', desc:'Pair words with their meanings on small boards.',
+  { id:'matching', name:'Matching pairs', desc:'Pair words with their translations on small boards.',
     icon:'<svg viewBox="0 0 24 24"><rect x="3" y="4" width="7" height="7" rx="1"/><rect x="14" y="4" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>' },
+  { id:'matching-def', name:'Matching meanings', desc:'Pair words with their English definitions — the harder board.',
+    icon:'<svg viewBox="0 0 24 24"><rect x="3" y="4" width="7" height="7" rx="1"/><path d="M14 6h7M14 9h5"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 16h7M14 19h5"/></svg>' },
   { id:'listening', name:'Listening', desc:'Hear the word spoken, then type what you heard.',
     icon:'<svg viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg>', needsTTS:true },
   { id:'ai-quiz', name:'AI quiz', desc:'Fresh context questions written for you, with explanations.',
@@ -1534,14 +1607,18 @@ function buildQuestions(mode, pool, count, opts) {
   const prefer = opts.prefer || [];
   const nOpts = optionCount() - 1;
 
-  /* Matching is split into playable boards so the round length still applies. */
-  if (mode === 'matching') {
-    const cards = chosen.filter(c => c.translation || c.definition);
+  /* Matching is split into playable boards so the round length still applies.
+     Two forms: against the translation, or against the English definition. */
+  if (mode === 'matching' || mode === 'matching-def') {
+    const byDefinition = mode === 'matching-def';
+    const pairText = (c) => byDefinition ? c.definition : c.translation;
+    const cards = chosen.filter(c => pairText(c));
     if (!cards.length) return [];
     const boards = Math.max(1, Math.ceil(cards.length / MATCH_BOARD_MAX));
     const per = Math.ceil(cards.length / boards);
     const out = [];
-    for (let i = 0; i < cards.length; i += per) out.push({ type: 'matching', cards: cards.slice(i, i + per) });
+    for (let i = 0; i < cards.length; i += per)
+      out.push({ type: 'matching', byDefinition: byDefinition, cards: cards.slice(i, i + per) });
     if (out.length > 1 && out[out.length - 1].cards.length < 2) {
       const tail = out.pop();
       out[out.length - 1].cards = out[out.length - 1].cards.concat(tail.cards);
@@ -1550,9 +1627,9 @@ function buildQuestions(mode, pool, count, opts) {
        rather than being whatever is left over. */
     out.forEach(board => {
       const used = {};
-      board.cards.forEach(c => { used[c.id] = 1; used[String(meaningOf(c)).toLowerCase()] = 1; });
+      board.cards.forEach(c => { used[c.id] = 1; used[String(pairText(c)).toLowerCase()] = 1; });
       const spare = (list) => list.filter(c =>
-        !used[c.id] && meaningOf(c) && !used[String(meaningOf(c)).toLowerCase()]);
+        !used[c.id] && pairText(c) && !used[String(pairText(c)).toLowerCase()]);
       const spares = spare(pool).length ? spare(pool) : spare(Store.state.cards);
       board.decoy = spares.length ? sample(spares, 1)[0] : null;
     });
@@ -1605,8 +1682,9 @@ function buildQuestions(mode, pool, count, opts) {
    but those words can come from anywhere in the collection, so one word in the
    selection is enough. Matching is the exception: it pairs the words you chose
    against each other, so it needs two of them. */
-const NEEDS_OPTIONS = ['mc-meaning', 'mc-word', 'matching', 'ai-quiz'];
-function minWordsFor(mode) { return mode === 'matching' ? 2 : 1; }
+const NEEDS_OPTIONS = ['mc-meaning', 'mc-word', 'matching', 'matching-def', 'ai-quiz'];
+function isMatching(mode) { return mode === 'matching' || mode === 'matching-def'; }
+function minWordsFor(mode) { return isMatching(mode) ? 2 : 1; }
 function minCollectionFor(mode) { return NEEDS_OPTIONS.indexOf(mode) !== -1 ? 2 : 1; }
 
 /* Why the drill cannot start, in words, or '' when it can. */
@@ -1876,9 +1954,10 @@ function feedbackHTML(item) {
 function matchingHTML(item) {
   if (!quiz.match) {
     const rightCards = item.decoy ? item.cards.concat([item.decoy]) : item.cards;
+    const pairText = (c) => item.byDefinition ? c.definition : c.translation;
     quiz.match = {
       left: shuffle(item.cards.map(c => ({ id: c.id, text: c.term }))),
-      right: shuffle(rightCards.map(c => ({ id: c.id, text: c.translation || c.definition }))),
+      right: shuffle(rightCards.map(c => ({ id: c.id, text: pairText(c) }))),
       sel: null, done: [], misses: 0, flash: null
     };
   }
@@ -1887,9 +1966,11 @@ function matchingHTML(item) {
   /* Flashes are keyed by side + id: on a miss the two tiles are different
      words, and the same id also exists in the opposite column. */
   const flashed = (side, id) => (m.flash && m.flash.keys.indexOf(side + id) !== -1) ? ' ' + m.flash.kind : '';
-  /* The two columns hold different kinds of thing — words on the left,
-     meanings on the right — and used to be told apart only by where they sat.
-     A heading and a coloured edge say which is which even mid-drag of the eye. */
+  /* The two columns hold different kinds of thing and used to be told apart
+     only by where they sat. A heading names each one, the right-hand column is
+     the quieter of the two, and the tiles are cut like puzzle pieces — a tab on
+     every word, a notch in every answer — so which side is which is legible
+     before a single word has been read. */
   const col = (rows, side, heading) =>
     '<div class="match-col ' + (side === 'l' ? 'words' : 'meanings') + '">' +
       '<div class="match-head">' + heading + '</div>' +
@@ -1900,13 +1981,14 @@ function matchingHTML(item) {
     '</div>';
   return '<div class="card">' +
     '<div class="row between" style="margin-bottom:14px">' +
-      '<p class="muted">Match each word with its meaning</p>' +
+      '<p class="muted">Match each word with its ' +
+        (item.byDefinition ? 'meaning' : 'translation') + '</p>' +
       '<span class="faint">' + m.done.length + ' / ' + item.cards.length + ' on this board' +
         (boards > 1 ? ' · board ' + (quiz.i + 1) + ' of ' + boards : '') +
         (m.misses ? ' · ' + m.misses + ' miss' + (m.misses === 1 ? '' : 'es') : '') + '</span>' +
     '</div>' +
     '<div class="match-grid">' + col(m.left, 'l', 'Word') +
-      col(m.right, 'r', 'Meaning') + '</div></div>';
+      col(m.right, 'r', item.byDefinition ? 'Meaning' : 'Translation') + '</div></div>';
 }
 
 /* ---------- interaction ------------------------------------------------------ */
@@ -2054,16 +2136,18 @@ function nextQuizItem() {
   quiz.state = 'idle'; quiz.given = ''; quiz.lastResult = null;
   quiz.hintShown = false; quiz.hintLetters = 0;
   quiz.match = null;                 /* the next matching board starts fresh */
-  if (quiz.i >= quiz.items.length) return finishQuiz();
+  if (quiz.i >= quiz.items.length) return finishQuiz(true);
   render('practice');
 }
 
-function finishQuiz() {
+function finishQuiz(completed) {
   quiz.finished = true;
+  quiz.completed = !!completed;
   render('practice'); refreshChrome();
 }
 
 function drawQuizResults(host) {
+  cheer(quiz);
   const answered = quiz.results.length;
   const score = answered ? pct(quiz.results.filter(r => r.ok).length, answered) : 0;
   const secs = Math.round((Date.now() - quiz.startedAt) / 1000);
@@ -2107,7 +2191,7 @@ function drawQuizResults(host) {
       const wide = practicePool(quizSetup.deckId, quizSetup.scope);
       const pool = wide.length >= 2 ? wide : missed;
       let mode = quizSetup.mode;
-      if (mode === 'matching' && missed.length < 2) mode = 'mc-meaning';
+      if (isMatching(mode) && missed.length < 2) mode = 'mc-meaning';
       quiz = newQuiz(mode, buildQuestions(mode, pool, missed.length, { cards: missed, prefer: missed }));
       if (!quiz.items.length) { quiz = null; toast('Could not rebuild those questions', 'err'); }
       render('practice');
