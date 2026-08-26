@@ -230,14 +230,6 @@ function senseSub(card) {
   return label ? '<div class="sense-sub">' + esc(label) + '</div>' : '';
 }
 
-/* "object · 2 senses" — shown wherever a word could be mistaken for another
-   card with the same spelling. */
-function senseCountChip(card) {
-  const n = Store.siblings(card).length;
-  return n ? '<span class="chip senses" title="This word has more than one meaning">' +
-    (n + 1) + ' senses</span>' : '';
-}
-
 const REL_LABEL = { syn: 'synonym', ant: 'opposite' };
 const REL_MARK  = { syn: '\u2248', ant: '\u00d7' };   /* ≈ means like this, × means the opposite */
 

@@ -382,21 +382,6 @@ const Store = {
     return out.sort((a, b) => a.term.localeCompare(b.term));
   },
 
-  /* What the family is called: the stem its members share, when they share
-     enough of one. Derived, never stored — a name that is computed cannot go
-     stale when a member is added or removed. */
-  familyName(members) {
-    const terms = members.map(m => this.headKey(m.term)).filter(Boolean).sort();
-    if (!terms.length) return '';
-    let prefix = terms[0];
-    terms.forEach(t => {
-      let i = 0;
-      while (i < prefix.length && i < t.length && prefix[i] === t[i]) i++;
-      prefix = prefix.slice(0, i);
-    });
-    return prefix.length >= 3 ? prefix + '-' : terms[0];
-  },
-
   cardsOf(deckId) {
     return deckId ? this.state.cards.filter(c => c.deckId === deckId) : this.state.cards.slice();
   },

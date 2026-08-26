@@ -1,6 +1,6 @@
 # Testler
 
-`regression.js`, uygulamayı gerçek bir tarayıcıda açıp 81 kontrol yapar.
+`regression.js`, uygulamayı gerçek bir tarayıcıda açıp 220 kontrol yapar.
 Buradaki her kontrol, bir zamanlar gerçekten bozuk olan bir şeyi koruyor:
 kodun içindeki yorumlar hangi hatanın nöbetini tuttuklarını anlatıyor.
 
@@ -21,7 +21,7 @@ node tests/regression.js
 Sonuç şöyle biter:
 
 ```
-81/81 checks passed
+220/220 checks passed
 ```
 
 Bir satır `✗` ile başlıyorsa o kontrol düşmüştür; komut da hata koduyla
@@ -30,6 +30,24 @@ biter, yani otomatik bir kurulumda fark edilir.
 Testler her bölümün başında verileri sıfırlar ve bitince tohum (seed)
 verisine geri döner; kendi kelimelerinizi bozmaz. Yine de gerçek verinizle
 aynı tarayıcıda çalıştırmak yerine önce **Settings → Backup** almanız iyi olur.
+
+## İkinci bir dosya: `no-dead-code.js`
+
+```
+node tests/no-dead-code.js
+```
+
+Tarayıcı gerektirmez, saniyeler sürer. Kullanılmayan kalıntıları arar: çağrılmayan
+fonksiyonlar, hiçbir elemana verilmeyen CSS sınıfları ve id'leri, okunmayan renk
+değişkenleri, çizilmeyen ikonlar ve iki kez yazılmış seçiciler. Bulduğu şey bir *aday*dır,
+hüküm değil — silmeden önce bakmak gerekir; parça parça birleştirilen sınıf adlarını
+(`'chip rel ' + kind` gibi) göremez.
+
+Bir şey bulursa hata koduyla biter:
+
+```
+nothing left behind
+```
 
 ## Neyi kapsıyor
 

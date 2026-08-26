@@ -186,8 +186,7 @@ yönde ve kaç adım gerekiyorsa o kadar takip edilir, bu yüzden **yeni bir kel
 herhangi bir üyesine bağlaman yeter** — geri kalanı kendiliğinden bulunur. Hangi üyeden
 bakarsan bak aynı aileyi görürsün ve yeni üye eklemek hiçbir şeyi yeniden düzenlemez.
 
-Ailenin adı da saklanmaz, üyelerin ortak kökünden hesaplanır (`analy-`) — hesaplanan bir ad
-üye eklenince eskimez. Aynı yazılışa sahip kartlar (bir kelimenin farklı anlamları) aileye
+Aynı yazılışa sahip kartlar (bir kelimenin farklı anlamları) aileye
 dahil edilmez; onlar anlamdır, biçim değil. Sildiğin bir üye ailede soluk renkte durmaya
 devam eder, yani "bu biçim var ama bende yok" bilgisi kaybolmaz.
 

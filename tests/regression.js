@@ -5,6 +5,8 @@
    fails loudly instead of quietly.
 
    Run:  node tests/regression.js
+   See also tests/no-dead-code.js, a static sweep for leftovers that needs no
+   browser and runs in seconds.
    Needs Playwright with a Chromium build. Nothing else — the app itself has
    no dependencies and is loaded straight from disk over file://.            */
 
@@ -799,9 +801,7 @@ const head = (s) => console.log('\n— ' + s + ' —');
       analytically: of('analytically'),      /* two hops from analysis */
       reliable: of('reliable'),              /* never links out itself */
       significant: of('significant'),
-      lonely: of('borrow'),
-      name: Store.familyName(Store.familyOf(Store.state.cards.find(c => c.term === 'analyse'))
-              .concat([{ term: 'analyse' }]))
+      lonely: of('borrow')
     };
   });
   is(fam.analyse.join(',') === 'analysis,analytical,analytically',
@@ -812,7 +812,6 @@ const head = (s) => console.log('\n— ' + s + ' —');
      `a word that declares nothing still has its family (${fam.reliable.join(', ')})`);
   is(fam.significant.join(',') === 'significance,significantly', 'significant has its two forms');
   is(fam.lonely.length === 0, 'a word with no family has none');
-  is(fam.name === 'analy-', `the family name is derived from the shared stem ("${fam.name}")`);
 
   /* Senses of one word are not family, and a family link survives a member
      being deleted the same way a synonym does. */
