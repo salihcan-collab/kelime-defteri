@@ -1796,9 +1796,17 @@ async function startQuiz() {
       const qs = await AI.makeQuestions(cards, cards.length, optionCount());
       quiz.items = qs.map(q => {
         const card = cards.find(c => c.term.toLowerCase() === String(q.term || '').toLowerCase()) || cards[0];
-        const opts = q.options.slice(0, optionCount());
-        if (opts.indexOf(q.answer) === -1) opts[0] = q.answer;
-        return { type: 'mc', card: card, prompt: q.prompt, pos: card.pos, options: shuffle(opts),
+        /* The same option listed twice would mean two right answers, and no wording
+           of the prompt can promise that away — so the duplicates go here. */
+        const seen = {};
+        const opts = q.options.filter(o => {
+          const k = normalize(o);
+          return k && !seen[k] && (seen[k] = true);
+        }).slice(0, optionCount());
+        if (!opts.some(o => normalize(o) === normalize(q.answer))) opts[0] = q.answer;
+        /* No part-of-speech chip: the options are all one part of speech by now,
+           so naming it says nothing, and on a gap-fill it hands over the answer. */
+        return { type: 'mc', card: card, prompt: q.prompt, options: shuffle(opts),
                  answer: q.answer, explanation: q.explanation, question: 'AI question' };
       });
       if (!quiz.items.length) throw new Error('No questions came back.');

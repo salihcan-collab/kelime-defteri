@@ -205,11 +205,16 @@ const AI = {
       ' "pos": one of [' + PARTS_OF_SPEECH.join(', ') + '],',
       ' "definition": a clear English definition, at most 30 words, no dictionary abbreviations,',
       ' "example": one natural English sentence that CONTAINS the word verbatim,',
-      /* A bare equivalent is often useless on its own: "prognosis → prognoz" tells a
-         learner nothing they did not already half-know. */
-      ' "translation": the ' + lang + ' equivalent, followed by a short parenthesis saying what it',
-      '   actually means when that helps — e.g. "prognoz (hastalığın seyri hakkında tıbbi öngörü)".',
-      '   A bare one-word gloss is only enough for a word with one plain everyday meaning.'
+      /* Two ways to get this wrong, not one: a single arbitrary equivalent teaches
+         less than the word has to offer, and a parenthesis on every card is noise
+         the learner soon reads past. The gloss earns its place only where no native
+         word carries the meaning by itself. */
+      ' "translation": what the word means in ' + lang + '. Where the word has several natural',
+      '   renderings, give 2-3 of them separated by commas rather than one arbitrary pick;',
+      '   where it genuinely has one, one is the right answer — do not invent alternatives.',
+      '   Add a parenthesis explaining the sense ONLY when no ' + lang + ' word carries the',
+      '   meaning on its own, e.g. "prognoz (hastalığın seyri hakkında tıbbi öngörü)".',
+      '   An everyday word with a well-known equivalent gets no parenthesis at all.'
     ];
     if (!extras) return core.join('\n');
     return core.concat([
@@ -309,10 +314,24 @@ const AI = {
         '  • a sentence with a gap where only the target word fits\n' +
         '  • "which word means ...?"\n' +
         '  • choosing the correct usage in context\n' +
-        'Distractors must be plausible but clearly wrong. Return JSON:\n' +
+        /* The two ways an otherwise fine question is wasted: several options fit,
+           or the odd one out is spottable without knowing any of the words. */
+        'Two rules decide whether a question is worth asking:\n' +
+        '  1. EXACTLY ONE option can be right. Put enough in the sentence to rule the others\n' +
+        '     out before you choose them. If a careful reader could argue for a second option,\n' +
+        '     the question is broken: sharpen the sentence or replace that option. A gap any\n' +
+        '     word of the right sort would fill ("a ____ overview of the project") is the\n' +
+        '     usual failure.\n' +
+        '  2. All ' + choices + ' options must be the same kind of word as the answer: same part of\n' +
+        '     speech, same form, phrasal verbs alongside phrasal verbs, single words alongside\n' +
+        '     single words. The wrong ones are real words a learner could confuse with the\n' +
+        '     answer — never its synonyms, and never a word that would also fit.\n' +
+        'Return JSON:\n' +
         '{"questions":[{"term":"the target word","prompt":"question text, use ____ for a gap",' +
         '"options":[' + Array.from({ length: choices }, (_, i) => '"option ' + (i + 1) + '"').join(',') + '],' +
-        '"answer":"the exact correct option","explanation":"one short sentence"}]}' }
+        '"answer":"the exact correct option",' +
+        '"explanation":"one or two short sentences: why the answer fits, and why the closest ' +
+        'wrong option does not"}]}' }
     ], { temperature: 0.8, maxTokens: 6000 });
     return (res.questions || []).filter(q => q && q.prompt && Array.isArray(q.options) && q.answer);
   },
