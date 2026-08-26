@@ -940,15 +940,50 @@ function cardEditor(card, presetDeck) {
         const original = fill.innerHTML;
         fill.disabled = true; fill.innerHTML = ICONS.loader + 'Asking the AI…';
         try {
-          const r = await AI.enrich(term, $('#cDef').value.trim());
-          if (r.pos && !$('#cPos').value) $('#cPos').value = PARTS_OF_SPEECH.indexOf(r.pos) !== -1 ? r.pos : '';
-          if (r.definition) $('#cDef').value = r.definition;
-          if (r.example) $('#cEx').value = r.example;
-          if (r.translation) $('#cTr').value = r.translation;
-          toast('Filled in by AI — check it before saving', 'ok');
+          const before = {
+            pos: $('#cPos').value, definition: $('#cDef').value.trim(), example: $('#cEx').value.trim(),
+            translation: $('#cTr').value.trim(), collocations: splitLines($('#cColl').value),
+            synonyms: splitList($('#cSyn').value), antonyms: splitList($('#cAnt').value),
+            family: splitList($('#cFam').value)
+          };
+          const r = await AI.enrich(term, before);
+
+          /* Only empty boxes are written to. The prompt asks for this as well,
+             but what the learner typed is not left to a model's good manners. */
+          const putText = (id, value) => {
+            const el = $('#' + id);
+            if (el && !el.value.trim() && value) { el.value = value; return 1; }
+            return 0;
+          };
+          const putList = (id, list, joiner) => {
+            const el = $('#' + id);
+            if (el && !el.value.trim() && list && list.length) { el.value = list.join(joiner); return 1; }
+            return 0;
+          };
+
+          let filled = 0;
+          if (!$('#cPos').value && PARTS_OF_SPEECH.indexOf(r.pos) !== -1) { $('#cPos').value = r.pos; filled++; }
+          filled += putText('cDef', r.definition);
+          filled += putText('cEx', r.example);
+          filled += putText('cTr', r.translation);
+          filled += putList('cColl', r.collocations, '\n');
+          filled += putList('cSyn', r.synonyms, ', ');
+          filled += putList('cAnt', r.antonyms, ', ');
+          filled += putList('cFam', r.family, ', ');
+
+          /* Anything that landed in the folded half should be visible, or it
+             looks as though nothing happened. */
+          const more = f.querySelector('.more-fields') || document.querySelector('.more-fields');
+          if (more && ['cColl', 'cSyn', 'cAnt'].some(id => $('#' + id).value.trim())) more.open = true;
+          checkSenses(); showLinks();
+
+          toast(filled
+            ? 'Filled ' + filled + ' empty field' + (filled === 1 ? '' : 's') + ' — check before saving'
+            : 'Everything was already filled in', filled ? 'ok' : 'err');
         } catch (err) { toast(err.message, 'err'); }
         fill.disabled = false; fill.innerHTML = original;
       };
+
       /* Reveal the sense label the moment the word turns out to have more than
          one meaning, and say which meanings are already saved. */
       const hint = $('#dupHint');
@@ -1015,11 +1050,18 @@ function aiDeckDialog() {
           ['A2', 'B1', 'B2', 'C1'].map(l => '<option' + (l === 'B2' ? ' selected' : '') + '>' + l + '</option>').join('') +
         '</select></div>' +
         '<div class="field"><label>How many words</label><select id="gCount">' +
-          [10, 15, 20, 30].map(n => '<option' + (n === 15 ? ' selected' : '') + '>' + n + '</option>').join('') +
+          [10, 15, 20, 30, 40, 50].map(n => '<option' + (n === 15 ? ' selected' : '') + '>' + n + '</option>').join('') +
         '</select></div>' +
       '</div>' +
-      '<p class="faint">The AI writes the definition, example sentence and translation for each word. ' +
-      'You can edit anything afterwards.</p>' +
+      /* The extra fields roughly double what comes back per word, so a big deck
+         and full detail together are the expensive corner — worth being a
+         choice rather than a default. */
+      '<label class="switch" style="padding:2px 0 10px"><input type="checkbox" id="gDetail">' +
+        '<span class="track"></span><span class="txt">Fill in the detail too' +
+        '<small>Collocations, synonyms, antonyms and word family for every word. ' +
+        'Slower, and a longer answer to wait for.</small></span></label>' +
+      '<p class="faint">Every word gets its part of speech, meaning, example sentence and ' +
+      'translation. You can edit anything afterwards.</p>' +
       '<div id="gOut"></div>',
     foot: '<button class="ghost-btn" data-act="cancel">Cancel</button>' +
           '<button class="primary-btn" data-act="go">' + ICONS.spark + 'Generate</button>',
@@ -1030,14 +1072,22 @@ function aiDeckDialog() {
         if (!topic) return toast('Enter a topic', 'err');
         const btn = f.querySelector('[data-act="go"]');
         btn.disabled = true; btn.innerHTML = ICONS.loader + 'Writing cards…';
-        $('#gOut').innerHTML = '<div class="ai-thinking">' + ICONS.loader + 'This usually takes 10–30 seconds…</div>';
+        $('#gOut').innerHTML = '<div class="ai-thinking">' + ICONS.loader +
+          ($('#gDetail').checked && parseInt($('#gCount').value, 10) > 20
+            ? 'A long one — this can take a minute…'
+            : 'This usually takes 10–30 seconds…') + '</div>';
         try {
-          const cards = await AI.suggestCards(topic, $('#gLevel').value, parseInt($('#gCount').value, 10));
+          const detail = $('#gDetail').checked;
+          const cards = await AI.suggestCards(topic, $('#gLevel').value, parseInt($('#gCount').value, 10), detail);
           if (!cards.length) throw new Error('The AI did not return any cards.');
           const deck = Store.addDeck({ name: cap(topic), emoji: '✨', description: 'Generated with AI · ' + $('#gLevel').value });
           cards.forEach(c => Store.addCard({
             deckId: deck.id, term: c.term, pos: c.pos, definition: c.definition,
-            example: c.example, translation: c.translation
+            example: c.example, translation: c.translation,
+            collocations: c.collocations,
+            related: (c.synonyms || []).map(t => ({ kind: 'syn', text: t }))
+              .concat((c.antonyms || []).map(t => ({ kind: 'ant', text: t })))
+              .concat((c.family || []).map(t => ({ kind: 'family', text: t })))
           }, true));
           Store.saveNow();
           closeModal(); toast('Created "' + deck.name + '" with ' + cards.length + ' words', 'ok');

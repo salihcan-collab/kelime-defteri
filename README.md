@@ -317,8 +317,8 @@ Seçimlerin kaydedilir.
 **Evet, mümkün ve ücretsiz seçenekler var.** Uygulama AI olmadan da eksiksiz çalışır;
 AI yalnızca dört yerde devreye girer:
 
-1. **Kart otomatik doldurma** — sadece kelimeyi yaz, tanım/örnek/çeviri dolsun
-2. **Deste üretme** — "job interviews, B2, 15 kelime" de, hazır deste gelsin
+1. **Kart otomatik doldurma** — sadece kelimeyi yaz, gerisi dolsun
+2. **Deste üretme** — "job interviews, B2, 15 kelime" de, hazır deste gelsin (50'ye kadar)
 3. **AI quiz** — her seferinde yeni bağlam cümleleriyle sorular + açıklamalar
 4. **Writing coach** — yazdığın cümleyi puanlar, düzeltir, Türkçe kısa not verir
 
@@ -335,6 +335,37 @@ AI yalnızca dört yerde devreye girer:
 | **OpenAI** | Ücretli ama çok ucuz (`gpt-4o-mini`) | platform.openai.com/api-keys |
 | **DeepSeek** | Ücretli, çok ucuz | platform.deepseek.com |
 | **Ollama** | **Tamamen ücretsiz**, kendi bilgisayarında, internetsiz | ollama.com |
+
+### AI kartı nasıl dolduruyor
+
+**Auto-fill the rest with AI** düğmesi kişisel not dışındaki bütün alanları doldurur:
+sözcük türü, tanım (**en fazla 30 kelime**), örnek cümle, çeviri, collocations
+(**en fazla 4**), synonyms (3), antonyms (2), word family (**en fazla 6**).
+
+İki kural önemli:
+
+- **Senin yazdığına dokunmaz.** Doldurduğun kutular olduğu gibi kalır; AI yalnızca boş
+  olanları doldurur. Bu hem isteğin içinde yazılı hem de uygulama tarafında ayrıca
+  kontrol ediliyor — yani model kuralı görmezden gelse bile yazdığın kaybolmaz.
+  Sonunda kaç alanın dolduğunu söyler.
+- **Uydurmaz.** Kelimenin gerçekten collocation'ı, eş ya da zıt anlamlısı yoksa o alan
+  boş kalır. "Bir şey yazsın diye" liste doldurmaz.
+
+Çeviride tek kelime belirsiz kalıyorsa kısa bir açıklayıcı ibare de ekler — netlik
+kısalıktan önemli.
+
+Doldurulan alanlardan biri **More fields** içindeyse o bölüm kendiliğinden açılır.
+
+### Deste üretirken detay
+
+Deste üretme penceresinde **"Fill in the detail too"** anahtarı var:
+
+| Kapalı | Her kelime için tür, tanım, örnek cümle, çeviri |
+|---|---|
+| **Açık** | Bunlara ek olarak collocations, synonyms, antonyms ve word family |
+
+Detay açıkken cevap kelime başına kabaca iki katına çıkar, yani daha uzun sürer.
+Kapalıyken 50 kelimelik bir deste rahatça tek istekte geliyor.
 
 ### Model adı
 

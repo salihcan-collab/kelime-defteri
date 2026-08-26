@@ -198,39 +198,99 @@ const AI = {
     return out.slice(0, 40);
   },
 
-  /* Fill in the missing parts of a card from just the word. */
-  async enrich(term, hint) {
+  /* What a card may hold, and how much of each. One description, used by both
+     the single-card fill and the deck generator, so the two cannot drift. */
+  cardFieldSpec(lang) {
+    return [
+      ' "pos": one of [' + PARTS_OF_SPEECH.join(', ') + '],',
+      ' "definition": a clear English definition, at most 30 words, no dictionary abbreviations,',
+      ' "example": one natural English sentence that CONTAINS the word verbatim,',
+      ' "translation": the ' + lang + ' translation. If a bare word would be ambiguous, give the',
+      '   word and a short clarifying phrase — clarity matters more than brevity here,',
+      ' "collocations": up to 4 fixed phrases the word really occurs in, each containing the word.',
+      '   Only genuine, common ones — an empty list is the right answer when there are none,',
+      ' "synonyms": up to 3, or an empty list,',
+      ' "antonyms": up to 2, or an empty list,',
+      ' "family": up to 6 other forms of the same root (analyse → analysis, analytical…), or an empty list'
+    ].join('\n');
+  },
+
+  /* Fill in the empty parts of a card. Whatever the learner has already
+     written is sent along and must come back untouched — and the app checks
+     that too, because an instruction is not a guarantee. */
+  async enrich(term, current) {
     const lang = this.cfg.nativeLanguage || 'Turkish';
+    const has = current || {};
+    const known = [];
+    const add = (label, v) => { if (v && String(v).length) known.push(label + ': ' + v); };
+    add('part of speech', has.pos);
+    add('meaning', has.definition);
+    add('example', has.example);
+    add('translation', has.translation);
+    add('collocations', (has.collocations || []).join('; '));
+    add('synonyms', (has.synonyms || []).join(', '));
+    add('antonyms', (has.antonyms || []).join(', '));
+    add('word family', (has.family || []).join(', '));
+
     const res = await this.json([
       { role: 'system', content:
-        'You are a bilingual lexicographer building vocabulary flashcards for a learner whose native language is ' + lang + '. ' +
-        'Answer only with JSON.' },
+        'You are a bilingual lexicographer building vocabulary flashcards for a learner whose native ' +
+        'language is ' + lang + '. Answer only with JSON.' },
       { role: 'user', content:
-        'Word or phrase: "' + term + '"' + (hint ? '\nContext/hint: ' + hint : '') + '\n\n' +
-        'Return JSON with exactly these keys:\n' +
-        '{"pos": one of [' + PARTS_OF_SPEECH.join(', ') + '],\n' +
-        ' "definition": a clear English definition, max 18 words, no dictionary abbreviations,\n' +
-        ' "example": one natural English sentence that CONTAINS the word "' + term + '" verbatim,\n' +
-        ' "translation": the ' + lang + ' translation (just the translation, no explanation)}' }
-    ], { temperature: 0.4, maxTokens: 1600 });
+        'Word or phrase: "' + term + '"\n' +
+        (known.length
+          ? 'The learner has already written these, and they are correct. Repeat them back ' +
+            'unchanged and do not improve them:\n' + known.map(k => '  ' + k).join('\n') + '\n\n'
+          : '') +
+        'Return JSON with exactly these keys:\n{\n' + this.cardFieldSpec(lang) + '\n}\n' +
+        'Leave a list empty rather than inventing something to fill it.' }
+    ], { temperature: 0.4, maxTokens: 2000 });
+
     return {
       pos: res.pos || '', definition: res.definition || '', example: res.example || '',
-      translation: res.translation || ''
+      translation: res.translation || '',
+      collocations: cleanList(res.collocations, 4),
+      synonyms: cleanList(res.synonyms, 3),
+      antonyms: cleanList(res.antonyms, 2),
+      family: cleanList(res.family, 6)
     };
   },
 
-  /* Invent a batch of new cards on a topic. */
-  async suggestCards(topic, level, count) {
+  /* Invent a batch of new cards on a topic. `detail` decides whether each card
+     comes back with its collocations, relations and family — off, the cards are
+     a third of the size, which is what makes a deck of fifty affordable in one
+     request. */
+  async suggestCards(topic, level, count, detail) {
     const lang = this.cfg.nativeLanguage || 'Turkish';
+    const core =
+      ' "pos": one of [' + PARTS_OF_SPEECH.join(', ') + '],\n' +
+      ' "definition": a clear English definition, at most 30 words,\n' +
+      ' "example": one natural English sentence that CONTAINS the term verbatim,\n' +
+      ' "translation": the ' + lang + ' translation; if a bare word would be ambiguous, add a short\n' +
+      '   clarifying phrase';
+    const extra =
+      ',\n "collocations": up to 4 genuine fixed phrases containing the term, or an empty list,\n' +
+      ' "synonyms": up to 3, or an empty list,\n' +
+      ' "antonyms": up to 2, or an empty list,\n' +
+      ' "family": up to 6 other forms of the same root, or an empty list';
+
     const res = await this.json([
       { role: 'system', content: 'You build vocabulary decks for learners of English. Answer only with JSON.' },
       { role: 'user', content:
         'Create ' + count + ' useful English vocabulary items about "' + topic + '" at CEFR level ' + level + '.\n' +
-        'Avoid very basic words the learner certainly knows. Return JSON:\n' +
-        '{"cards":[{"term":"","pos":"","definition":"","example":"","translation":"' + lang + ' translation"}]}\n' +
-        'Each "example" must contain its "term" verbatim.' }
-    ], { temperature: 0.85, maxTokens: 6000 });
-    return (res.cards || []).filter(c => c && c.term);
+        'Avoid very basic words the learner certainly knows, and do not repeat a term.\n' +
+        'Return JSON: {"cards":[{ "term":"",\n' + core + (detail ? extra : '') + '\n}]}\n' +
+        (detail ? 'Leave a list empty rather than inventing something to fill it.\n' : '') }
+    ], { temperature: 0.85, maxTokens: Math.min(24000, Math.max(4000, count * (detail ? 260 : 130))) });
+
+    return (res.cards || []).filter(c => c && c.term).map(c => ({
+      term: c.term, pos: c.pos || '', definition: c.definition || '',
+      example: c.example || '', translation: c.translation || '',
+      collocations: cleanList(c.collocations, 4),
+      synonyms: cleanList(c.synonyms, 3),
+      antonyms: cleanList(c.antonyms, 2),
+      family: cleanList(c.family, 6)
+    }));
   },
 
   /* Fresh, context-rich questions the offline generator cannot produce. */
@@ -287,6 +347,17 @@ const AI = {
 };
 
 function clampChoices(n) { return Math.max(2, Math.min(5, parseInt(n, 10) || 4)); }
+
+/* Whatever a model returns where a list was asked for: trimmed, de-duplicated,
+   emptied of junk and cut to the agreed length. The prompt asks for at most N;
+   this is what makes it true. */
+function cleanList(v, max) {
+  const arr = Array.isArray(v) ? v : (typeof v === 'string' ? v.split(/[;,\n]/) : []);
+  const seen = {};
+  return arr.map(x => String(x == null ? '' : x).trim())
+    .filter(x => x && x.length < 80 && !seen[x.toLowerCase()] && (seen[x.toLowerCase()] = 1))
+    .slice(0, max);
+}
 
 /* Models sometimes wrap JSON in prose or code fences — dig it out. */
 function parseLooseJSON(text) {
