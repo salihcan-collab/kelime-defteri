@@ -209,9 +209,10 @@ const AI = {
          less than the word has to offer, and a parenthesis on every card is noise
          the learner soon reads past. The gloss earns its place only where no native
          word carries the meaning by itself. */
-      ' "translation": what the word means in ' + lang + '. Where the word has several natural',
-      '   renderings, give 2-3 of them separated by commas rather than one arbitrary pick;',
-      '   where it genuinely has one, one is the right answer — do not invent alternatives.',
+      ' "translation": what the word means in ' + lang + '. Most words have more than one natural',
+      '   rendering: give 2-3 of them, separated by commas, rather than one arbitrary pick.',
+      '   A single word is right only where ' + lang + ' truly offers only one — and do not pad',
+      '   the other way either, by inventing a second word nobody would use.',
       '   Add a parenthesis explaining the sense ONLY when no ' + lang + ' word carries the',
       '   meaning on its own, e.g. "prognoz (hastalığın seyri hakkında tıbbi öngörü)".',
       '   An everyday word with a well-known equivalent gets no parenthesis at all.'
@@ -223,7 +224,10 @@ const AI = {
       '   AT MOST 4, and fewer is normal — most words have one or two, many have none.',
       '   Only phrases a dictionary would list as set expressions. Do NOT pad the list to',
       '   reach four: an ordinary sentence with the word in it is not a collocation,',
-      ' "synonyms": up to 3 genuine ones, or an empty list,',
+      /* Two came back every time while the ceiling was three — the ceiling was
+         being read as the target. */
+      ' "synonyms": every word that genuinely means the same, up to 4 — two is not a quota.',
+      '   A word with four real synonyms gets four; a word with none gets an empty list,',
       ' "antonyms": up to 2, or an empty list — plenty of words have no opposite,',
       ' "family": up to 6 words built on the same root, each a SEPARATE dictionary word.',
       '   Never a mere inflection of the word itself: no plurals, no past tenses, and no',
@@ -268,7 +272,7 @@ const AI = {
       pos: res.pos || '', definition: res.definition || '', example: res.example || '',
       translation: res.translation || '',
       collocations: cleanList(res.collocations, 4),
-      synonyms: cleanList(res.synonyms, 3),
+      synonyms: cleanList(res.synonyms, 4),
       antonyms: cleanList(res.antonyms, 2),
       family: cleanList(res.family, 6).filter(f => !isInflectionOf(f, term))
     };
@@ -293,7 +297,7 @@ const AI = {
       term: c.term, pos: c.pos || '', definition: c.definition || '',
       example: c.example || '', translation: c.translation || '',
       collocations: cleanList(c.collocations, 4),
-      synonyms: cleanList(c.synonyms, 3),
+      synonyms: cleanList(c.synonyms, 4),
       antonyms: cleanList(c.antonyms, 2),
       family: cleanList(c.family, 6).filter(f => !isInflectionOf(f, c.term))
     }));
