@@ -349,10 +349,17 @@ sözcük türü, tanım (**en fazla 30 kelime**), örnek cümle, çeviri, colloc
   kontrol ediliyor — yani model kuralı görmezden gelse bile yazdığın kaybolmaz.
   Sonunda kaç alanın dolduğunu söyler.
 - **Uydurmaz.** Kelimenin gerçekten collocation'ı, eş ya da zıt anlamlısı yoksa o alan
-  boş kalır. "Bir şey yazsın diye" liste doldurmaz.
+  boş kalır. Sayıyı doldurmak için listeye dolgu eklemez — "en fazla 4" hedef değil tavan.
 
-Çeviride tek kelime belirsiz kalıyorsa kısa bir açıklayıcı ibare de ekler — netlik
-kısalıktan önemli.
+**Çeviri tek kelimeyle bırakılmaz.** Gerekiyorsa parantez içinde ne demek olduğu da yazılır:
+`prognoz (hastalığın seyri hakkında tıbbi öngörü)`. Tek düz anlamı olan gündelik kelimelerde
+tek karşılık yeterlidir.
+
+**Word family'de çekim yok.** Kelimenin çoğulu, geçmiş zamanı ya da -ing hâli aile üyesi
+sayılmaz — `diagnose` için `diagnosing` gelmez. Ayrı bir sözlük kelimesiyse gelir
+(`build → building`). Bunu hem istekte yazıyorum hem de uygulama ayrıca eliyor; düzensiz
+çoğullar da kapsanıyor (`prognosis → prognoses`, `bacterium → bacteria`). Eleme bir istisna
+tanır: o biçim senin koleksiyonunda ayrı bir kelime olarak kayıtlıysa korunur.
 
 Doldurulan alanlardan biri **More fields** içindeyse o bölüm kendiliğinden açılır.
 

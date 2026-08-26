@@ -1058,8 +1058,7 @@ function aiDeckDialog() {
          choice rather than a default. */
       '<label class="switch" style="padding:2px 0 10px"><input type="checkbox" id="gDetail">' +
         '<span class="track"></span><span class="txt">Fill in the detail too' +
-        '<small>Collocations, synonyms, antonyms and word family for every word. ' +
-        'Slower, and a longer answer to wait for.</small></span></label>' +
+        '<small>Collocations, relations and word family. Slower.</small></span></label>' +
       '<p class="faint">Every word gets its part of speech, meaning, example sentence and ' +
       'translation. You can edit anything afterwards.</p>' +
       '<div id="gOut"></div>',

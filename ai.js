@@ -200,19 +200,32 @@ const AI = {
 
   /* What a card may hold, and how much of each. One description, used by both
      the single-card fill and the deck generator, so the two cannot drift. */
-  cardFieldSpec(lang) {
-    return [
+  cardFieldSpec(lang, extras) {
+    const core = [
       ' "pos": one of [' + PARTS_OF_SPEECH.join(', ') + '],',
       ' "definition": a clear English definition, at most 30 words, no dictionary abbreviations,',
       ' "example": one natural English sentence that CONTAINS the word verbatim,',
-      ' "translation": the ' + lang + ' translation. If a bare word would be ambiguous, give the',
-      '   word and a short clarifying phrase — clarity matters more than brevity here,',
-      ' "collocations": up to 4 fixed phrases the word really occurs in, each containing the word.',
-      '   Only genuine, common ones — an empty list is the right answer when there are none,',
-      ' "synonyms": up to 3, or an empty list,',
-      ' "antonyms": up to 2, or an empty list,',
-      ' "family": up to 6 other forms of the same root (analyse → analysis, analytical…), or an empty list'
-    ].join('\n');
+      /* A bare equivalent is often useless on its own: "prognosis → prognoz" tells a
+         learner nothing they did not already half-know. */
+      ' "translation": the ' + lang + ' equivalent, followed by a short parenthesis saying what it',
+      '   actually means when that helps — e.g. "prognoz (hastalığın seyri hakkında tıbbi öngörü)".',
+      '   A bare one-word gloss is only enough for a word with one plain everyday meaning.'
+    ];
+    if (!extras) return core.join('\n');
+    return core.concat([
+      /* "Up to 4" reads as "give me 4" unless padding is named as the failure. */
+      ' "collocations": fixed phrases the word genuinely occurs in, each containing the word.',
+      '   AT MOST 4, and fewer is normal — most words have one or two, many have none.',
+      '   Only phrases a dictionary would list as set expressions. Do NOT pad the list to',
+      '   reach four: an ordinary sentence with the word in it is not a collocation,',
+      ' "synonyms": up to 3 genuine ones, or an empty list,',
+      ' "antonyms": up to 2, or an empty list — plenty of words have no opposite,',
+      ' "family": up to 6 words built on the same root, each a SEPARATE dictionary word.',
+      '   Never a mere inflection of the word itself: no plurals, no past tenses, and no',
+      '   -ing form unless it is a word in its own right (diagnose → NOT "diagnosing";',
+      '   analyse → analysis, analytical, analytically; build → building is fine, since a',
+      '   building is a thing). An empty list is the right answer for a word with no family'
+    ]).join('\n');
   },
 
   /* Fill in the empty parts of a card. Whatever the learner has already
@@ -242,7 +255,7 @@ const AI = {
           ? 'The learner has already written these, and they are correct. Repeat them back ' +
             'unchanged and do not improve them:\n' + known.map(k => '  ' + k).join('\n') + '\n\n'
           : '') +
-        'Return JSON with exactly these keys:\n{\n' + this.cardFieldSpec(lang) + '\n}\n' +
+        'Return JSON with exactly these keys:\n{\n' + this.cardFieldSpec(lang, true) + '\n}\n' +
         'Leave a list empty rather than inventing something to fill it.' }
     ], { temperature: 0.4, maxTokens: 2000 });
 
@@ -252,7 +265,7 @@ const AI = {
       collocations: cleanList(res.collocations, 4),
       synonyms: cleanList(res.synonyms, 3),
       antonyms: cleanList(res.antonyms, 2),
-      family: cleanList(res.family, 6)
+      family: cleanList(res.family, 6).filter(f => !isInflectionOf(f, term))
     };
   },
 
@@ -262,24 +275,12 @@ const AI = {
      request. */
   async suggestCards(topic, level, count, detail) {
     const lang = this.cfg.nativeLanguage || 'Turkish';
-    const core =
-      ' "pos": one of [' + PARTS_OF_SPEECH.join(', ') + '],\n' +
-      ' "definition": a clear English definition, at most 30 words,\n' +
-      ' "example": one natural English sentence that CONTAINS the term verbatim,\n' +
-      ' "translation": the ' + lang + ' translation; if a bare word would be ambiguous, add a short\n' +
-      '   clarifying phrase';
-    const extra =
-      ',\n "collocations": up to 4 genuine fixed phrases containing the term, or an empty list,\n' +
-      ' "synonyms": up to 3, or an empty list,\n' +
-      ' "antonyms": up to 2, or an empty list,\n' +
-      ' "family": up to 6 other forms of the same root, or an empty list';
-
     const res = await this.json([
       { role: 'system', content: 'You build vocabulary decks for learners of English. Answer only with JSON.' },
       { role: 'user', content:
         'Create ' + count + ' useful English vocabulary items about "' + topic + '" at CEFR level ' + level + '.\n' +
         'Avoid very basic words the learner certainly knows, and do not repeat a term.\n' +
-        'Return JSON: {"cards":[{ "term":"",\n' + core + (detail ? extra : '') + '\n}]}\n' +
+        'Return JSON: {"cards":[{ "term":"",\n' + this.cardFieldSpec(lang, detail) + '\n}]}\n' +
         (detail ? 'Leave a list empty rather than inventing something to fill it.\n' : '') }
     ], { temperature: 0.85, maxTokens: Math.min(24000, Math.max(4000, count * (detail ? 260 : 130))) });
 
@@ -289,7 +290,7 @@ const AI = {
       collocations: cleanList(c.collocations, 4),
       synonyms: cleanList(c.synonyms, 3),
       antonyms: cleanList(c.antonyms, 2),
-      family: cleanList(c.family, 6)
+      family: cleanList(c.family, 6).filter(f => !isInflectionOf(f, c.term))
     }));
   },
 
@@ -347,6 +348,35 @@ const AI = {
 };
 
 function clampChoices(n) { return Math.max(2, Math.min(5, parseInt(n, 10) || 4)); }
+
+/* A family member has to be a different word, not the same word wearing a
+   suffix. The prompt says so; this is the part that does not depend on the
+   model having listened.
+
+   Only the mechanical endings are stripped, and a form already saved as a word
+   of its own is kept — "building" is a thing, "diagnosing" is not, and the
+   collection is the only evidence available for telling those apart. */
+function isInflectionOf(form, term) {
+  const a = String(form || '').trim().toLowerCase();
+  const b = String(term || '').trim().toLowerCase();
+  if (!a || !b || a === b) return a === b;
+  if (typeof Store !== 'undefined' && Store.state && Store.cardByTerm && Store.cardByTerm(a)) return false;
+  /* Plurals that do not simply add an s — common enough in medical and academic
+     English that leaving them out would let half of them through. */
+  const latin = [['is', 'es'], ['us', 'i'], ['um', 'a'], ['on', 'a'],
+                 ['a', 'ae'], ['ex', 'ices'], ['ix', 'ices']];
+  for (const [end, plural] of latin) {
+    if (b.length > end.length + 2 && b.slice(-end.length) === end &&
+        a === b.slice(0, -end.length) + plural) return true;
+  }
+
+  const stems = [b];
+  if (/e$/.test(b)) stems.push(b.slice(0, -1));                 /* diagnose -> diagnos-  */
+  if (/is$/.test(b)) stems.push(b.slice(0, -2));                /* prognosis -> prognos- */
+  if (/[bdgklmnprt]$/.test(b)) stems.push(b + b.slice(-1));     /* run      -> runn-     */
+  if (/y$/.test(b)) stems.push(b.slice(0, -1) + 'i');           /* study    -> studi-    */
+  return stems.some(stem => ['s', 'es', 'ed', 'd', 'ing'].some(suf => a === stem + suf));
+}
 
 /* Whatever a model returns where a list was asked for: trimmed, de-duplicated,
    emptied of junk and cut to the agreed length. The prompt asks for at most N;
