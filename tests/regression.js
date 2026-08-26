@@ -851,6 +851,9 @@ const head = (s) => console.log('\n— ' + s + ' —');
     Store.saveNow();
     go('study', {});
     startSession(null, false);
+    /* The card fades in. Measuring visibility while that is still running can
+       catch an element at opacity 0 and call it hidden, so let it land. */
+    await new Promise(r => setTimeout(r, 320));
     const v = document.getElementById('view-study');
     /* Both sides live in the DOM now, so what matters is what is on show. */
     const seen = (el) => !!el && el.checkVisibility({ contentVisibilityAuto: true,
@@ -861,7 +864,7 @@ const head = (s) => console.log('\n— ' + s + ' —');
       posChips: v.querySelectorAll('.fc-top .chip.pos').length
     };
     revealCard();
-    await new Promise(r => setTimeout(r, 60));
+    await new Promise(r => setTimeout(r, 320));   /* the back fades in too */
     const back = {
       sense: (v.querySelector('.fc-sense') || {}).textContent,
       senseShown: seen(v.querySelector('.fc-sense')),
