@@ -78,11 +78,39 @@ const AI = {
     }
 
     const data = await res.json();
+
+    let text, finish;
     if (c.provider === 'gemini') {
-      const parts = data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts;
-      return (parts || []).map(p => p.text || '').join('').trim();
+      const cand = (data.candidates || [])[0] || {};
+      finish = cand.finishReason || (data.promptFeedback && data.promptFeedback.blockReason) || '';
+      const parts = cand.content && cand.content.parts;
+      text = (parts || []).map(p => p.text || '').join('').trim();
+    } else {
+      const choice = (data.choices || [])[0] || {};
+      finish = choice.finish_reason || '';
+      text = ((choice.message && choice.message.content) || '').trim();
     }
-    return ((data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '').trim();
+
+    /* An empty answer used to be handed back as though it were one. It never
+       is: something stopped the model before it wrote anything, and the reason
+       is in the response. The usual cause is a reasoning model spending its
+       whole output budget on thinking, so that case is retried once with room
+       rather than reported as a puzzle. */
+    if (!text) {
+      const ranOut = /MAX_TOKENS|length/i.test(finish);
+      if (ranOut && !opts._retried) {
+        return await this.chat(messages, Object.assign({}, opts, {
+          maxTokens: Math.max((opts.maxTokens || 900) * 4, 4000), _retried: true
+        }));
+      }
+      if (ranOut) throw new Error(
+        'The model used its whole output budget before writing anything. Reasoning models do ' +
+        'this — try a "flash" or "mini" variant, or a model that does not think first.');
+      if (/SAFETY|BLOCK|RECITATION/i.test(finish)) throw new Error(
+        'The provider blocked this request (' + finish + ').');
+      throw new Error('The provider answered with no text' + (finish ? ' (' + finish + ')' : '') + '.');
+    }
+    return text;
   },
 
   async json(messages, opts) {
@@ -127,7 +155,7 @@ const AI = {
 
   /* ---------- features ------------------------------------------------------ */
   async test() {
-    const out = await this.chat([{ role: 'user', content: 'Reply with exactly: OK' }], { maxTokens: 10, temperature: 0 });
+    const out = await this.chat([{ role: 'user', content: 'Reply with exactly: OK' }], { maxTokens: 400, temperature: 0 });
     return out.slice(0, 40);
   },
 
@@ -145,7 +173,7 @@ const AI = {
         ' "definition": a clear English definition, max 18 words, no dictionary abbreviations,\n' +
         ' "example": one natural English sentence that CONTAINS the word "' + term + '" verbatim,\n' +
         ' "translation": the ' + lang + ' translation (just the translation, no explanation)}' }
-    ], { temperature: 0.4, maxTokens: 320 });
+    ], { temperature: 0.4, maxTokens: 1600 });
     return {
       pos: res.pos || '', definition: res.definition || '', example: res.example || '',
       translation: res.translation || ''
@@ -162,7 +190,7 @@ const AI = {
         'Avoid very basic words the learner certainly knows. Return JSON:\n' +
         '{"cards":[{"term":"","pos":"","definition":"","example":"","translation":"' + lang + ' translation"}]}\n' +
         'Each "example" must contain its "term" verbatim.' }
-    ], { temperature: 0.85, maxTokens: 2000 });
+    ], { temperature: 0.85, maxTokens: 6000 });
     return (res.cards || []).filter(c => c && c.term);
   },
 
@@ -185,7 +213,7 @@ const AI = {
         '{"questions":[{"term":"the target word","prompt":"question text, use ____ for a gap",' +
         '"options":[' + Array.from({ length: choices }, (_, i) => '"option ' + (i + 1) + '"').join(',') + '],' +
         '"answer":"the exact correct option","explanation":"one short sentence"}]}' }
-    ], { temperature: 0.8, maxTokens: 2200 });
+    ], { temperature: 0.8, maxTokens: 6000 });
     return (res.questions || []).filter(q => q && q.prompt && Array.isArray(q.options) && q.answer);
   },
 
@@ -202,7 +230,7 @@ const AI = {
         'Return JSON: {"correct":true|false,"score":0-100,"feedback":"2-3 sentences in English, ' +
         'name the specific problem if there is one","corrected":"a corrected or improved version of their sentence",' +
         '"note":"one short tip in ' + lang + '"}' }
-    ], { temperature: 0.4, maxTokens: 500 });
+    ], { temperature: 0.4, maxTokens: 2500 });
     return res;
   },
 
@@ -215,7 +243,7 @@ const AI = {
         'The learner (native language ' + lang + ') was asked about "' + card.term + '" and answered "' +
         wrongAnswer + '", which is wrong. The right meaning is: ' + (card.definition || card.translation) +
         '. Explain the difference in one or two short sentences, then give one memory hook.' }
-    ], { temperature: 0.6, maxTokens: 160 });
+    ], { temperature: 0.6, maxTokens: 1200 });
   }
 };
 
@@ -234,5 +262,9 @@ function parseLooseJSON(text) {
   if (start !== -1 && end > start) {
     try { return JSON.parse(t.slice(start, end + 1)); } catch (e) {}
   }
-  throw new Error('The AI response was not valid JSON. Try again, or pick a stronger model.');
+  /* Saying what came back instead is the difference between a puzzle and a
+     clue — an apology, a refusal and a truncated object all look the same
+     otherwise. */
+  throw new Error('The AI response was not valid JSON. It began: "' +
+    String(text).trim().slice(0, 80).replace(/\s+/g, ' ') + '". Try again, or pick another model.');
 }

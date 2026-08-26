@@ -346,6 +346,12 @@ Yazdığın ad listede yoksa bunu da söyler.
 
 Gemini'de yalnızca metin üretebilen modeller listelenir; gömme (embedding) modelleri
 elenir, çünkü bu uygulama onlarla konuşamaz.
+
+**Düşünen (reasoning) modeller:** Bazı modeller cevabı yazmadan önce kendi içinde düşünür ve
+bu düşünme de çıktı bütçesinden harcanır. Bütçe düşünmeye giderse geriye **hiç metin kalmaz**;
+uygulama da elinde boş bir cevapla kalır. Bu durumda uygulama isteği bir kez daha, dört kat
+bütçeyle dener; yine boş dönerse ne olduğunu açıkça söyler. Sürekli yaşıyorsan **"flash"**
+ya da **"mini"** türü, düşünmeyen bir model seç.
 ### Elindeki OpenAI anahtarıyla maliyet
 
 Bir kart doldurma veya bir quiz sorusu yaklaşık **500–1.500 token** eder; 15 kelimelik bir
