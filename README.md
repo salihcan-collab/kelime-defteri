@@ -317,7 +317,7 @@ Seçimlerin kaydedilir.
 **Evet, mümkün ve ücretsiz seçenekler var.** Uygulama AI olmadan da eksiksiz çalışır;
 AI yalnızca dört yerde devreye girer:
 
-1. **Kart otomatik doldurma** — sadece kelimeyi yaz, tanım/örnek/çeviri/kategori dolsun
+1. **Kart otomatik doldurma** — sadece kelimeyi yaz, tanım/örnek/çeviri dolsun
 2. **Deste üretme** — "job interviews, B2, 15 kelime" de, hazır deste gelsin
 3. **AI quiz** — her seferinde yeni bağlam cümleleriyle sorular + açıklamalar
 4. **Writing coach** — yazdığın cümleyi puanlar, düzeltir, Türkçe kısa not verir
@@ -336,12 +336,22 @@ AI yalnızca dört yerde devreye girer:
 | **DeepSeek** | Ücretli, çok ucuz | platform.deepseek.com |
 | **Ollama** | **Tamamen ücretsiz**, kendi bilgisayarında, internetsiz | ollama.com |
 
+### Model adı
+
+Model adları zamanla emekliye ayrılıyor: sağlayıcı bir modeli kaldırdığında uygulama
+`404 — model not found` verir. Bu yüzden Model kutusunun altında **"Ask the provider what
+it has"** bağlantısı var — anahtarını girdikten sonra ona bas, uygulama sağlayıcıya sorar ve
+o anda gerçekten sunulan modelleri listeler. Sonra Model kutusuna tıklayıp listeden seçersin.
+Yazdığın ad listede yoksa bunu da söyler.
+
+Gemini'de yalnızca metin üretebilen modeller listelenir; gömme (embedding) modelleri
+elenir, çünkü bu uygulama onlarla konuşamaz.
 ### Elindeki OpenAI anahtarıyla maliyet
 
-Bir kart doldurma veya bir quiz sorusu yaklaşık 500–1.500 token eder.
-`gpt-4o-mini` ile bu **sentin küçük bir kesri** demektir: her gün yoğun kullansan bile
-aylık maliyet genelde **1 doların altında** kalır. Pahalı modellere ihtiyaç yok —
-bu iş için küçük modeller fazlasıyla yeterli.
+Bir kart doldurma veya bir quiz sorusu yaklaşık **500–1.500 token** eder; 15 kelimelik bir
+deste üretmek ~2.000 token. Fiyatlar sık değiştiği için buraya rakam yazmıyorum — güncel
+fiyatı sağlayıcının kendi sayfasından bakıp bu sayılarla çarpman yeterli. Küçük modeller bu
+iş için fazlasıyla yeterli; pahalı modele ihtiyaç yok.
 
 ### Anahtarın güvenliği
 

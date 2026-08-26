@@ -90,6 +90,41 @@ const AI = {
     return parseLooseJSON(raw);
   },
 
+  /* Ask the provider what it actually offers. Model names are retired without
+     warning — a list fetched from the endpoint beats one written down here. */
+  async listModels() {
+    const c = this.cfg;
+    let url, headers = {};
+    if (c.provider === 'gemini') {
+      url = 'https://generativelanguage.googleapis.com/v1beta/models?key=' + encodeURIComponent(c.apiKey) + '&pageSize=200';
+    } else {
+      url = (c.baseUrl || 'https://api.openai.com/v1').replace(/\/+$/, '') + '/models';
+      if (c.apiKey) headers['Authorization'] = 'Bearer ' + c.apiKey;
+    }
+
+    let res;
+    try { res = await fetch(url, { headers: headers }); }
+    catch (e) { throw new Error('Could not reach the provider to ask for its model list.'); }
+    if (!res.ok) {
+      let detail = '';
+      try { const j = await res.json(); detail = (j.error && (j.error.message || j.error.status)) || ''; } catch (e) {}
+      throw new Error('The provider would not list its models (' + res.status + '). ' + detail);
+    }
+    const data = await res.json();
+
+    let names;
+    if (c.provider === 'gemini') {
+      names = (data.models || [])
+        /* only the ones this app can actually talk to */
+        .filter(m => !m.supportedGenerationMethods ||
+                     m.supportedGenerationMethods.indexOf('generateContent') !== -1)
+        .map(m => String(m.name || '').replace(/^models\//, ''));
+    } else {
+      names = (data.data || data.models || []).map(m => m.id || m.name || '');
+    }
+    return names.filter(Boolean).sort();
+  },
+
   /* ---------- features ------------------------------------------------------ */
   async test() {
     const out = await this.chat([{ role: 'user', content: 'Reply with exactly: OK' }], { maxTokens: 10, temperature: 0 });

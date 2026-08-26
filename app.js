@@ -2515,7 +2515,7 @@ function miniStat(label, n, sub, color) {
    ========================================================================== */
 const AI_PRESETS = {
   openai:     { label:'OpenAI',              provider:'openai',     baseUrl:'https://api.openai.com/v1',                model:'gpt-4o-mini',            keyUrl:'platform.openai.com/api-keys', note:'Paid, but a mini model costs a few cents a month at this usage.' },
-  gemini:     { label:'Google Gemini',       provider:'gemini',     baseUrl:'',                                         model:'gemini-2.0-flash',       keyUrl:'aistudio.google.com/apikey',   note:'Has a free tier — a good place to start.' },
+  gemini:     { label:'Google Gemini',       provider:'gemini',     baseUrl:'',                                         model:'gemini-3.6-flash',       keyUrl:'aistudio.google.com/apikey',   note:'Has a free tier — a good place to start.' },
   groq:       { label:'Groq',                provider:'compatible', baseUrl:'https://api.groq.com/openai/v1',           model:'llama-3.3-70b-versatile', keyUrl:'console.groq.com/keys',        note:'Free tier with generous limits and very fast replies.' },
   openrouter: { label:'OpenRouter',          provider:'compatible', baseUrl:'https://openrouter.ai/api/v1',             model:'meta-llama/llama-3.3-70b-instruct:free', keyUrl:'openrouter.ai/keys', note:'Marketplace with several models marked :free.' },
   deepseek:   { label:'DeepSeek',            provider:'compatible', baseUrl:'https://api.deepseek.com/v1',              model:'deepseek-chat',          keyUrl:'platform.deepseek.com',        note:'Paid but extremely cheap.' },
@@ -2602,7 +2602,14 @@ function renderSettings(host) {
             [['openai', 'OpenAI'], ['compatible', 'OpenAI-compatible'], ['gemini', 'Google Gemini']].map(o =>
               '<option value="' + o[0] + '"' + (ai.provider === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') +
           '</select></div>' +
-          '<div class="field"><label>Model</label><input type="text" id="aiModel" value="' + esc(ai.model) + '"></div>' +
+          '<div class="field"><label>Model</label>' +
+            '<input type="text" id="aiModel" list="modelList" value="' + esc(ai.model) + '">' +
+            '<datalist id="modelList"></datalist>' +
+            /* The link and the message it produces are kept apart: writing the
+               message used to replace the link, so it could only be used once. */
+            '<span class="help">Names change over time. ' +
+              '<a href="#" id="aiModels">Ask the provider what it has</a> once your key is in. ' +
+              '<span id="modelHint"></span></span></div>' +
         '</div>' +
         '<div class="field"><label>API base URL</label>' +
           '<input type="text" id="aiBase" value="' + esc(ai.baseUrl) + '" placeholder="https://api.openai.com/v1">' +
@@ -2752,6 +2759,30 @@ function bindSettings(host) {
   const bindAI = (id, key) => { const el = $('#' + id); if (el) el.onchange = () => { s.ai[key] = el.value.trim(); Store.save(); }; };
   bindAI('aiProvider', 'provider'); bindAI('aiModel', 'model'); bindAI('aiBase', 'baseUrl');
   bindAI('aiKey', 'apiKey'); bindAI('aiLang', 'nativeLanguage');
+
+  /* The model names written into the presets age out — Google retires one and
+     the app stops working with a 404. Rather than keep chasing them, ask the
+     endpoint itself and offer what comes back. */
+  const models = $('#aiModels');
+  if (models) models.onclick = async (e) => {
+    e.preventDefault();
+    ['aiProvider', 'aiModel', 'aiBase', 'aiKey'].forEach(id => { const el = $('#' + id); if (el) el.onchange(); });
+    const hint = $('#modelHint');
+    hint.textContent = 'Asking the provider…';
+    try {
+      const list = await AI.listModels();
+      $('#modelList').innerHTML = list.map(m => '<option value="' + esc(m) + '">').join('');
+      hint.innerHTML = list.length
+        ? list.length + ' models offered — click the box above to choose one.'
+        : 'The provider returned no models.';
+      const box = $('#aiModel');
+      if (list.length && list.indexOf(box.value) === -1) {
+        hint.innerHTML += ' <b>' + esc(box.value) + '</b> is not among them.';
+      }
+    } catch (err) {
+      hint.innerHTML = '<span style="color:var(--bad)">' + esc(err.message) + '</span>';
+    }
+  };
 
   const test = $('#aiTest');
   if (test) test.onclick = async () => {
