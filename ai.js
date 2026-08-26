@@ -30,6 +30,13 @@ const AI = {
     const c = this.cfg;
     if (!this.available()) throw new Error('AI is switched off. Turn it on in Settings → AI assistant.');
 
+    /* A model that has already needed room once will need it every time. Asking
+       for it up front turns two requests back into one — which matters when the
+       free allowance is counted in requests per day. */
+    if (!opts._retried && c.roomFor && c.roomFor === (c.model || '')) {
+      opts = Object.assign({}, opts, { maxTokens: Math.max((opts.maxTokens || 900) * 4, 4000) });
+    }
+
     let url, headers = { 'Content-Type': 'application/json' }, body;
 
     if (c.provider === 'gemini') {
@@ -60,6 +67,8 @@ const AI = {
       if (opts.json) body.response_format = { type: 'json_object' };
     }
 
+    Store.countAIRequest();
+
     let res;
     try {
       res = await fetch(url, { method: 'POST', headers: headers, body: JSON.stringify(body) });
@@ -72,7 +81,18 @@ const AI = {
       let detail = '';
       try { const j = await res.json(); detail = (j.error && (j.error.message || j.error.status)) || ''; } catch (e) {}
       if (res.status === 401 || res.status === 403) throw new Error('The API key was rejected (' + res.status + '). ' + detail);
-      if (res.status === 429) throw new Error('Rate limit or quota reached (429). ' + detail);
+      if (res.status === 429) {
+        /* The wait Google suggests is a backoff hint, not the end of the
+           allowance: a daily cap does not come back in a minute, however long
+           the message says to wait. */
+        const secs = /retry in ([\d.]+)s/i.exec(detail);
+        const limit = /limit:\s*(\d+)/i.exec(detail);
+        throw new Error('Out of quota (429).' +
+          (limit ? ' Your limit is ' + limit[1] + ' requests.' : '') +
+          (secs ? ' It suggests waiting ' + Math.ceil(parseFloat(secs[1])) + 's,' : ' ') +
+          ' but if that was the per-day allowance, waiting will not help — check ' +
+          'ai.dev/rate-limit to see which one ran out. ' + detail);
+      }
       if (res.status === 404) throw new Error('Model "' + (this.cfg.model) + '" was not found at this endpoint. ' + detail);
       throw new Error('AI request failed (' + res.status + '). ' + detail);
     }
@@ -99,9 +119,15 @@ const AI = {
     if (!text) {
       const ranOut = /MAX_TOKENS|length/i.test(finish);
       if (ranOut && !opts._retried) {
-        return await this.chat(messages, Object.assign({}, opts, {
+        const out = await this.chat(messages, Object.assign({}, opts, {
           maxTokens: Math.max((opts.maxTokens || 900) * 4, 4000), _retried: true
         }));
+        /* Remember, so the next call starts wide and costs one request. */
+        if (out && c.roomFor !== (c.model || '')) {
+          c.roomFor = c.model || '';
+          Store.save();
+        }
+        return out;
       }
       if (ranOut) throw new Error(
         'The model used its whole output budget before writing anything. Reasoning models do ' +
@@ -122,35 +148,48 @@ const AI = {
      warning — a list fetched from the endpoint beats one written down here. */
   async listModels() {
     const c = this.cfg;
-    let url, headers = {};
+
     if (c.provider === 'gemini') {
-      url = 'https://generativelanguage.googleapis.com/v1beta/models?key=' + encodeURIComponent(c.apiKey) + '&pageSize=200';
-    } else {
-      url = (c.baseUrl || 'https://api.openai.com/v1').replace(/\/+$/, '') + '/models';
-      if (c.apiKey) headers['Authorization'] = 'Bearer ' + c.apiKey;
+      /* The list is paginated, and a page token has to be followed or only the
+         first handful ever arrives — which looked like "the provider only has
+         one model". */
+      const base = 'https://generativelanguage.googleapis.com/v1beta/models?key=' +
+        encodeURIComponent(c.apiKey) + '&pageSize=100';
+      let raw = [], token = '', pages = 0;
+      do {
+        const data = await this._getJSON(base + (token ? '&pageToken=' + encodeURIComponent(token) : ''));
+        raw = raw.concat(data.models || []);
+        token = data.nextPageToken || '';
+      } while (token && ++pages < 10);
+
+      const canGenerate = (m) => {
+        const methods = m.supportedGenerationMethods || m.supportedActions;
+        /* No list of methods at all: give it the benefit of the doubt. */
+        return !methods || !methods.length || methods.indexOf('generateContent') !== -1;
+      };
+      const all = raw.map(m => String(m.name || '').replace(/^models\//, '')).filter(Boolean);
+      const usable = raw.filter(canGenerate).map(m => String(m.name || '').replace(/^models\//, '')).filter(Boolean);
+      /* If the filter has thrown away nearly everything it is more likely to be
+         wrong than the provider is to have one model. Show the lot instead. */
+      const names = usable.length >= 2 ? usable : all;
+      return names.sort();
     }
 
+    const url = (c.baseUrl || 'https://api.openai.com/v1').replace(/\/+$/, '') + '/models';
+    const data = await this._getJSON(url, c.apiKey ? { Authorization: 'Bearer ' + c.apiKey } : {});
+    return (data.data || data.models || []).map(m => m.id || m.name || '').filter(Boolean).sort();
+  },
+
+  async _getJSON(url, headers) {
     let res;
-    try { res = await fetch(url, { headers: headers }); }
+    try { res = await fetch(url, { headers: headers || {} }); }
     catch (e) { throw new Error('Could not reach the provider to ask for its model list.'); }
     if (!res.ok) {
       let detail = '';
       try { const j = await res.json(); detail = (j.error && (j.error.message || j.error.status)) || ''; } catch (e) {}
       throw new Error('The provider would not list its models (' + res.status + '). ' + detail);
     }
-    const data = await res.json();
-
-    let names;
-    if (c.provider === 'gemini') {
-      names = (data.models || [])
-        /* only the ones this app can actually talk to */
-        .filter(m => !m.supportedGenerationMethods ||
-                     m.supportedGenerationMethods.indexOf('generateContent') !== -1)
-        .map(m => String(m.name || '').replace(/^models\//, ''));
-    } else {
-      names = (data.data || data.models || []).map(m => m.id || m.name || '');
-    }
-    return names.filter(Boolean).sort();
+    return await res.json();
   },
 
   /* ---------- features ------------------------------------------------------ */

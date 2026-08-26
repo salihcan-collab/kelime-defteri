@@ -2622,9 +2622,14 @@ function renderSettings(host) {
           '<span class="help">Used for translations and short explanations.</span></div>' +
         '<div class="row"><button class="ghost-btn" id="aiTest">Test the connection</button>' +
           '<span id="aiTestOut" class="faint"></span></div>' +
-        '<p class="faint" style="margin-top:14px;line-height:1.6">Roughly what it costs: one auto-filled card or one quiz question is ' +
-          'about 500–1,500 tokens. With a small model that is a fraction of a cent — heavy daily use lands well under a dollar a month. ' +
-          'Gemini, Groq and OpenRouter all have free tiers, and Ollama runs offline on your own machine for nothing.</p>' +
+        '<p class="help" style="margin-top:12px">' +
+          '<b>' + Store.aiRequestsToday() + '</b> request' + (Store.aiRequestsToday() === 1 ? '' : 's') +
+          ' sent today. Free allowances are counted in requests, not words — so a long ' +
+          'answer costs no more than a short one, and generating a whole deck costs one.</p>' +
+        '<p class="faint" style="margin-top:14px;line-height:1.6">Free tiers cap how many <b>requests</b> you may send — ' +
+          'per minute and per day — so the thing to watch is the count above, not the length of the answers. ' +
+          'Paid use is billed by tokens instead: an auto-filled card or a quiz question is about 500–1,500 of them. ' +
+          'Ollama runs offline on your own machine, with no limit and no bill.</p>' +
       '</div>' +
     '</div>' +
 

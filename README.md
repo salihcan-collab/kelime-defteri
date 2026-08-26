@@ -352,6 +352,34 @@ bu düşünme de çıktı bütçesinden harcanır. Bütçe düşünmeye giderse 
 uygulama da elinde boş bir cevapla kalır. Bu durumda uygulama isteği bir kez daha, dört kat
 bütçeyle dener; yine boş dönerse ne olduğunu açıkça söyler. Sürekli yaşıyorsan **"flash"**
 ya da **"mini"** türü, düşünmeyen bir model seç.
+### Ücretsiz katmanda sayılan şey: **istek adedi**
+
+Ücretsiz katmanlarda ölçü token değil, **kaç kere sorduğun**. Google bunu üç ayrı sayaçla
+tutuyor ve üçü de ayrı ayrı dolabiliyor:
+
+| Kısaltma | Anlamı |
+|---|---|
+| **RPM** | dakikada istek — dakika başında yenilenir |
+| **TPM** | dakikada token — bu uygulamada neredeyse hiç sorun olmaz |
+| **RPD** | **günde istek** — dolarsa beklemek işe yaramaz, ertesi güne kadar biter |
+
+`ai.dev/rate-limit` sayfasında hangisinin dolduğunu görebilirsin. Hata mesajındaki
+"şu kadar saniye sonra dene" ifadesi genel bir öneridir; **günlük** sayaç dolduysa
+o süreyi beklemek hiçbir şeyi değiştirmez.
+
+Hangi işlem kaç istek harcar:
+
+| İşlem | İstek |
+|---|---|
+| Deste üretme (10 da olsa 30 kelime de olsa) | **1** |
+| Bir AI quiz turu (bütün sorular birlikte) | **1** |
+| Bir kartı doldurma / bir cümleyi notlama / bir açıklama | 1 |
+| Bağlantı testi | 1 |
+
+Settings'teki AI bölümü **bugün kaç istek gönderdiğini** yazar. Bu, uygulamanın gönderdiği
+sayıdır — sağlayıcının saydığıyla birebir aynı olmayabilir ama neyi harcadığını görmen için
+yeterlidir.
+
 ### Elindeki OpenAI anahtarıyla maliyet
 
 Bir kart doldurma veya bir quiz sorusu yaklaşık **500–1.500 token** eder; 15 kelimelik bir

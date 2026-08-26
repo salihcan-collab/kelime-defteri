@@ -45,13 +45,16 @@ const Store = {
           baseUrl: 'https://api.openai.com/v1',
           model: 'gpt-4o-mini',
           apiKey: '',
-          nativeLanguage: 'Turkish'
+          nativeLanguage: 'Turkish',
+          roomFor: ''                 // a model that needs a wide output budget
+
         }
       },
       decks: [],
       cards: [],
       log: [],                          // { ts, cardId, rating, correct, mode }
       daily: {},                        // 'YYYY-MM-DD': { new:0, reviews:0, correct:0, minutes:0 }
+      aiUsage: { day: '', count: 0 },   // requests this app sent today, for the free allowance
       lastBackup: null
     };
   },
@@ -95,6 +98,7 @@ const Store = {
       if (!Array.isArray(c.related)) c.related = [];
       return c;
     });
+    s.aiUsage = data.aiUsage || { day: '', count: 0 };
     s.log = data.log || [];
     s.daily = data.daily || {};
     /* Starter content that has been corrected or added since this collection
@@ -570,6 +574,22 @@ const Store = {
       newAvailable: newAvailable,
       ready: dueNow.length + newAvailable
     };
+  },
+
+  /* Free allowances are counted in requests, so it helps to see how many this
+     app has sent. It is what we sent, not what the provider counted — a retry
+     shows up here as the two requests it really is. */
+  countAIRequest() {
+    const key = todayKey();
+    if (!this.state.aiUsage || this.state.aiUsage.day !== key) this.state.aiUsage = { day: key, count: 0 };
+    this.state.aiUsage.count++;
+    this.save();
+    return this.state.aiUsage.count;
+  },
+
+  aiRequestsToday() {
+    const u = this.state.aiUsage;
+    return (u && u.day === todayKey()) ? u.count : 0;
   },
 
   /* ---------- statistics --------------------------------------------------- */
