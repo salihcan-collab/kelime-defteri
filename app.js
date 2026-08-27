@@ -34,7 +34,10 @@ const ICONS = {
   finish: '<svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>' +
           '<path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>',
   bulb: '<svg viewBox="0 0 24 24"><path d="M9 18h6"/><path d="M10 22h4"/>' +
-        '<path d="M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg>'
+        '<path d="M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg>',
+  /* Looking back over a finished round — a marked page, not the hint bulb. */
+  review: '<svg viewBox="0 0 24 24"><path d="M5 3h9l5 5v13H5z"/><path d="M14 3v5h5"/>' +
+          '<path d="M8.5 13.5l2 2 4-4.5"/></svg>'
 };
 
 /* ---------- toast ---------------------------------------------------------- */
@@ -2562,7 +2565,7 @@ function packReview() {
                  answer: '', given: it.given == null ? null : String(it.given), ok: !!it.ok });
     } else {
       out.push({ kind: 'q', term: term, q: it.cloze || it.prompt || it.question || term,
-                 answer: it.answer || term,
+                 answer: it.answer || term, options: it.options || null,
                  given: it.given == null ? null : String(it.given), ok: !!it.ok });
     }
   });
@@ -2588,19 +2591,30 @@ function reviewRound(entry) {
       (ok ? '' : '<s>' + esc(given) + '</s>') + esc(answer) + '</span>';
   };
 
+  /* The options as they were offered, so the question reads as the question:
+     the right one, the one taken instead, and the rest standing back. */
+  const choices = (r) => r.options.map(o => {
+    const right = normalize(o) === normalize(r.answer);
+    const taken = r.given != null && normalize(o) === normalize(r.given);
+    return '<span class="rev-opt' + (right ? ' correct' : taken ? ' wrong' : '') + '">' +
+      (taken && !right ? '<s>' + esc(o) + '</s>' : esc(o)) + '</span>';
+  }).join('');
+
   const body = head + '<div class="review-list" id="reviewList">' +
     (entry.review || []).map(r => {
       if (r.kind === 'passage')
         return '<div class="review-row"><p class="passage">' +
           r.parts.map((t, i) => esc(t) + (i < r.answers.length
-            ? '<span class="rg-blank"></span><span class="review-a">' + word(r.answers[i], (r.given || [])[i]) + '</span>'
+            ? '<span class="rg-blank"></span><span class="rg-word">' + word(r.answers[i], (r.given || [])[i]) + '</span>'
             : '')).join('') + '</p></div>';
+      const missed = r.given != null && r.given !== '' && normalize(r.given) !== normalize(r.answer);
       return '<div class="review-row">' +
         '<div class="review-q">' + esc(r.q) + '</div>' +
         '<div class="review-a">' +
-          (r.answer ? '<b>' + esc(r.answer) + '</b>' : '') +
-          (r.given != null && r.given !== '' && normalize(r.given) !== normalize(r.answer)
-            ? '<span class="review-given">you said: ' + esc(r.given) + '</span>' : '') +
+          (r.options && r.options.length
+            ? choices(r)
+            : (missed ? '<s>' + esc(r.given) + '</s>' : '') +
+              (r.answer ? '<b>' + esc(r.answer) + '</b>' : esc(r.given || ''))) +
           (r.given == null ? '<span class="review-given">not reached</span>' : '') +
         '</div></div>';
     }).join('') + '</div>';
@@ -2656,7 +2670,7 @@ function historyHTML() {
         '<div class="row" style="gap:10px;flex:none">' +
           '<span class="chip">' + pct(r.correct, r.answers) + '% of ' + r.answers + '</span>' +
           (r.review && r.review.length
-            ? '<button class="soft-btn" data-review="' + r.id + '">' + ICONS.bulb + 'Review</button>' : '') +
+            ? '<button class="soft-btn" data-review="' + r.id + '">' + ICONS.review + 'Review</button>' : '') +
         '</div>' +
       '</div>';
     }).join('') + '</div>';

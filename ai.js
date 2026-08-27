@@ -204,6 +204,13 @@ const AI = {
       'The target words stay as they are, however hard they are.';
   },
 
+  /* The other half of what a level means: English written TO the learner rather
+     than for them to work through. A beginner who cannot read the explanation
+     has been told nothing; an advanced learner does not need it thinned out. */
+  levelTalk() {
+    return 'The learner is at CEFR level ' + this.level() + '. ' + LEVEL_TALK[this.level()];
+  },
+
   async test() {
     const out = await this.chat([{ role: 'user', content: 'Reply with exactly: OK' }], { maxTokens: 400, temperature: 0 });
     return out.slice(0, 40);
@@ -346,7 +353,7 @@ const AI = {
         '"options":[' + Array.from({ length: choices }, (_, i) => '"option ' + (i + 1) + '"').join(',') + '],' +
         '"answer":"the exact correct option",' +
         '"explanation":"one or two short sentences: why the answer fits, and why the closest ' +
-        'wrong option does not"}]}' }
+        'wrong option does not"}]}\n' + this.levelTalk() }
     ], { temperature: 0.8, maxTokens: 6000 });
     return (res.questions || []).filter(q => q && q.prompt && Array.isArray(q.options) && q.answer);
   },
@@ -409,8 +416,15 @@ const AI = {
         'You are a friendly but precise English writing tutor. Be encouraging and concrete. Answer only with JSON.' },
       { role: 'user', content:
         'Target word: "' + card.term + '" (' + (card.pos || '') + ') — ' + (card.definition || card.translation) + '\n' +
-        'The learner wrote: "' + sentence + '"\n' + this.levelSays() + '\n\n' +
-        'Judge whether the target word is used correctly and whether the sentence is natural English.\n' +
+        'The learner wrote: "' + sentence + '"\n' + this.levelTalk() + '\n\n' +
+        'Judge whether the target word is used correctly and whether the sentence is natural English. ' +
+        /* Marking a beginner against C1 English teaches them only that they
+           failed; the word is what is being practised. */
+        'Mark the use of the word first, and hold the rest of the sentence to what someone at ' +
+        'that level should manage — at A1-A2 a short, plain sentence that uses the word correctly ' +
+        'is a success.\n' +
+        'The corrected version stays their sentence, at their level: repair it, do not replace it ' +
+        'with English they could not have written.\n' +
         'Return JSON: {"correct":true|false,"score":0-100,"feedback":"2-3 sentences in English, ' +
         'name the specific problem if there is one","corrected":"a corrected or improved version of their sentence",' +
         '"note":"one short tip in ' + lang + '"}' }
@@ -424,7 +438,7 @@ const AI = {
     return await this.chat([
       { role: 'system', content: 'You are a concise English teacher. Maximum 45 words. No preamble.' },
       { role: 'user', content:
-        this.levelSays() + '\n' +
+        this.levelTalk() + '\n' +
         'The learner (native language ' + lang + ') was asked about "' + card.term + '" and answered "' +
         wrongAnswer + '", which is wrong. The right meaning is: ' + (card.definition || card.translation) +
         '. Explain the difference in one or two short sentences, then give one memory hook.' }
@@ -437,6 +451,19 @@ const CEFR_BANDS = {
   'A1-A2': 'beginner',
   'B1-B2': 'intermediate',
   'C1-C2': 'advanced'
+};
+
+/* And how to talk to someone at each of them. Explanations sit a step below the
+   level being practised: understanding the correction is not meant to be the
+   hard part. */
+const LEVEL_TALK = {
+  'A1-A2': 'Write everything you say TO them in very simple English — short sentences, ' +
+    'A1-A2 words, no grammar jargon beyond "verb", "noun" and the like. Give a plain example ' +
+    'rather than a rule where you can.',
+  'B1-B2': 'Write everything you say TO them in clear, simple English at about B1 — ' +
+    'straightforward sentences and only the common grammar terms.',
+  'C1-C2': 'Write everything you say TO them in ordinary unsimplified English (B2-C1); ' +
+    'precise grammatical terms are welcome and need no explaining.'
 };
 
 function clampChoices(n) { return Math.max(2, Math.min(5, parseInt(n, 10) || 4)); }

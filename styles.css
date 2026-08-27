@@ -511,13 +511,32 @@ input[type=range]::-moz-range-thumb{
 .review-row{ padding:11px 0; border-bottom:1px solid var(--border-soft); }
 .review-row:last-child{ border-bottom:0; }
 .review-q{ font-size:.92rem; line-height:1.6; }
-.review-a{ display:block; margin-top:6px; font-size:.9rem; }
+.review-a{ display:block; margin-top:7px; font-size:.9rem; }
 .review-a b{ color:var(--good); font-weight:650; }
-.review-given{ color:var(--text-faint); margin-left:10px; font-size:.84rem; }
-.review-list.hidden-answers .review-a{ display:none; }
-/* A word inside a text sits on the line, not on a line of its own — but only
-   while the answers are showing, or this would out-rank hiding them. */
-.review-list:not(.hidden-answers) .passage .review-a{ display:inline; margin:0; }
+.review-a s{ color:var(--bad); opacity:.8; margin-right:9px; }
+.review-given{ display:block; margin-top:4px; color:var(--text-faint); font-size:.84rem; }
+/* The options as the question offered them: the ones that were not taken stand
+   back, so the eye lands on the answer and on what was taken instead. */
+.rev-opt{
+  display:inline-block; margin:0 6px 6px 0; padding:3px 11px; border-radius:9px;
+  border:1px solid var(--border-soft); background:var(--surface-2);
+  font-size:.85rem; color:var(--text-faint);
+}
+.rev-opt.correct{ border-color:var(--good); background:rgba(34,197,94,.12); color:var(--good); font-weight:650; }
+.rev-opt.wrong{ border-color:var(--bad); background:rgba(239,68,68,.10); color:var(--bad); }
+.rev-opt s{ color:inherit; opacity:.85; margin:0; }
+/* Hiding the answers must not move the questions, or the page jumps under the
+   reader who asked for them to go. The space stays; only the words blur — and
+   the colours go with them, since a green blur is still an answer. */
+.review-list.hidden-answers .review-a{ filter:blur(7px); user-select:none; }
+.review-list.hidden-answers .review-a,
+.review-list.hidden-answers .review-a b,
+.review-list.hidden-answers .review-a s,
+.review-list.hidden-answers .rev-opt{
+  color:var(--text-dim); border-color:var(--border-soft); background:var(--surface-2);
+}
+.rg-word{ display:inline; }
+.review-list.hidden-answers .rg-word{ display:none; }
 .rg-blank{ display:none; min-width:112px; border-bottom:1px dashed var(--text-faint); margin:0 4px; }
 .review-list.hidden-answers .rg-blank{ display:inline-block; }
 
