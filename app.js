@@ -1595,6 +1595,9 @@ function drawPracticeSetup(host) {
         '</select></div>' +
 
       '</div>' +
+      /* Start belongs beside the settings it uses, not below two grids of
+         cards: choosing a drill should not mean scrolling back for the button. */
+      '<div>' +
       '<div class="card">' +
         '<div class="field" style="margin-bottom:10px">' +
           '<div class="row between"><label style="margin:0">Round length</label>' +
@@ -1609,6 +1612,12 @@ function drawPracticeSetup(host) {
             (Store.state.settings.quizAffectsSrs ? ' checked' : '') + '><span class="track"></span>' +
             '<span class="txt">Count towards scheduling</span></label>' +
         '</div>' +
+      '</div>' +
+      '<div class="row end" style="margin-top:14px">' +
+        '<button class="primary-btn" data-act="start"' + (blocked ? ' disabled' : '') + '>' +
+          ICONS.play + 'Start practice</button>' +
+      '</div>' +
+      (blocked ? '<p class="faint" style="text-align:right;margin-top:8px">' + esc(blocked) + '</p>' : '') +
       '</div>' +
     '</div>' +
 
@@ -1625,11 +1634,6 @@ function drawPracticeSetup(host) {
     '<div class="mode-grid">' + modeCards(m => m.ai) + '</div>' +
     (aiOn ? '<p class="faint" style="margin-top:9px">The level sets the English written and marked ' +
       'around your words — the words themselves are used whatever their level.</p>' : '') +
-    '<div class="row" style="margin-top:20px;justify-content:flex-end">' +
-      '<button class="primary-btn" data-act="start"' + (blocked ? ' disabled' : '') + '>' +
-        ICONS.play + 'Start practice</button>' +
-    '</div>' +
-    (blocked ? '<p class="faint" style="text-align:right;margin-top:8px">' + esc(blocked) + '</p>' : '') +
     historyHTML();
 
   host.onclick = (e) => {
@@ -1833,13 +1837,24 @@ function buildPassageItem(p, cards, pool) {
   /* A word standing where a sentence begins wears a capital, and a capital in
      the bank says which gap it came from. */
   const opensSentence = (i) => i === 0 || /[.!?]\s+$/.test(text.slice(0, i));
+
+  /* Longest terms first, and a word never claims a place another target has
+     already taken: "cake" would otherwise settle inside "a piece of cake" and
+     leave the phrase itself homeless — and then look like a word used twice. */
+  const claimed = [];
+  const free = (term, from) => {
+    let at = findTerm(text, term, from);
+    while (at && claimed.some(c => at[0] < c[1] && at[1] > c[0])) at = findTerm(text, term, at[1]);
+    return at;
+  };
   const hits = [];
-  cards.forEach(card => {
-    const at = findTerm(text, card.term, 0);
+  cards.slice().sort((a, b) => b.term.length - a.term.length).forEach(card => {
+    const at = free(card.term, 0);
     if (!at || opensSentence(at[0])) return;
-    /* A word that turns up twice gives its own gap away, so it stays as prose
-       and simply is not asked about. */
-    if (findTerm(text, card.term, at[1])) return;
+    /* A word that genuinely turns up twice gives its own gap away, so it stays
+       as prose and simply is not asked about. */
+    if (free(card.term, at[1])) return;
+    claimed.push(at);
     hits.push({ card: card, start: at[0], end: at[1] });
   });
   hits.sort((a, b) => a.start - b.start);
@@ -2592,12 +2607,14 @@ function reviewRound(entry) {
   };
 
   /* The options as they were offered, so the question reads as the question:
-     the right one, the one taken instead, and the rest standing back. */
+     the right one, the one taken instead, and the rest standing back. The
+     marking is all in the class, never in the markup — hiding the answers has
+     to leave four plain words behind, or the question cannot be tried again. */
   const choices = (r) => r.options.map(o => {
     const right = normalize(o) === normalize(r.answer);
     const taken = r.given != null && normalize(o) === normalize(r.given);
     return '<span class="rev-opt' + (right ? ' correct' : taken ? ' wrong' : '') + '">' +
-      (taken && !right ? '<s>' + esc(o) + '</s>' : esc(o)) + '</span>';
+      esc(o) + '</span>';
   }).join('');
 
   const body = head + '<div class="review-list" id="reviewList">' +
@@ -2608,15 +2625,19 @@ function reviewRound(entry) {
             ? '<span class="rg-blank"></span><span class="rg-word">' + word(r.answers[i], (r.given || [])[i]) + '</span>'
             : '')).join('') + '</p></div>';
       const missed = r.given != null && r.given !== '' && normalize(r.given) !== normalize(r.answer);
+      const notReached = r.given == null ? '<span class="review-given">not reached</span>' : '';
+      /* A question with options keeps them in the open when the answers are
+         hidden; a question whose answer is the only thing to show has to cover
+         it up instead. */
       return '<div class="review-row">' +
         '<div class="review-q">' + esc(r.q) + '</div>' +
-        '<div class="review-a">' +
-          (r.options && r.options.length
-            ? choices(r)
-            : (missed ? '<s>' + esc(r.given) + '</s>' : '') +
-              (r.answer ? '<b>' + esc(r.answer) + '</b>' : esc(r.given || ''))) +
-          (r.given == null ? '<span class="review-given">not reached</span>' : '') +
-        '</div></div>';
+        (r.options && r.options.length
+          ? '<div class="review-opts">' + choices(r) + notReached + '</div>'
+          : '<div class="review-a">' +
+              (missed ? '<s>' + esc(r.given) + '</s>' : '') +
+              (r.answer ? '<b>' + esc(r.answer) + '</b>' : esc(r.given || '')) +
+              notReached + '</div>') +
+        '</div>';
     }).join('') + '</div>';
 
   openModal({

@@ -15,7 +15,10 @@ const THEMES = [
   { id:'forest',   name:'Forest',   colors:['#0d1512','#1a2922','#25392e'] },
   { id:'sepia',    name:'Sepia',    colors:['#f3ead9','#fdf8ee','#e0d2b8'] },
   { id:'rose',     name:'Rose',     colors:['#fcf5f6','#ffffff','#f0dde0'] },
-  { id:'mono',     name:'Mono',     colors:['#0c0c0c','#141414','#282828'] }
+  { id:'mono',     name:'Mono',     colors:['#0c0c0c','#141414','#282828'] },
+  { id:'plum',     name:'Plum',     colors:['#120e1a','#191424','#302543'] },
+  { id:'ember',    name:'Ember',    colors:['#14100d','#1c1714','#372c23'] },
+  { id:'mist',     name:'Mist',     colors:['#eef2f7','#ffffff','#ccd8e6'] }
 ];
 
 const ACCENTS = [
@@ -26,7 +29,10 @@ const ACCENTS = [
   { id:'amber',   name:'Amber',   hex:'#f59e0b' },
   { id:'rose',    name:'Rose',    hex:'#f43f5e' },
   { id:'violet',  name:'Violet',  hex:'#8b5cf6' },
-  { id:'slate',   name:'Slate',   hex:'#64748b' }
+  { id:'slate',   name:'Slate',   hex:'#64748b' },
+  { id:'cyan',    name:'Cyan',    hex:'#06b6d4' },
+  { id:'lime',    name:'Lime',    hex:'#84cc16' },
+  { id:'fuchsia', name:'Fuchsia', hex:'#d946ef' }
 ];
 
 const FONTS = [
@@ -34,7 +40,10 @@ const FONTS = [
   { id:'rounded',  name:'Rounded',  sample:'Aa' },
   { id:'serif',    name:'Serif',    sample:'Aa' },
   { id:'humanist', name:'Humanist', sample:'Aa' },
-  { id:'mono',     name:'Mono',     sample:'Aa' }
+  { id:'mono',     name:'Mono',     sample:'Aa' },
+  { id:'slab',     name:'Slab',     sample:'Aa' },
+  { id:'grotesk',  name:'Grotesk',  sample:'Aa' },
+  { id:'clear',    name:'Clear',    sample:'Aa' }
 ];
 
 /* --------------------------------------------------------------------------

@@ -63,6 +63,27 @@
   color-scheme:dark;
 }
 
+:root[data-theme="plum"]{
+  --bg:#120e1a; --surface:#191424; --surface-2:#20192e; --surface-3:#2a2139;
+  --border:#302543; --border-soft:#241c33;
+  --text:#ece7f6; --text-dim:#a294bd; --text-faint:#796d92;
+  color-scheme:dark;
+}
+:root[data-theme="ember"]{
+  --bg:#14100d; --surface:#1c1714; --surface-2:#241d18; --surface-3:#2e2620;
+  --border:#372c23; --border-soft:#28211b;
+  --text:#f1e8de; --text-dim:#b4a18e; --text-faint:#877667;
+  color-scheme:dark;
+}
+:root[data-theme="mist"]{
+  --bg:#eef2f7; --surface:#ffffff; --surface-2:#e6ecf4; --surface-3:#dae3ee;
+  --border:#ccd8e6; --border-soft:#dfe7f1;
+  --text:#16202c; --text-dim:#5b6b7d; --text-faint:#8b9aab;
+  --shadow:0 1px 2px rgba(20,40,70,.06), 0 10px 26px -16px rgba(20,40,70,.30);
+  --shadow-lg:0 28px 64px -24px rgba(20,40,70,.30);
+  color-scheme:light;
+}
+
 /* ---------- Accents ---------------------------------------------------- */
 :root[data-accent="indigo"]  { --accent:#6366f1; --accent-soft:rgba(99,102,241,.14); --accent-ink:#fff; }
 :root[data-accent="blue"]    { --accent:#3b82f6; --accent-soft:rgba(59,130,246,.14); --accent-ink:#fff; }
@@ -72,6 +93,9 @@
 :root[data-accent="rose"]    { --accent:#f43f5e; --accent-soft:rgba(244,63,94,.14); --accent-ink:#fff; }
 :root[data-accent="violet"]  { --accent:#8b5cf6; --accent-soft:rgba(139,92,246,.15); --accent-ink:#fff; }
 :root[data-accent="slate"]   { --accent:#64748b; --accent-soft:rgba(100,116,139,.16); --accent-ink:#fff; }
+:root[data-accent="cyan"]    { --accent:#06b6d4; --accent-soft:rgba(6,182,212,.15); --accent-ink:#04252b; }
+:root[data-accent="lime"]    { --accent:#84cc16; --accent-soft:rgba(132,204,22,.17); --accent-ink:#18260a; }
+:root[data-accent="fuchsia"] { --accent:#d946ef; --accent-soft:rgba(217,70,239,.15); --accent-ink:#fff; }
 
 /* ---------- Fonts ------------------------------------------------------- */
 /* Each stack has to land on a different family per platform, or two options
@@ -84,6 +108,10 @@
 :root[data-font="serif"]    { --font:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif; }
 :root[data-font="humanist"] { --font:Optima,Candara,"Gill Sans MT","Gill Sans","Trebuchet MS",sans-serif; }
 :root[data-font="mono"]     { --font:ui-monospace,SFMono-Regular,"JetBrains Mono",Menlo,Consolas,"Liberation Mono",monospace; }
+/*   Windows  -> Rockwell / Arial / Verdana      macOS -> American Typewriter / Helvetica Neue / Verdana */
+:root[data-font="slab"]     { --font:"Roboto Slab","American Typewriter",Rockwell,"Bookman Old Style",Bookman,serif; }
+:root[data-font="grotesk"]  { --font:"Helvetica Neue",Helvetica,Arial,"Liberation Sans","Nimbus Sans",sans-serif; }
+:root[data-font="clear"]    { --font:Verdana,Tahoma,"DejaVu Sans",Geneva,sans-serif; }
 
 /* Four steps of 1.5px — enough to feel, small enough to fine-tune. */
 :root[data-size="sm"]{ --fs:14.5px; }
@@ -511,30 +539,32 @@ input[type=range]::-moz-range-thumb{
 .review-row{ padding:11px 0; border-bottom:1px solid var(--border-soft); }
 .review-row:last-child{ border-bottom:0; }
 .review-q{ font-size:.92rem; line-height:1.6; }
-.review-a{ display:block; margin-top:7px; font-size:.9rem; }
+.review-a{ display:block; margin-top:7px; font-size:.92rem; }
 .review-a b{ color:var(--good); font-weight:650; }
 .review-a s{ color:var(--bad); opacity:.8; margin-right:9px; }
 .review-given{ display:block; margin-top:4px; color:var(--text-faint); font-size:.84rem; }
-/* The options as the question offered them: the ones that were not taken stand
-   back, so the eye lands on the answer and on what was taken instead. */
-.rev-opt{
-  display:inline-block; margin:0 6px 6px 0; padding:3px 11px; border-radius:9px;
-  border:1px solid var(--border-soft); background:var(--surface-2);
-  font-size:.85rem; color:var(--text-faint);
-}
-.rev-opt.correct{ border-color:var(--good); background:rgba(34,197,94,.12); color:var(--good); font-weight:650; }
-.rev-opt.wrong{ border-color:var(--bad); background:rgba(239,68,68,.10); color:var(--bad); }
-.rev-opt s{ color:inherit; opacity:.85; margin:0; }
+/* The options as the question offered them, in the question's own size and
+   with no boxes around them — a marked-up sentence, not a row of buttons. */
+.review-opts{ margin-top:7px; font-size:.92rem; line-height:1.9; }
+/* Every option carries the same weight in both states. Bolding the right one
+   would re-wrap the line when the marking came off, which is exactly the jump
+   hiding the answers is meant to avoid — colour and a rule through the word
+   change nothing about where the words sit. */
+.rev-opt{ color:var(--text-dim); font-weight:500; }
+/* The separator hangs off the following option, so whatever comes after the
+   last one — a "not reached" note — cannot leave a dot dangling. */
+.rev-opt + .rev-opt::before{ content:'·'; color:var(--text-faint); margin:0 9px; }
+.rev-opt.correct{ color:var(--good); }
+.rev-opt.wrong{ color:var(--bad); text-decoration:line-through; }
 /* Hiding the answers must not move the questions, or the page jumps under the
-   reader who asked for them to go. The space stays; only the words blur — and
-   the colours go with them, since a green blur is still an answer. */
+   reader who asked for them to go. Where the options are on the page they stay
+   readable and simply lose their marking, so the question can be worked out
+   again; where the answer is the only thing there, it is covered instead. */
+.review-list.hidden-answers .rev-opt{ color:var(--text-dim); text-decoration:none; }
 .review-list.hidden-answers .review-a{ filter:blur(7px); user-select:none; }
 .review-list.hidden-answers .review-a,
 .review-list.hidden-answers .review-a b,
-.review-list.hidden-answers .review-a s,
-.review-list.hidden-answers .rev-opt{
-  color:var(--text-dim); border-color:var(--border-soft); background:var(--surface-2);
-}
+.review-list.hidden-answers .review-a s{ color:var(--text-dim); }
 .rg-word{ display:inline; }
 .review-list.hidden-answers .rg-word{ display:none; }
 .rg-blank{ display:none; min-width:112px; border-bottom:1px dashed var(--text-faint); margin:0 4px; }

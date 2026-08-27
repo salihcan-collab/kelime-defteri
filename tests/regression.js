@@ -1704,9 +1704,12 @@ const head = (s) => console.log('\n— ' + s + ' —');
     });
     document.documentElement.setAttribute('data-size', Store.state.settings.size || 'md');
     const fonts = {};
-    ['sans', 'rounded', 'serif', 'mono', 'humanist'].forEach(f => {
-      document.documentElement.setAttribute('data-font', f);
-      fonts[f] = getComputedStyle(document.body).fontFamily;
+    /* Every font the app offers, not a list that has to be kept in step with
+       one — an option added to data.js and forgotten in the CSS would simply
+       inherit the last stack. */
+    FONTS.forEach(f => {
+      document.documentElement.setAttribute('data-font', f.id);
+      fonts[f.id] = getComputedStyle(document.body).fontFamily;
     });
     document.documentElement.setAttribute('data-font', Store.state.settings.font || 'sans');
     const strays = document.querySelectorAll('body [data-theme], body [data-accent], body [data-font], body [data-size]').length;
@@ -1717,7 +1720,8 @@ const head = (s) => console.log('\n— ' + s + ' —');
      appearance.sizes.lg === 17.5 && appearance.sizes.xl === 19,
      `four distinct text sizes (${Object.values(appearance.sizes).join(' / ')} px)`);
   is(appearance.fonts.sans !== appearance.fonts.rounded, 'Sans and Rounded are genuinely different stacks');
-  is(new Set(Object.values(appearance.fonts)).size === 5, 'all five font choices differ from one another');
+  is(new Set(Object.values(appearance.fonts)).size === appearance.fontCount,
+     `all ${appearance.fontCount} font choices differ from one another`);
   is(appearance.strays === 0, 'appearance attributes live on :root only');
   is(appearance.themes >= 8 && appearance.accents >= 8, `${appearance.themes} themes and ${appearance.accents} accents on offer`);
 
@@ -1732,7 +1736,20 @@ const head = (s) => console.log('\n— ' + s + ' —');
     document.documentElement.setAttribute('data-theme', Store.state.settings.theme || 'graphite');
     return seen.size;
   });
-  is(painted >= 6, `themes produce ${painted} distinct page backgrounds`);
+  is(painted === appearance.themes, `all ${appearance.themes} themes paint their own background`);
+
+  /* Same for the accents: one missing rule and the swatch would quietly wear
+     the colour of the option before it. */
+  const accents = await page.evaluate(() => {
+    const seen = new Set();
+    ACCENTS.forEach(a => {
+      document.documentElement.setAttribute('data-accent', a.id);
+      seen.add(getComputedStyle(document.documentElement).getPropertyValue('--accent').trim());
+    });
+    document.documentElement.setAttribute('data-accent', Store.state.settings.accent || 'indigo');
+    return seen.size;
+  });
+  is(accents === appearance.accents, `all ${appearance.accents} accents paint their own colour`);
 
   /* ------------------------------------------------------------------ *
      11. Scrolling.
