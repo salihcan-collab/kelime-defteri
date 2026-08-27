@@ -340,6 +340,39 @@ const AI = {
     return (res.questions || []).filter(q => q && q.prompt && Array.isArray(q.options) && q.answer);
   },
 
+  /* Banked gap-fill: one short text per group of words, with the words taken
+     out of it. The learner puts them back, so what is being tested is the
+     context around the gap rather than the word in isolation. */
+  async makePassages(groups) {
+    const list = groups.map((g, i) =>
+      '  Text ' + (i + 1) + ': ' + g.map(c => c.term + ' (' + (c.pos || '?') + ')').join(', ')).join('\n');
+    const res = await this.json([
+      { role: 'system', content: 'You are an English teacher writing banked gap-fill texts. Answer only with JSON.' },
+      { role: 'user', content:
+        'Write one text for each group of target words:\n' + list + '\n\n' +
+        'Each text is 5-7 sentences that hang together — a story, a report, an explanation — ' +
+        'not unrelated sentences sharing a topic.\n' +
+        'Every word of the group appears exactly once, in the form written above, and is ' +
+        'replaced by ____ (four underscores) where it belongs.\n' +
+        /* The failure a gap-fill dies of: a gap that any of the bank words would fill. */
+        'What decides whether the text is worth doing: every gap must be settled by the ' +
+        'sentences around it. If two words of the group could stand in the same gap, the text ' +
+        'is broken — say more about what is happening there until one word only fits.\n' +
+        '"extra" is one more English word, the same kind of word as the targets and tempting ' +
+        'at a glance, that belongs in none of the gaps.\n' +
+        'Return JSON: {"passages":[{"text":"the text, with ____ for each gap",' +
+        '"words":["the target words, in the order their gaps appear"],"extra":"one spare word"}]}' }
+    ], { temperature: 0.7, maxTokens: Math.min(6000, 1400 * groups.length) });
+    return (res.passages || []).filter(p => p && p.text && Array.isArray(p.words) && p.words.length);
+  },
+
+  /* Whether a word in a generated text is the target word wearing a suffix —
+     a sentence may need "diagnosed" where the card says "diagnose". */
+  sameWord(a, b) {
+    a = String(a || '').trim().toLowerCase(); b = String(b || '').trim().toLowerCase();
+    return !!a && !!b && (a === b || isInflectionOf(a, b) || isInflectionOf(b, a));
+  },
+
   /* Mark a sentence the learner wrote using the target word. */
   async gradeSentence(card, sentence) {
     const lang = this.cfg.nativeLanguage || 'Turkish';

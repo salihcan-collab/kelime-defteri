@@ -476,6 +476,29 @@ input[type=range]::-moz-range-thumb{
 }
 @keyframes shake{ 0%,100%{transform:translateX(0);} 25%{transform:translateX(-5px);} 75%{transform:translateX(5px);} }
 
+/* Banked gap-fill. The text has to read as prose, so a gap keeps the same box
+   whether it is empty, filled or marked — nothing on the line moves as words
+   are put in and taken out again. */
+.passage{ font-size:1.02rem; line-height:2.2; }
+.gap{
+  display:inline-block; min-width:112px; padding:3px 12px; margin:0 3px;
+  border:1px dashed var(--text-faint); border-radius:9px; background:var(--surface-2);
+  font-size:.92rem; font-weight:650; line-height:1.75; text-align:center; cursor:pointer; transition:.14s;
+}
+.gap:hover{ border-color:var(--accent); }
+.gap.filled{ border-style:solid; }
+.gap.sel{ border-style:solid; border-color:var(--accent); background:var(--accent-soft); }
+.gap.correct{ border-style:solid; border-color:var(--good); background:rgba(34,197,94,.13); color:var(--good); cursor:default; }
+.gap.wrong{ border-style:solid; border-color:var(--bad); background:rgba(239,68,68,.11); color:var(--bad); cursor:default; }
+.gap s{ opacity:.55; font-weight:500; margin-right:6px; }
+.bank{ display:flex; flex-wrap:wrap; gap:8px; margin-top:22px; }
+.bank-word{
+  padding:9px 15px; border-radius:11px; border:1px solid var(--border);
+  background:var(--surface); font-size:.9rem; font-weight:650; cursor:pointer; transition:.14s;
+}
+.bank-word:hover{ border-color:var(--accent); }
+.bank-word.used{ opacity:.3; }
+
 .mode-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(215px,1fr)); gap:12px; }
 .mode-card{
   padding:16px; border-radius:14px; border:1px solid var(--border-soft); background:var(--surface);

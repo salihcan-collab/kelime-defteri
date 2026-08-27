@@ -1525,6 +1525,8 @@ const MODES = [
     icon:'<svg viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg>', needsTTS:true },
   { id:'ai-quiz', name:'AI quiz', desc:'Fresh context questions written for you, with explanations.',
     icon:'<svg viewBox="0 0 24 24"><path d="M12 3l1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9z"/></svg>', ai:true },
+  { id:'ai-passage', name:'Fill the passage', desc:'A short text with gaps, and a word bank holding one word too many.',
+    icon:'<svg viewBox="0 0 24 24"><path d="M4 6h16M4 10h16M4 18h16M4 14h4M18 14h2"/><rect x="9.5" y="12" width="6.5" height="4" rx="1"/></svg>', ai:true },
   { id:'ai-writing', name:'Writing coach', desc:'Write your own sentence; the AI marks it and suggests a better one.',
     icon:'<svg viewBox="0 0 24 24"><path d="M11 4H4v16h16v-7"/><path d="M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>', ai:true }
 ];
@@ -1542,6 +1544,22 @@ function roundLength(poolSize) {
 function optionCount() { return clamp(Store.state.settings.optionCount || 4, 2, 5); }
 /* Pairs shown on one matching board — more than this stops being playable. */
 const MATCH_BOARD_MAX = 6;
+/* Texts in one gap-fill round. The whole round is a single request, so this is
+   what one answer can hold before the writing thins out. */
+const PASSAGE_MAX_TEXTS = 3;
+
+/* Words are used in whole texts of four or five, so a round is the largest such
+   arrangement the chosen words allow, and null below four. */
+function passagePlan(n) {
+  let best = null;
+  [4, 5].forEach(per => {
+    for (let texts = 1; texts <= PASSAGE_MAX_TEXTS; texts++) {
+      const total = per * texts;
+      if (total <= n && (!best || total > best.total)) best = { per: per, texts: texts, total: total };
+    }
+  });
+  return best;
+}
 
 function renderPractice(host) {
   if (quiz && quiz.finished) return drawQuizResults(host);
@@ -1751,19 +1769,53 @@ function buildQuestions(mode, pool, count, opts) {
   }).filter(Boolean);
 }
 
+/* What the AI sends back becomes a question only if it holds together: the
+   gaps and the words have to be equal in number, and every word has to point
+   at one of the cards the text was written for. A text that fails is dropped
+   rather than patched — a gap with no owner has nothing to mark. */
+function buildPassageItem(p, cards, pool) {
+  const parts = String(p.text || '').replace(/\s+/g, ' ').trim().split(/_{2,}/);
+  const words = (p.words || []).map(w => String(w || '').trim()).filter(Boolean);
+  if (!words.length || parts.length - 1 !== words.length) return null;
+
+  const taken = {};
+  const owners = words.map(w => {
+    const c = cards.find(c => !taken[c.id] && AI.sameWord(w, c.term));
+    if (c) taken[c.id] = 1;
+    return c || null;
+  });
+  if (owners.some(c => !c)) return null;
+
+  /* One word too many, so the last gap is still a choice rather than whatever
+     is left over. The AI picks it; a word from the pool stands in if it did
+     not, or named one of the answers again. */
+  const clash = (w) => !w || words.some(a => normalize(a) === normalize(w));
+  let extra = String(p.extra || '').trim();
+  if (clash(extra)) {
+    const spare = pool.filter(c => !taken[c.id] && c.term && !clash(c.term));
+    extra = spare.length ? sample(spare, 1)[0].term : '';
+  }
+  return { type: 'passage', parts: parts, answers: words, cards: owners,
+           bank: shuffle(words.concat(clash(extra) ? [] : [extra])),
+           question: 'Fill the passage' };
+}
+
 /* Multiple-choice drills need other words to build plausible options from —
    but those words can come from anywhere in the collection, so one word in the
    selection is enough. Matching is the exception: it pairs the words you chose
    against each other, so it needs two of them. */
 const NEEDS_OPTIONS = ['mc-meaning', 'mc-word', 'matching', 'matching-def', 'ai-quiz'];
 function isMatching(mode) { return mode === 'matching' || mode === 'matching-def'; }
-function minWordsFor(mode) { return isMatching(mode) ? 2 : 1; }
+function minWordsFor(mode) { return mode === 'ai-passage' ? 4 : isMatching(mode) ? 2 : 1; }
 function minCollectionFor(mode) { return NEEDS_OPTIONS.indexOf(mode) !== -1 ? 2 : 1; }
 
 /* Why the drill cannot start, in words, or '' when it can. */
 function startBlocker(pool, mode) {
   if (!pool.length) return 'No words match these filters yet.';
-  if (pool.length < minWordsFor(mode)) return 'Matching needs at least two words in this selection.';
+  if (pool.length < minWordsFor(mode))
+    return mode === 'ai-passage'
+      ? 'A text is written around four words — this selection has fewer.'
+      : 'Matching needs at least two words in this selection.';
   if (Store.state.cards.length < minCollectionFor(mode))
     return 'This drill needs other words to build wrong answers from — add a second word.';
   return '';
@@ -1774,7 +1826,8 @@ function startBlocker(pool, mode) {
 function newQuiz(mode, items) {
   const q = { mode: mode, i: 0, items: items, results: [], correct: 0,
               startedAt: Date.now(), state: 'idle', match: null };
-  q.pairsTotal = items.reduce((n, it) => n + (it.type === 'matching' ? it.cards.length : 0), 0);
+  q.pairsTotal = items.reduce((n, it) =>
+    n + (it.type === 'matching' ? it.cards.length : it.type === 'passage' ? it.answers.length : 0), 0);
   q.pairsDone = 0;
   return q;
 }
@@ -1782,9 +1835,8 @@ function newQuiz(mode, items) {
 async function startQuiz() {
   const pool = practicePool(quizSetup.deckId, quizSetup.scope);
   const mode = quizSetup.mode;
-  if (pool.length < minWordsFor(mode)) {
-    return toast(pool.length ? 'This drill needs at least two words' : 'No words match these filters', 'err');
-  }
+  const blocked = startBlocker(pool, mode);
+  if (blocked) return toast(blocked, 'err');
   const count = roundLength(pool.length);
   quiz = newQuiz(mode, []);
 
@@ -1810,6 +1862,22 @@ async function startQuiz() {
                  answer: q.answer, explanation: q.explanation, question: 'AI question' };
       });
       if (!quiz.items.length) throw new Error('No questions came back.');
+      quiz = Object.assign(newQuiz(mode, quiz.items), { startedAt: quiz.startedAt });
+    } catch (err) {
+      quiz = null; toast(err.message, 'err'); return render('practice');
+    }
+  } else if (mode === 'ai-passage') {
+    const plan = passagePlan(Math.min(pool.length, Math.max(4, count), PASSAGE_MAX_TEXTS * 5));
+    const chosen = sample(pool, plan.total);
+    const groups = [];
+    for (let i = 0; i < chosen.length; i += plan.per) groups.push(chosen.slice(i, i + plan.per));
+    $('#view-practice').innerHTML = '<div class="quiz-wrap"><div class="card"><div class="ai-thinking">' +
+      ICONS.loader + 'The AI is writing ' + groups.length + ' text' + (groups.length === 1 ? '' : 's') + '…</div></div></div>';
+    try {
+      const out = await AI.makePassages(groups);
+      quiz.items = out.slice(0, groups.length)
+        .map((p, i) => buildPassageItem(p, groups[i], pool)).filter(Boolean);
+      if (!quiz.items.length) throw new Error('The text that came back did not line up with the words. Try again.');
       quiz = Object.assign(newQuiz(mode, quiz.items), { startedAt: quiz.startedAt });
     } catch (err) {
       quiz = null; toast(err.message, 'err'); return render('practice');
@@ -1855,21 +1923,13 @@ function gradeTyped(input, answer) {
 /* ---------- item rendering -------------------------------------------------- */
 function drawQuizItem(host) {
   const item = quiz.items[quiz.i];
-  /* The bar tracks what is finished. For matching that is pairs solved across
-     every board; elsewhere it is questions answered, so landing on the last
-     question does not already read as 100 %. */
-  const matching = item.type === 'matching';
-  const doneCount = matching ? quiz.pairsDone : quiz.i + (quiz.state === 'answered' ? 1 : 0);
-  const totalCount = matching ? quiz.pairsTotal : quiz.items.length;
-  const progress = pct(doneCount, totalCount);
+  const p = quizProgress();
   const head =
     '<div class="study-head">' +
       '<button class="soft-btn tiny end-btn" data-act="quit">' + ICONS.finish +
         '<span>End practice</span></button>' +
-      '<div class="bar" style="flex:1"><i id="qBar" style="width:' + progress + '%"></i></div>' +
-      '<div class="counts"><span class="c-due" id="qCount">' +
-        (matching ? doneCount + ' / ' + totalCount + ' matched'
-                  : (quiz.i + 1) + ' / ' + quiz.items.length) + '</span>' +
+      '<div class="bar" style="flex:1"><i id="qBar" style="width:' + pct(p.done, p.total) + '%"></i></div>' +
+      '<div class="counts"><span class="c-due" id="qCount">' + p.text + '</span>' +
         '<span class="c-new" id="qCorrect">' + quiz.correct + ' correct</span></div>' +
     '</div>';
 
@@ -1878,6 +1938,7 @@ function drawQuizItem(host) {
   else if (item.type === 'mc') body = mcHTML(item);
   else if (item.type === 'type') body = typeHTML(item);
   else if (item.type === 'write') body = writeHTML(item);
+  else if (item.type === 'passage') body = passageHTML(item);
 
   host.innerHTML = '<div class="quiz-wrap">' + head + body + '</div>';
 
@@ -2105,6 +2166,10 @@ function bindQuizEvents(host, item) {
     if (opt && quiz.state !== 'answered') return answerMC(item, opt.dataset.opt);
     const mi = e.target.closest('[data-side]');
     if (mi) return matchClick(item, mi.dataset.side, mi.dataset.id);
+    const g = e.target.closest('[data-gap]');
+    if (g) return passageGapClick(item, parseInt(g.dataset.gap, 10));
+    const bw = e.target.closest('[data-word]');
+    if (bw) return passageWordClick(item, parseInt(bw.dataset.word, 10));
   };
   const input = $('#qInput');
   if (input && quiz.state !== 'answered') {
@@ -2144,21 +2209,31 @@ function showAnswerInPlace(item) {
   refreshQuizHead();
 }
 
+/* What the bar is measuring. Matching boards and gap-filled texts hold several
+   answers each, so a round of three texts is not a third done once the first
+   one is on screen — those count in pairs and gaps. Everywhere else it is
+   questions answered, so arriving at the last one does not already read 100 %. */
+function quizProgress() {
+  const item = quiz.items[quiz.i];
+  const kind = item && item.type;
+  if (kind === 'matching' || kind === 'passage')
+    return { done: quiz.pairsDone, total: quiz.pairsTotal,
+             text: quiz.pairsDone + ' / ' + quiz.pairsTotal + (kind === 'matching' ? ' matched' : ' filled') };
+  return { done: quiz.i + (quiz.state === 'answered' ? 1 : 0), total: quiz.items.length,
+           text: (quiz.i + 1) + ' / ' + quiz.items.length };
+}
+
 /* The counters and the bar move on an answer, so they are the one part of the
    head that has to be told. */
 function refreshQuizHead() {
   const host = $('#view-practice');
   if (!host || !quiz) return;
-  const item = quiz.items[quiz.i];
-  const matching = item && item.type === 'matching';
-  const done = matching ? quiz.pairsDone : quiz.i + (quiz.state === 'answered' ? 1 : 0);
-  const total = matching ? quiz.pairsTotal : quiz.items.length;
+  const p = quizProgress();
   const bar = host.querySelector('#qBar');
   const count = host.querySelector('#qCount');
   const correct = host.querySelector('#qCorrect');
-  if (bar) bar.style.width = pct(done, total) + '%';
-  if (count) count.textContent = matching ? done + ' / ' + total + ' matched'
-                                          : (quiz.i + 1) + ' / ' + quiz.items.length;
+  if (bar) bar.style.width = pct(p.done, p.total) + '%';
+  if (count) count.textContent = p.text;
   if (correct) correct.textContent = quiz.correct + ' correct';
 }
 
@@ -2171,6 +2246,7 @@ function answerMC(item, given) {
 
 function checkAnswer(item) {
   if (item.type === 'write') return gradeWriting(item);
+  if (item.type === 'passage') return checkPassage(item);
   const input = $('#qInput');
   const val = input ? input.value : '';
   let g = gradeTyped(val, item.answer);
@@ -2261,11 +2337,112 @@ function matchClick(item, side, id) {
   }, m.flash.kind === 'hit' ? 420 : 620);
 }
 
+/* The text, its gaps and the bank underneath. Only the body is ever redrawn:
+   placing a word must not move the passage the learner is reading. */
+function passageHTML(item) {
+  if (!quiz.fill) quiz.fill = { placed: item.answers.map(() => null), sel: null };
+  return '<div class="card" id="passageBody">' + passageBody(item) + '</div>';
+}
+
+function passageBody(item) {
+  const f = quiz.fill;
+  const done = quiz.state === 'answered';
+  const word = (i) => f.placed[i] == null ? '' : item.bank[f.placed[i]];
+  const right = item.answers.filter((a, i) => normalize(word(i)) === normalize(a)).length;
+  const filled = f.placed.filter(b => b != null).length;
+  const texts = quiz.items.length;
+
+  const gap = (i) => {
+    if (done) {
+      const ok = normalize(word(i)) === normalize(item.answers[i]);
+      return '<span class="gap ' + (ok ? 'correct' : 'wrong') + '">' +
+        (ok ? '' : '<s>' + esc(word(i)) + '</s>') + esc(item.answers[i]) + '</span>';
+    }
+    /* An empty gap still needs a line's worth of height, or the box collapses
+       into a stripe between the words. */
+    return '<button class="gap' + (f.placed[i] != null ? ' filled' : '') +
+      (f.sel === i ? ' sel' : '') + '" data-gap="' + i + '">' +
+      (f.placed[i] == null ? '&nbsp;' : esc(word(i))) + '</button>';
+  };
+
+  return '<div class="row between" style="margin-bottom:14px">' +
+      '<p class="muted">' + (done ? 'The words in their places'
+        : f.sel == null ? 'Choose a gap, then the word that belongs in it'
+        : 'Now choose the word that belongs in it') + '</p>' +
+      '<span class="faint">' + (texts > 1 ? 'Text ' + (quiz.i + 1) + ' of ' + texts + ' · ' : '') +
+        (done ? right + ' of ' + item.answers.length + ' right'
+              : filled + ' / ' + item.answers.length + ' filled') + '</span>' +
+    '</div>' +
+    '<p class="passage">' +
+      item.parts.map((t, i) => esc(t) + (i < item.answers.length ? gap(i) : '')).join('') + '</p>' +
+    (done ? '' : '<div class="bank">' + item.bank.map((w, i) =>
+      '<button class="bank-word' + (f.placed.indexOf(i) === -1 ? '' : ' used') +
+        '" data-word="' + i + '">' + esc(w) + '</button>').join('') + '</div>') +
+    '<div class="row end" style="margin-top:18px">' +
+      (done
+        ? '<button class="primary-btn" data-act="next">' +
+            (quiz.i + 1 >= quiz.items.length ? 'See results' : 'Next text') + '</button>'
+        : '<button class="primary-btn" data-act="check"' + (filled < item.answers.length ? ' disabled' : '') +
+            '>Check</button>') +
+    '</div>';
+}
+
+function repaintPassage(item) {
+  const body = $('#passageBody');
+  if (body) body.innerHTML = passageBody(item); else render('practice');
+}
+
+/* A gap: empty, it becomes the one being filled; filled, its word goes back to
+   the bank and the gap stays selected, so a change of mind is two taps. */
+function passageGapClick(item, i) {
+  const f = quiz.fill;
+  if (quiz.state === 'answered') return;
+  if (f.placed[i] != null) f.placed[i] = null;
+  f.sel = i;
+  repaintPassage(item);
+}
+
+function passageWordClick(item, b) {
+  const f = quiz.fill;
+  if (quiz.state === 'answered') return;
+  const was = f.placed.indexOf(b);
+  if (was !== -1) f.placed[was] = null;          /* moving it, not copying it */
+  const target = f.sel != null && f.placed[f.sel] == null
+    ? f.sel : f.placed.indexOf(null);
+  if (target === -1) return;
+  f.placed[target] = b;
+  /* Move on to the next hole by itself: filling five gaps otherwise takes ten
+     taps for no reason. */
+  const next = f.placed.indexOf(null);
+  f.sel = next === -1 ? null : next;
+  repaintPassage(item);
+}
+
+/* Every gap is marked at once, and each one counts for its own card. */
+function checkPassage(item) {
+  const f = quiz.fill;
+  if (f.placed.some(b => b == null)) return toast('Fill every gap first', 'err');
+  quiz.state = 'answered';
+  item.answers.forEach((answer, i) => {
+    const given = item.bank[f.placed[i]];
+    const ok = normalize(given) === normalize(answer);
+    if (ok) quiz.correct++;
+    quiz.pairsDone++;
+    const card = item.cards[i];
+    if (card) Store.quizResult(card.id, ok);
+    quiz.results.push({ card: card, ok: ok, given: given, answer: answer });
+  });
+  repaintPassage(item);
+  refreshQuizHead();
+  refreshChrome();
+}
+
 function nextQuizItem() {
   quiz.i++;
   quiz.state = 'idle'; quiz.given = ''; quiz.lastResult = null;
   quiz.hintShown = false; quiz.hintLetters = 0;
   quiz.match = null;                 /* the next matching board starts fresh */
+  quiz.fill = null;                  /* and so does the next text */
   if (quiz.i >= quiz.items.length) return finishQuiz(true);
   render('practice');
 }
