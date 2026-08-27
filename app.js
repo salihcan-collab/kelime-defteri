@@ -1047,8 +1047,7 @@ function aiDeckDialog() {
         '<input type="text" id="gTopic" placeholder="e.g. job interviews, cooking, medical English"></div>' +
       '<div class="inline-fields">' +
         '<div class="field"><label>Level</label><select id="gLevel">' +
-          ['A2', 'B1', 'B2', 'C1'].map(l => '<option' + (l === 'B2' ? ' selected' : '') + '>' + l + '</option>').join('') +
-        '</select></div>' +
+          levelOptions(Store.state.settings.ai.level) + '</select></div>' +
         '<div class="field"><label>How many words</label><select id="gCount">' +
           [10, 15, 20, 30, 40, 50].map(n => '<option' + (n === 15 ? ' selected' : '') + '>' + n + '</option>').join('') +
         '</select></div>' +
@@ -1077,6 +1076,9 @@ function aiDeckDialog() {
             : 'This usually takes 10–30 seconds…') + '</div>';
         try {
           const detail = $('#gDetail').checked;
+          /* The band chosen here is the one the drills use next time too — the
+             level is the learner's, not the deck's. */
+          Store.state.settings.ai.level = $('#gLevel').value; Store.save();
           const cards = await AI.suggestCards(topic, $('#gLevel').value, parseInt($('#gCount').value, 10), detail);
           if (!cards.length) throw new Error('The AI did not return any cards.');
           const deck = Store.addDeck({ name: cap(topic), emoji: '✨', description: 'Generated with AI · ' + $('#gLevel').value });
@@ -1542,6 +1544,14 @@ function roundLength(poolSize) {
 }
 /* How many choices a multiple-choice question offers. */
 function optionCount() { return clamp(Store.state.settings.optionCount || 4, 2, 5); }
+/* The CEFR bands the AI works to, worded for a learner rather than a syllabus.
+   One list, so the practice screen and the deck generator cannot drift apart. */
+const LEVEL_NAMES = [['A1-A2', 'Beginner (A1–A2)'], ['B1-B2', 'Intermediate (B1–B2)'], ['C1-C2', 'Advanced (C1–C2)']];
+function levelOptions(sel) {
+  return LEVEL_NAMES.map(l =>
+    '<option value="' + l[0] + '"' + (l[0] === sel ? ' selected' : '') + '>' + l[1] + '</option>').join('');
+}
+
 /* Pairs shown on one matching board — more than this stops being playable. */
 const MATCH_BOARD_MAX = 6;
 /* Texts in one gap-fill round. The whole round is a single request, so this is
@@ -1575,11 +1585,15 @@ function drawPracticeSetup(host) {
     '<div class="grid g2" style="margin-bottom:18px;align-items:start">' +
       '<div class="card">' +
         '<div class="field"><label>Deck</label><select id="pDeck">' + deckOptions(quizSetup.deckId, 'All decks') + '</select></div>' +
-        '<div class="field" style="margin-bottom:0"><label>Which words</label><select id="pScope">' +
+        '<div class="field"><label>Which words</label><select id="pScope">' +
           [['all', 'Everything in the deck'], ['due', 'Only what is due now'], ['weak', 'My weakest words'],
            ['new', 'Words I have not started'], ['recent', 'Recently added']]
             .map(o => '<option value="' + o[0] + '"' + (quizSetup.scope === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') +
         '</select></div>' +
+        '<div class="field" style="margin-bottom:0"><label>Level</label>' +
+          '<select id="pLevel">' + levelOptions(Store.state.settings.ai.level) + '</select>' +
+          '<span class="help">The English the AI drills write and mark at. Your own words are ' +
+            'used whatever their level.</span></div>' +
       '</div>' +
       '<div class="card">' +
         '<div class="field" style="margin-bottom:10px">' +
@@ -1622,6 +1636,7 @@ function drawPracticeSetup(host) {
   };
   $('#pDeck').onchange = (e) => { quizSetup.deckId = e.target.value; render('practice'); };
   $('#pScope').onchange = (e) => { quizSetup.scope = e.target.value; render('practice'); };
+  $('#pLevel').onchange = (e) => { Store.state.settings.ai.level = e.target.value; Store.save(); };
   const slider = $('#pPct');
   if (slider) {
     const paint = () => {

@@ -193,6 +193,17 @@ const AI = {
   },
 
   /* ---------- features ------------------------------------------------------ */
+  /* The band the learner is working at. It steers the English around the target
+     words — the sentences, the marking, the explanations — never the target
+     words themselves, which are whatever the learner has saved. */
+  level() { return CEFR_BANDS[this.cfg.level] ? this.cfg.level : 'B1-B2'; },
+  levelSays() {
+    const band = this.level();
+    return 'The learner is at CEFR level ' + band + ' (' + CEFR_BANDS[band] + '). Write the English ' +
+      'around the target words at that level — sentence length, grammar and everyday vocabulary. ' +
+      'The target words stay as they are, however hard they are.';
+  },
+
   async test() {
     const out = await this.chat([{ role: 'user', content: 'Reply with exactly: OK' }], { maxTokens: 400, temperature: 0 });
     return out.slice(0, 40);
@@ -311,7 +322,7 @@ const AI = {
     const res = await this.json([
       { role: 'system', content: 'You are an English teacher writing exam questions. Answer only with JSON.' },
       { role: 'user', content:
-        'Learner native language: ' + lang + '.\nTarget words:\n' + list + '\n\n' +
+        'Learner native language: ' + lang + '. ' + this.levelSays() + '\nTarget words:\n' + list + '\n\n' +
         'Write ' + count + ' multiple-choice questions with exactly ' + choices + ' options each. ' +
         'Use a NEW sentence for each word (do not reuse the ' +
         'definitions above word for word). Mix these question styles:\n' +
@@ -351,7 +362,7 @@ const AI = {
     const res = await this.json([
       { role: 'system', content: 'You are an English teacher writing texts for a gap-fill exercise. Answer only with JSON.' },
       { role: 'user', content:
-        'Write one text for each group of target words:\n' + list + '\n\n' +
+        this.levelSays() + '\n\nWrite one text for each group of target words:\n' + list + '\n\n' +
         'Each text is 5-7 sentences that hang together — a story, a report, an explanation — ' +
         'not unrelated sentences sharing a topic.\n' +
         /* The gaps are cut out of this text afterwards, which is why the text is
@@ -392,7 +403,7 @@ const AI = {
         'You are a friendly but precise English writing tutor. Be encouraging and concrete. Answer only with JSON.' },
       { role: 'user', content:
         'Target word: "' + card.term + '" (' + (card.pos || '') + ') — ' + (card.definition || card.translation) + '\n' +
-        'The learner wrote: "' + sentence + '"\n\n' +
+        'The learner wrote: "' + sentence + '"\n' + this.levelSays() + '\n\n' +
         'Judge whether the target word is used correctly and whether the sentence is natural English.\n' +
         'Return JSON: {"correct":true|false,"score":0-100,"feedback":"2-3 sentences in English, ' +
         'name the specific problem if there is one","corrected":"a corrected or improved version of their sentence",' +
@@ -407,11 +418,19 @@ const AI = {
     return await this.chat([
       { role: 'system', content: 'You are a concise English teacher. Maximum 45 words. No preamble.' },
       { role: 'user', content:
+        this.levelSays() + '\n' +
         'The learner (native language ' + lang + ') was asked about "' + card.term + '" and answered "' +
         wrongAnswer + '", which is wrong. The right meaning is: ' + (card.definition || card.translation) +
         '. Explain the difference in one or two short sentences, then give one memory hook.' }
     ], { temperature: 0.6, maxTokens: 1200 });
   }
+};
+
+/* The three bands the app offers, and what each one means to a model. */
+const CEFR_BANDS = {
+  'A1-A2': 'beginner',
+  'B1-B2': 'intermediate',
+  'C1-C2': 'advanced'
 };
 
 function clampChoices(n) { return Math.max(2, Math.min(5, parseInt(n, 10) || 4)); }

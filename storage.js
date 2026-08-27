@@ -46,6 +46,7 @@ const Store = {
           model: 'gpt-4o-mini',
           apiKey: '',
           nativeLanguage: 'Turkish',
+          level: 'B1-B2',             // CEFR band the AI writes and marks at
           roomFor: ''                 // a model that needs a wide output budget
 
         }
