@@ -7,6 +7,9 @@
 
 const STORAGE_KEY = 'lexio.v1';
 const SCHEMA_VERSION = 2;
+/* Rounds kept in the practice history. They carry their own questions so a
+   repeat costs nothing, which is also why the list has an end. */
+const PRACTICE_MAX = 12;
 
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 const todayKey = (d) => {
@@ -56,6 +59,7 @@ const Store = {
       log: [],                          // { ts, cardId, rating, correct, mode }
       daily: {},                        // 'YYYY-MM-DD': { new:0, reviews:0, correct:0, minutes:0 }
       aiUsage: { day: '', count: 0 },   // requests this app sent today, for the free allowance
+      practice: [],                     // finished rounds, newest first — see addRound
       lastBackup: null
     };
   },
@@ -100,6 +104,7 @@ const Store = {
       return c;
     });
     s.aiUsage = data.aiUsage || { day: '', count: 0 };
+    s.practice = (data.practice || []).slice(0, PRACTICE_MAX);
     s.log = data.log || [];
     s.daily = data.daily || {};
     /* Starter content that has been corrected or added since this collection
@@ -741,6 +746,19 @@ const Store = {
     this.saveNow();
     return { added: added, skipped: skipped };
   },
+
+  /* A finished round, kept so it can be done again. An AI round brings its
+     questions with it: repeating one is then free, which is the whole point of
+     being able to. */
+  addRound(round) {
+    const entry = Object.assign({ id: uid(), at: Date.now() }, round);
+    this.state.practice.unshift(entry);
+    this.state.practice = this.state.practice.slice(0, PRACTICE_MAX);
+    this.save();
+    return entry;
+  },
+
+  clearPractice() { this.state.practice = []; this.save(); },
 
   wipe() {
     try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}

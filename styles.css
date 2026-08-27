@@ -499,6 +499,11 @@ input[type=range]::-moz-range-thumb{
 .bank-word:hover{ border-color:var(--accent); }
 .bank-word.used{ opacity:.3; }
 
+/* Recent rounds, one line each. */
+.history-row{ gap:12px; padding:10px 0; border-bottom:1px solid var(--border-soft); }
+.history-row:last-child{ border-bottom:0; padding-bottom:2px; }
+.history-row .faint{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
 .mode-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(215px,1fr)); gap:12px; }
 .mode-card{
   padding:16px; border-radius:14px; border:1px solid var(--border-soft); background:var(--surface);

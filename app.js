@@ -1627,12 +1627,19 @@ function drawPracticeSetup(host) {
       '<button class="primary-btn" data-act="start"' + (blocked ? ' disabled' : '') + '>' +
         ICONS.play + 'Start practice</button>' +
     '</div>' +
-    (blocked ? '<p class="faint" style="text-align:right;margin-top:8px">' + esc(blocked) + '</p>' : '');
+    (blocked ? '<p class="faint" style="text-align:right;margin-top:8px">' + esc(blocked) + '</p>' : '') +
+    historyHTML();
 
   host.onclick = (e) => {
     const m = e.target.closest('[data-mode]');
     if (m) { quizSetup.mode = m.dataset.mode; return render('practice'); }
     if (e.target.closest('[data-act="start"]')) return startQuiz();
+    if (e.target.closest('[data-act="clear-history"]')) { Store.clearPractice(); return render('practice'); }
+    const again = e.target.closest('[data-repeat]');
+    if (again) {
+      const entry = Store.state.practice.filter(r => r.id === again.dataset.repeat)[0];
+      if (entry) return repeatRound(entry);
+    }
   };
   $('#pDeck').onchange = (e) => { quizSetup.deckId = e.target.value; render('practice'); };
   $('#pScope').onchange = (e) => { quizSetup.scope = e.target.value; render('practice'); };
@@ -2501,8 +2508,122 @@ function nextQuizItem() {
 function finishQuiz(completed) {
   quiz.finished = true;
   quiz.completed = !!completed;
+  recordRound();
   render('practice'); refreshChrome();
 }
+
+/* Rounds are worth keeping mostly so they can be done again, which is why an
+   AI round is written down with its questions: repeating one then costs
+   nothing, where rebuilding it would cost a request. The others are cheap to
+   build from the same words, so only the words are kept. */
+function recordRound() {
+  if (!quiz || quiz.saved || !quiz.results.length) return;
+  quiz.saved = true;
+  const ids = [];
+  quiz.results.forEach(r => { if (r.card && ids.indexOf(r.card.id) === -1) ids.push(r.card.id); });
+  Store.addRound({
+    mode: quiz.mode, deckId: quizSetup.deckId, scope: quizSetup.scope,
+    level: Store.state.settings.ai.level,
+    answers: quiz.results.length, correct: quiz.results.filter(r => r.ok).length,
+    cardIds: ids,
+    items: isAIMode(quiz.mode) ? packItems(quiz.items) : null
+  });
+}
+
+function isAIMode(mode) { return String(mode).indexOf('ai-') === 0; }
+
+/* Items hold whole cards; a saved round holds their ids. Nothing else about an
+   item is worth interpreting here, so the rest travels as it is. */
+function packItems(items) {
+  return items.map(it => {
+    const out = {};
+    Object.keys(it).forEach(k => { if (k !== 'card' && k !== 'cards') out[k] = it[k]; });
+    if (it.card) out.cardId = it.card.id;
+    if (it.cards) out.cardIds = it.cards.map(c => c.id);
+    return out;
+  });
+}
+
+/* And back again — minus anything whose word has been deleted since. */
+function unpackItems(saved) {
+  return (saved || []).map(it => {
+    const item = {};
+    Object.keys(it).forEach(k => { if (k !== 'cardId' && k !== 'cardIds') item[k] = it[k]; });
+    if (it.cardId) { item.card = Store.card(it.cardId); if (!item.card) return null; }
+    if (it.cardIds) {
+      item.cards = it.cardIds.map(id => Store.card(id));
+      if (item.cards.some(c => !c)) return null;
+    }
+    return item;
+  }).filter(Boolean);
+}
+
+/* Doing a round again: an AI round exactly as it was, anything else built
+   afresh from the same words — the questions there are free to make and a new
+   shuffle is worth more than a rerun. */
+function repeatRound(entry) {
+  const cards = (entry.cardIds || []).map(id => Store.card(id)).filter(Boolean);
+  quizSetup.mode = entry.mode;
+  quizSetup.deckId = Store.deck(entry.deckId) ? entry.deckId : '';
+  quizSetup.scope = entry.scope;
+
+  let items = entry.items ? unpackItems(entry.items) : [];
+  if (!items.length) {
+    if (!cards.length) return toast('Those words are no longer in your collection', 'err');
+    if (isAIMode(entry.mode)) return startQuiz();      /* nothing kept — ask again */
+    const pool = practicePool(quizSetup.deckId, quizSetup.scope);
+    items = buildQuestions(entry.mode, pool.length >= 2 ? pool : cards, cards.length,
+                           { cards: cards, prefer: cards });
+  }
+  if (!items.length) return toast('Could not rebuild that round', 'err');
+  quiz = newQuiz(entry.mode, items);
+  render('practice');
+  refreshChrome();
+}
+
+/* "3 minutes ago", and coarser the further back it goes. */
+function agoLabel(ts) {
+  const mins = Math.round((Date.now() - ts) / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return mins + ' min ago';
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return hours + ' hour' + (hours === 1 ? '' : 's') + ' ago';
+  const days = Math.round(hours / 24);
+  if (days === 1) return 'yesterday';
+  if (days < 7) return days + ' days ago';
+  return new Date(ts).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+}
+
+const SCOPE_NAMES = { all: 'all words', due: 'due now', weak: 'weakest', new: 'not started', recent: 'recently added' };
+
+/* The last few rounds, each one a click away from being done again. */
+function historyHTML() {
+  const rounds = Store.state.practice;
+  if (!rounds.length) return '';
+  const modeName = (id) => { const m = MODES.filter(m => m.id === id)[0]; return m ? m.name : id; };
+  return '<div class="section-title" style="margin-top:26px"><h2>Recent practice</h2>' +
+      '<button class="ghost-btn tiny" data-act="clear-history">Clear</button></div>' +
+    '<div class="card">' + rounds.map(r => {
+      const deck = Store.deck(r.deckId);
+      return '<div class="row between history-row">' +
+        '<div style="min-width:0">' +
+          '<b>' + esc(modeName(r.mode)) + '</b>' +
+          '<div class="faint">' + esc(deck ? deck.emoji + ' ' + deck.name : 'All decks') +
+            ' · ' + esc(SCOPE_NAMES[r.scope] || r.scope) +
+            (isAIMode(r.mode) && r.level ? ' · ' + esc(r.level) : '') +
+            ' · ' + agoLabel(r.at) + '</div>' +
+        '</div>' +
+        /* The score belongs with the button that offers another go, not adrift
+           in the middle of the line. */
+        '<div class="row" style="gap:10px;flex:none">' +
+          '<span class="chip">' + pct(r.correct, r.answers) + '% of ' + r.answers + '</span>' +
+          '<button class="soft-btn" data-repeat="' + r.id + '">' + ICONS.play + 'Repeat</button>' +
+        '</div>' +
+      '</div>';
+    }).join('') + '</div>';
+}
+
+
 
 function drawQuizResults(host) {
   cheer(quiz);
