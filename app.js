@@ -1769,34 +1769,70 @@ function buildQuestions(mode, pool, count, opts) {
   }).filter(Boolean);
 }
 
-/* What the AI sends back becomes a question only if it holds together: the
-   gaps and the words have to be equal in number, and every word has to point
-   at one of the cards the text was written for. A text that fails is dropped
-   rather than patched — a gap with no owner has nothing to mark. */
-function buildPassageItem(p, cards, pool) {
-  const parts = String(p.text || '').replace(/\s+/g, ' ').trim().split(/_{2,}/);
-  const words = (p.words || []).map(w => String(w || '').trim()).filter(Boolean);
-  if (!words.length || parts.length - 1 !== words.length) return null;
+/* Where a word actually stands in a text. The loose match that finds
+   "diagnosed" for "diagnose" also finds "objective" for "object", so every hit
+   is weighed against the word it claims to be before it counts. */
+function findTerm(text, term, from) {
+  let base = from || 0;
+  while (base < text.length) {
+    const at = termMatch(text.slice(base), term);
+    if (!at) return null;
+    const hit = [base + at[0], base + at[1]];
+    if (AI.sameWord(text.slice(hit[0], hit[1]), term)) return hit;
+    base = hit[1];
+  }
+  return null;
+}
 
-  const taken = {};
-  const owners = words.map(w => {
-    const c = cards.find(c => !taken[c.id] && AI.sameWord(w, c.term));
-    if (c) taken[c.id] = 1;
-    return c || null;
+/* The gaps are cut here rather than taken from the model. Asking for a text
+   with the holes already in it and a list of the words that fill them means
+   trusting two things to line up, and when they do not the drill marks a right
+   answer wrong — which is worse than no drill at all. Prose cannot come apart
+   that way: whatever is cut out of the sentence is what belongs in it. */
+function buildPassageItem(p, cards, pool) {
+  const text = String(p.text || '').replace(/\s+/g, ' ').trim();
+  if (!text) return null;
+
+  /* A word standing where a sentence begins wears a capital, and a capital in
+     the bank says which gap it came from. */
+  const opensSentence = (i) => i === 0 || /[.!?]\s+$/.test(text.slice(0, i));
+  const hits = [];
+  cards.forEach(card => {
+    const at = findTerm(text, card.term, 0);
+    if (!at || opensSentence(at[0])) return;
+    /* A word that turns up twice gives its own gap away, so it stays as prose
+       and simply is not asked about. */
+    if (findTerm(text, card.term, at[1])) return;
+    hits.push({ card: card, start: at[0], end: at[1] });
   });
-  if (owners.some(c => !c)) return null;
+  hits.sort((a, b) => a.start - b.start);
+
+  const parts = [], answers = [], owners = [];
+  let at = 0;
+  hits.forEach(h => {
+    if (h.start < at) return;                    /* one word inside another */
+    parts.push(text.slice(at, h.start));
+    answers.push(text.slice(h.start, h.end));
+    owners.push(h.card);
+    at = h.end;
+  });
+  if (answers.length < 3) return null;           /* too little left to be a round */
+  parts.push(text.slice(at));
 
   /* One word too many, so the last gap is still a choice rather than whatever
      is left over. The AI picks it; a word from the pool stands in if it did
-     not, or named one of the answers again. */
-  const clash = (w) => !w || words.some(a => normalize(a) === normalize(w));
+     not, named one of the answers again, or named something already in the
+     text. */
+  const spent = {};
+  owners.forEach(c => { spent[c.id] = 1; });
+  const clash = (w) => !w || answers.some(a => normalize(a) === normalize(w)) || !!findTerm(text, w, 0);
   let extra = String(p.extra || '').trim();
   if (clash(extra)) {
-    const spare = pool.filter(c => !taken[c.id] && c.term && !clash(c.term));
+    const spare = pool.filter(c => !spent[c.id] && c.term && !clash(c.term));
     extra = spare.length ? sample(spare, 1)[0].term : '';
   }
-  return { type: 'passage', parts: parts, answers: words, cards: owners,
-           bank: shuffle(words.concat(clash(extra) ? [] : [extra])),
+  return { type: 'passage', parts: parts, answers: answers, cards: owners,
+           bank: shuffle(answers.concat(clash(extra) ? [] : [extra])),
            question: 'Fill the passage' };
 }
 

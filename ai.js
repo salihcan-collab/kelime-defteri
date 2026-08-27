@@ -344,33 +344,44 @@ const AI = {
      out of it. The learner puts them back, so what is being tested is the
      context around the gap rather than the word in isolation. */
   async makePassages(groups) {
+    const brief = (c) => String(c.definition || c.translation || '').split(/\s+/).slice(0, 12).join(' ');
     const list = groups.map((g, i) =>
-      '  Text ' + (i + 1) + ': ' + g.map(c => c.term + ' (' + (c.pos || '?') + ')').join(', ')).join('\n');
+      '  Text ' + (i + 1) + ': ' + g.map(c => c.term + ' (' + (c.pos || '?') + ' — ' + brief(c) + ')').join('; ')
+    ).join('\n');
     const res = await this.json([
-      { role: 'system', content: 'You are an English teacher writing banked gap-fill texts. Answer only with JSON.' },
+      { role: 'system', content: 'You are an English teacher writing texts for a gap-fill exercise. Answer only with JSON.' },
       { role: 'user', content:
         'Write one text for each group of target words:\n' + list + '\n\n' +
         'Each text is 5-7 sentences that hang together — a story, a report, an explanation — ' +
         'not unrelated sentences sharing a topic.\n' +
-        'Every word of the group appears exactly once, in the form written above, and is ' +
-        'replaced by ____ (four underscores) where it belongs.\n' +
-        /* The failure a gap-fill dies of: a gap that any of the bank words would fill. */
-        'What decides whether the text is worth doing: every gap must be settled by the ' +
-        'sentences around it. If two words of the group could stand in the same gap, the text ' +
-        'is broken — say more about what is happening there until one word only fits.\n' +
-        '"extra" is one more English word, the same kind of word as the targets and tempting ' +
-        'at a glance, that belongs in none of the gaps.\n' +
-        'Return JSON: {"passages":[{"text":"the text, with ____ for each gap",' +
-        '"words":["the target words, in the order their gaps appear"],"extra":"one spare word"}]}' }
+        /* The gaps are cut out of this text afterwards, which is why the text is
+           asked for whole: a word written into the wrong hole is the one mistake
+           this drill cannot survive, and prose cannot make it. */
+        'Write the text out in full, with the target words in it. Do not mark, number or ' +
+        'blank out anything.\n' +
+        'Use every word of the group exactly once, and nowhere else in the text in any form. ' +
+        'Keep each one in the form written above unless the sentence needs another, and do not ' +
+        'start a sentence with one of them.\n' +
+        'What decides whether the text is worth doing: each target word must be pinned down by ' +
+        'the sentences around it, so that a reader who covered it could name it from what is ' +
+        'said before and after. If another word of the group could stand in its place, say more ' +
+        'about what is happening there until one word only fits.\n' +
+        '"extra" is one more English word, the same kind of word as the targets and tempting at ' +
+        'a glance, that appears nowhere in the text and fits none of the places they stand.\n' +
+        'Return JSON: {"passages":[{"text":"the whole text, target words included",' +
+        '"extra":"one spare word"}]}' }
     ], { temperature: 0.7, maxTokens: Math.min(6000, 1400 * groups.length) });
-    return (res.passages || []).filter(p => p && p.text && Array.isArray(p.words) && p.words.length);
+    return (res.passages || []).filter(p => p && p.text);
   },
 
-  /* Whether a word in a generated text is the target word wearing a suffix —
-     a sentence may need "diagnosed" where the card says "diagnose". */
+  /* Whether two forms are the same word: a sentence may need "diagnosed" where
+     the card says "diagnose", or "worked out" for "work out". Word by word, so
+     a phrase is judged as a phrase. */
   sameWord(a, b) {
-    a = String(a || '').trim().toLowerCase(); b = String(b || '').trim().toLowerCase();
-    return !!a && !!b && (a === b || isInflectionOf(a, b) || isInflectionOf(b, a));
+    const x = String(a || '').trim().toLowerCase().split(/\s+/).filter(Boolean);
+    const y = String(b || '').trim().toLowerCase().split(/\s+/).filter(Boolean);
+    if (!x.length || x.length !== y.length) return false;
+    return x.every((w, i) => w === y[i] || inflects(w, y[i]) || inflects(y[i], w));
   },
 
   /* Mark a sentence the learner wrote using the target word. */
@@ -417,6 +428,12 @@ function isInflectionOf(form, term) {
   const b = String(term || '').trim().toLowerCase();
   if (!a || !b || a === b) return a === b;
   if (typeof Store !== 'undefined' && Store.state && Store.cardByTerm && Store.cardByTerm(a)) return false;
+  return inflects(a, b);
+}
+
+/* The mechanical half of that question, with no opinion about what the learner
+   has saved: is `a` simply `b` wearing a regular ending? */
+function inflects(a, b) {
   /* Plurals that do not simply add an s — common enough in medical and academic
      English that leaving them out would let half of them through. */
   const latin = [['is', 'es'], ['us', 'i'], ['um', 'a'], ['on', 'a'],
