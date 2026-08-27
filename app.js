@@ -1585,15 +1585,12 @@ function drawPracticeSetup(host) {
     '<div class="grid g2" style="margin-bottom:18px;align-items:start">' +
       '<div class="card">' +
         '<div class="field"><label>Deck</label><select id="pDeck">' + deckOptions(quizSetup.deckId, 'All decks') + '</select></div>' +
-        '<div class="field"><label>Which words</label><select id="pScope">' +
+        '<div class="field" style="margin-bottom:0"><label>Which words</label><select id="pScope">' +
           [['all', 'Everything in the deck'], ['due', 'Only what is due now'], ['weak', 'My weakest words'],
            ['new', 'Words I have not started'], ['recent', 'Recently added']]
             .map(o => '<option value="' + o[0] + '"' + (quizSetup.scope === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') +
         '</select></div>' +
-        '<div class="field" style="margin-bottom:0"><label>Level</label>' +
-          '<select id="pLevel">' + levelOptions(Store.state.settings.ai.level) + '</select>' +
-          '<span class="help">The English the AI drills write and mark at. Your own words are ' +
-            'used whatever their level.</span></div>' +
+
       '</div>' +
       '<div class="card">' +
         '<div class="field" style="margin-bottom:10px">' +
@@ -1612,17 +1609,19 @@ function drawPracticeSetup(host) {
       '</div>' +
     '</div>' +
 
-    '<div class="section-title"><h2>Choose a drill</h2>' +
-      (aiOn ? '' : '<span class="hint">AI drills need a key — see Settings</span>') + '</div>' +
-    '<div class="mode-grid">' +
-      MODES.filter(m => !(m.needsTTS && !TTS.ok)).map(m =>
-        '<button class="mode-card' + (quizSetup.mode === m.id ? ' sel' : '') + '" data-mode="' + m.id + '"' +
-          (m.ai && !aiOn ? ' disabled title="Connect an AI assistant in Settings"' : '') + '>' +
-          '<span class="mi">' + m.icon + '</span>' +
-          (m.ai ? '<span class="ai-tag">AI</span>' : '') +
-          '<strong>' + esc(m.name) + '</strong><span>' + esc(m.desc) + '</span>' +
-        '</button>').join('') +
-    '</div>' +
+    '<div class="section-title"><h2>Choose a drill</h2></div>' +
+    '<div class="mode-grid">' + modeCards(m => !m.ai) + '</div>' +
+
+    /* The AI drills answer to a setting of their own, so they sit under their
+       own heading with it rather than being four cards among nine. */
+    '<div class="section-title" style="margin-top:26px"><h2>AI drills</h2>' +
+      (aiOn
+        ? '<div class="row level-pick"><label for="pLevel">Level</label>' +
+            '<select id="pLevel">' + levelOptions(Store.state.settings.ai.level) + '</select></div>'
+        : '<span class="hint">AI drills need a key — see Settings</span>') + '</div>' +
+    '<div class="mode-grid">' + modeCards(m => m.ai) + '</div>' +
+    (aiOn ? '<p class="faint" style="margin-top:9px">The level sets the English written and marked ' +
+      'around your words — the words themselves are used whatever their level.</p>' : '') +
     '<div class="row" style="margin-top:20px;justify-content:flex-end">' +
       '<button class="primary-btn" data-act="start"' + (blocked ? ' disabled' : '') + '>' +
         ICONS.play + 'Start practice</button>' +
@@ -1635,15 +1634,16 @@ function drawPracticeSetup(host) {
     if (m) { quizSetup.mode = m.dataset.mode; return render('practice'); }
     if (e.target.closest('[data-act="start"]')) return startQuiz();
     if (e.target.closest('[data-act="clear-history"]')) { Store.clearPractice(); return render('practice'); }
-    const again = e.target.closest('[data-repeat]');
-    if (again) {
-      const entry = Store.state.practice.filter(r => r.id === again.dataset.repeat)[0];
-      if (entry) return repeatRound(entry);
+    const back = e.target.closest('[data-review]');
+    if (back) {
+      const entry = Store.state.practice.filter(r => r.id === back.dataset.review)[0];
+      if (entry) return reviewRound(entry);
     }
   };
   $('#pDeck').onchange = (e) => { quizSetup.deckId = e.target.value; render('practice'); };
   $('#pScope').onchange = (e) => { quizSetup.scope = e.target.value; render('practice'); };
-  $('#pLevel').onchange = (e) => { Store.state.settings.ai.level = e.target.value; Store.save(); };
+  const level = $('#pLevel');   /* absent while there is no AI to set a level for */
+  if (level) level.onchange = (e) => { Store.state.settings.ai.level = e.target.value; Store.save(); };
   const slider = $('#pPct');
   if (slider) {
     const paint = () => {
@@ -1659,6 +1659,18 @@ function drawPracticeSetup(host) {
     };
   }
   $('#pSrs').onchange = (e) => { Store.state.settings.quizAffectsSrs = e.target.checked; Store.save(); };
+}
+
+/* One drill card, whichever grid it lands on. */
+function modeCards(wanted) {
+  const aiOn = AI.available();
+  return MODES.filter(m => !(m.needsTTS && !TTS.ok)).filter(wanted).map(m =>
+    '<button class="mode-card' + (quizSetup.mode === m.id ? ' sel' : '') + '" data-mode="' + m.id + '"' +
+      (m.ai && !aiOn ? ' disabled title="Connect an AI assistant in Settings"' : '') + '>' +
+      '<span class="mi">' + m.icon + '</span>' +
+      (m.ai ? '<span class="ai-tag">AI</span>' : '') +
+      '<strong>' + esc(m.name) + '</strong><span>' + esc(m.desc) + '</span>' +
+    '</button>').join('');
 }
 
 /* "40 % · 26 of 66 words" — shows both the share and what it works out to. */
@@ -2340,6 +2352,7 @@ async function gradeWriting(item) {
 
 function recordAnswer(item, ok, given, close, extra) {
   quiz.state = 'answered';
+  item.given = given; item.ok = ok;      /* kept for the review afterwards */
   quiz.lastResult = Object.assign({ ok: ok, close: close }, extra || {});
   if (ok) quiz.correct++;
   quiz.results.push({ card: item.card, ok: ok, given: given, answer: item.answer || (item.card && item.card.term) });
@@ -2481,6 +2494,7 @@ function checkPassage(item) {
   const f = quiz.fill;
   if (f.placed.some(b => b == null)) return toast('Fill every gap first', 'err');
   quiz.state = 'answered';
+  item.given = f.placed.map(b => item.bank[b]);
   item.answers.forEach((answer, i) => {
     const given = item.bank[f.placed[i]];
     const ok = normalize(given) === normalize(answer);
@@ -2512,10 +2526,10 @@ function finishQuiz(completed) {
   render('practice'); refreshChrome();
 }
 
-/* Rounds are worth keeping mostly so they can be done again, which is why an
-   AI round is written down with its questions: repeating one then costs
-   nothing, where rebuilding it would cost a request. The others are cheap to
-   build from the same words, so only the words are kept. */
+/* A round is kept so it can be read back afterwards: what was asked, what the
+   answer was, and what was given. Repeating a round would only ask the same
+   questions of someone who now knows them; going over them is the part that
+   teaches. */
 function recordRound() {
   if (!quiz || quiz.saved || !quiz.results.length) return;
   quiz.saved = true;
@@ -2525,60 +2539,84 @@ function recordRound() {
     mode: quiz.mode, deckId: quizSetup.deckId, scope: quizSetup.scope,
     level: Store.state.settings.ai.level,
     answers: quiz.results.length, correct: quiz.results.filter(r => r.ok).length,
-    cardIds: ids,
-    items: isAIMode(quiz.mode) ? packItems(quiz.items) : null
+    cardIds: ids, review: packReview()
   });
 }
 
 function isAIMode(mode) { return String(mode).indexOf('ai-') === 0; }
 
-/* Items hold whole cards; a saved round holds their ids. Nothing else about an
-   item is worth interpreting here, so the rest travels as it is. */
-function packItems(items) {
-  return items.map(it => {
-    const out = {};
-    Object.keys(it).forEach(k => { if (k !== 'card' && k !== 'cards') out[k] = it[k]; });
-    if (it.card) out.cardId = it.card.id;
-    if (it.cards) out.cardIds = it.cards.map(c => c.id);
-    return out;
-  });
-}
-
-/* And back again — minus anything whose word has been deleted since. */
-function unpackItems(saved) {
-  return (saved || []).map(it => {
-    const item = {};
-    Object.keys(it).forEach(k => { if (k !== 'cardId' && k !== 'cardIds') item[k] = it[k]; });
-    if (it.cardId) { item.card = Store.card(it.cardId); if (!item.card) return null; }
-    if (it.cardIds) {
-      item.cards = it.cardIds.map(id => Store.card(id));
-      if (item.cards.some(c => !c)) return null;
+/* Every drill flattened to the same three things, because a review that reads
+   differently for each one is a review nobody reads. An item that was never
+   reached has no answer of its own and says so by leaving it out. */
+function packReview() {
+  const out = [];
+  quiz.items.forEach(it => {
+    const term = it.card ? it.card.term : '';
+    if (it.type === 'passage') {
+      out.push({ kind: 'passage', parts: it.parts, answers: it.answers, given: it.given || [] });
+    } else if (it.type === 'matching') {
+      it.cards.forEach(c => out.push({ kind: 'q', term: c.term, q: c.term,
+        answer: it.byDefinition ? c.definition : c.translation }));
+    } else if (it.type === 'write') {
+      out.push({ kind: 'q', term: term, q: 'Write a sentence using "' + term + '"',
+                 answer: '', given: it.given == null ? null : String(it.given), ok: !!it.ok });
+    } else {
+      out.push({ kind: 'q', term: term, q: it.cloze || it.prompt || it.question || term,
+                 answer: it.answer || term,
+                 given: it.given == null ? null : String(it.given), ok: !!it.ok });
     }
-    return item;
-  }).filter(Boolean);
+  });
+  return out;
 }
 
-/* Doing a round again: an AI round exactly as it was, anything else built
-   afresh from the same words — the questions there are free to make and a new
-   shuffle is worth more than a rerun. */
-function repeatRound(entry) {
-  const cards = (entry.cardIds || []).map(id => Store.card(id)).filter(Boolean);
-  quizSetup.mode = entry.mode;
-  quizSetup.deckId = Store.deck(entry.deckId) ? entry.deckId : '';
-  quizSetup.scope = entry.scope;
+/* Reading a round back. Answers are shown to begin with — that is what a review
+   is for — and the button takes them away for anyone who would rather think
+   first. Both states are in the page, so the toggle moves no other pixel. */
+function reviewRound(entry) {
+  const modeName = (id) => { const m = MODES.filter(m => m.id === id)[0]; return m ? m.name : id; };
+  const deck = Store.deck(entry.deckId);
+  const head = '<p class="faint" style="margin-bottom:14px">' +
+    esc(deck ? deck.emoji + ' ' + deck.name : 'All decks') + ' · ' + esc(SCOPE_NAMES[entry.scope] || entry.scope) +
+    (isAIMode(entry.mode) && entry.level ? ' · ' + esc(entry.level) : '') +
+    ' · ' + agoLabel(entry.at) + ' · ' + pct(entry.correct, entry.answers) + '% of ' + entry.answers + '</p>';
 
-  let items = entry.items ? unpackItems(entry.items) : [];
-  if (!items.length) {
-    if (!cards.length) return toast('Those words are no longer in your collection', 'err');
-    if (isAIMode(entry.mode)) return startQuiz();      /* nothing kept — ask again */
-    const pool = practicePool(quizSetup.deckId, quizSetup.scope);
-    items = buildQuestions(entry.mode, pool.length >= 2 ? pool : cards, cards.length,
-                           { cards: cards, prefer: cards });
-  }
-  if (!items.length) return toast('Could not rebuild that round', 'err');
-  quiz = newQuiz(entry.mode, items);
-  render('practice');
-  refreshChrome();
+  /* A word in its place, next to the one that was put there instead. */
+  const word = (answer, given) => {
+    if (given == null || given === '') return '<span class="gap filled">' + esc(answer) + '</span>';
+    const ok = normalize(given) === normalize(answer);
+    return '<span class="gap ' + (ok ? 'correct' : 'wrong') + '">' +
+      (ok ? '' : '<s>' + esc(given) + '</s>') + esc(answer) + '</span>';
+  };
+
+  const body = head + '<div class="review-list" id="reviewList">' +
+    (entry.review || []).map(r => {
+      if (r.kind === 'passage')
+        return '<div class="review-row"><p class="passage">' +
+          r.parts.map((t, i) => esc(t) + (i < r.answers.length
+            ? '<span class="rg-blank"></span><span class="review-a">' + word(r.answers[i], (r.given || [])[i]) + '</span>'
+            : '')).join('') + '</p></div>';
+      return '<div class="review-row">' +
+        '<div class="review-q">' + esc(r.q) + '</div>' +
+        '<div class="review-a">' +
+          (r.answer ? '<b>' + esc(r.answer) + '</b>' : '') +
+          (r.given != null && r.given !== '' && normalize(r.given) !== normalize(r.answer)
+            ? '<span class="review-given">you said: ' + esc(r.given) + '</span>' : '') +
+          (r.given == null ? '<span class="review-given">not reached</span>' : '') +
+        '</div></div>';
+    }).join('') + '</div>';
+
+  openModal({
+    title: modeName(entry.mode), body: body, wide: true, noFocus: true,
+    foot: '<button class="ghost-btn" data-act="toggle">Hide answers</button>' +
+          '<button class="primary-btn" data-act="close">Done</button>',
+    onMount: (b, f) => {
+      f.querySelector('[data-act="close"]').onclick = closeModal;
+      f.querySelector('[data-act="toggle"]').onclick = (e) => {
+        const off = b.querySelector('#reviewList').classList.toggle('hidden-answers');
+        e.target.textContent = off ? 'Show answers' : 'Hide answers';
+      };
+    }
+  });
 }
 
 /* "3 minutes ago", and coarser the further back it goes. */
@@ -2617,7 +2655,8 @@ function historyHTML() {
            in the middle of the line. */
         '<div class="row" style="gap:10px;flex:none">' +
           '<span class="chip">' + pct(r.correct, r.answers) + '% of ' + r.answers + '</span>' +
-          '<button class="soft-btn" data-repeat="' + r.id + '">' + ICONS.play + 'Repeat</button>' +
+          (r.review && r.review.length
+            ? '<button class="soft-btn" data-review="' + r.id + '">' + ICONS.bulb + 'Review</button>' : '') +
         '</div>' +
       '</div>';
     }).join('') + '</div>';

@@ -377,6 +377,12 @@ const AI = {
         'the sentences around it, so that a reader who covered it could name it from what is ' +
         'said before and after. If another word of the group could stand in its place, say more ' +
         'about what is happening there until one word only fits.\n' +
+        /* A learner reads the whole text to work out one gap, so a text that
+           argues with itself makes every gap harder for the wrong reason. */
+        'It also has to hold together as one situation: the same person, the same stretch of ' +
+        'time, reasons that agree with each other. Read it back before you answer — someone who ' +
+        'put a job off because they were busy cannot two sentences later refuse an invitation ' +
+        'because duty comes first.\n' +
         '"extra" is one more English word, the same kind of word as the targets and tempting at ' +
         'a glance, that appears nowhere in the text and fits none of the places they stand.\n' +
         'Return JSON: {"passages":[{"text":"the whole text, target words included",' +

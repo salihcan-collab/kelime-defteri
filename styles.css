@@ -499,6 +499,28 @@ input[type=range]::-moz-range-thumb{
 .bank-word:hover{ border-color:var(--accent); }
 .bank-word.used{ opacity:.3; }
 
+/* The level sits in the AI heading, so it is as wide as its longest band and
+   no wider. */
+.level-pick{ gap:8px; }
+.level-pick label{ font-size:.8rem; color:var(--text-faint); white-space:nowrap; }
+.level-pick select{ width:auto; min-width:172px; padding:7px 32px 7px 12px; font-size:.84rem; }
+
+/* Reading a round back. Answers are in the page either way, so hiding them
+   swaps a word for the blank it came out of and moves nothing else. */
+.review-list{ display:flex; flex-direction:column; gap:2px; }
+.review-row{ padding:11px 0; border-bottom:1px solid var(--border-soft); }
+.review-row:last-child{ border-bottom:0; }
+.review-q{ font-size:.92rem; line-height:1.6; }
+.review-a{ display:block; margin-top:6px; font-size:.9rem; }
+.review-a b{ color:var(--good); font-weight:650; }
+.review-given{ color:var(--text-faint); margin-left:10px; font-size:.84rem; }
+.review-list.hidden-answers .review-a{ display:none; }
+/* A word inside a text sits on the line, not on a line of its own — but only
+   while the answers are showing, or this would out-rank hiding them. */
+.review-list:not(.hidden-answers) .passage .review-a{ display:inline; margin:0; }
+.rg-blank{ display:none; min-width:112px; border-bottom:1px dashed var(--text-faint); margin:0 4px; }
+.review-list.hidden-answers .rg-blank{ display:inline-block; }
+
 /* Recent rounds, one line each. */
 .history-row{ gap:12px; padding:10px 0; border-bottom:1px solid var(--border-soft); }
 .history-row:last-child{ border-bottom:0; padding-bottom:2px; }
