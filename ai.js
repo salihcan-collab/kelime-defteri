@@ -442,6 +442,30 @@ const AI = {
     return (res.clues || []).filter(c => c && c.term && c.clue);
   },
 
+  /* A word to meet today. The model has no way of reading a dictionary's word
+     of the day — it is a text call, with no web — so it chooses one itself,
+     which is the honest version of the same idea. One request a day. */
+  async wordOfTheDay(avoid) {
+    const lang = this.cfg.nativeLanguage || 'Turkish';
+    const seen = (avoid || []).slice(-60);
+    const res = await this.json([
+      { role: 'system', content: 'You choose a word worth learning and present it plainly. Answer only with JSON.' },
+      { role: 'user', content:
+        'Pick one English word or short phrase worth meeting today. ' + this.levelSays() + '\n' +
+        'It should be genuinely useful or interesting to a learner — a word they will meet again — ' +
+        'not a rarity nobody says, and not one of the first hundred words anyone learns.\n' +
+        (seen.length ? 'Not any of these, which have already been offered: ' + seen.join(', ') + '\n' : '') +
+        'Return JSON: {"term":"the word","pos":"one of [' + PARTS_OF_SPEECH.join(', ') + ']",' +
+        '"definition":"a clear English definition, at most 25 words",' +
+        '"example":"one natural sentence that CONTAINS the word",' +
+        '"translation":"what it means in ' + lang + ', 2-3 alternatives where the word has them",' +
+        '"note":"one short line in ' + lang + ' on when or how it is used"}' }
+    ], { temperature: 0.9, maxTokens: 1200 });
+    if (!res.term) throw new Error('No word came back. Try again.');
+    return { term: String(res.term).trim(), pos: res.pos || '', definition: res.definition || '',
+             example: res.example || '', translation: res.translation || '', note: res.note || '' };
+  },
+
   /* Mark a sentence the learner wrote using the target word. */
   async gradeSentence(card, sentence) {
     const lang = this.cfg.nativeLanguage || 'Turkish';

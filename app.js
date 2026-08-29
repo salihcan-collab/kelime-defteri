@@ -530,6 +530,8 @@ function renderDashboard(host) {
       statTile('30-day recall', ret == null ? '—' : ret + '%', ret == null ? 'no data yet' : 'answers correct') +
     '</div>' +
 
+    wordOfDayHTML() +
+
     '<div class="grid g2" style="margin-top:16px;align-items:start">' +
       '<div class="card">' +
         '<div class="section-title" style="margin:0 0 12px"><h2>Today</h2>' +
@@ -574,8 +576,79 @@ function renderDashboard(host) {
   host.onclick = (e) => {
     const g = e.target.closest('[data-go]');
     if (g) return go(g.dataset.go);
-    if (e.target.closest('[data-act="quick-add"]')) cardEditor(null);
+    if (e.target.closest('[data-act="quick-add"]')) return cardEditor(null);
+    if (e.target.closest('[data-act="wotd-new"]')) return fetchWordOfDay(true);
+    if (e.target.closest('[data-act="wotd-add"]')) {
+      const w = Store.state.wotd;
+      /* An id would make this an edit of a card that does not exist; without
+         one the editor opens as "Add a word" with the boxes already filled. */
+      if (w) cardEditor({ term: w.term, pos: w.pos, definition: w.definition,
+                          example: w.example, translation: w.translation, notes: '',
+                          collocations: [], related: [] });
+      return;
+    }
   };
+  /* One word a day, fetched the first time the dashboard is opened that day —
+     never twice, and never again after it has failed until it is asked for. */
+  if (wordOfDayWanted() && !wordOfDayToday() && !wotdState.busy && !wotdState.failed) fetchWordOfDay(false);
+}
+
+/* ---------- word of the day ------------------------------------------------ */
+let wotdState = { busy: false, failed: '' };
+
+function wordOfDayWanted() {
+  return AI.available() && Store.state.settings.wordOfDay !== false;
+}
+function wordOfDayToday() {
+  const w = Store.state.wotd;
+  return w && w.day === todayKey() ? w : null;
+}
+
+function wordOfDayHTML() {
+  if (!wordOfDayWanted()) return '';
+  const w = wordOfDayToday();
+  const head = (right) =>
+    '<div class="card wotd" style="margin-top:16px">' +
+      '<div class="section-title" style="margin:0 0 10px"><h2>' + ICONS.spark + 'Word of the day</h2>' +
+        (right || '') + '</div>';
+
+  if (wotdState.busy)
+    return head('') + '<div class="ai-thinking">' + ICONS.loader + 'Finding a word for today…</div></div>';
+  if (!w)
+    return head('<button class="soft-btn tiny" data-act="wotd-new">Try again</button>') +
+      '<p class="muted">' + esc(wotdState.failed || 'No word yet today.') + '</p></div>';
+
+  const known = Store.cardByTerm ? Store.cardByTerm(w.term) : null;
+  return head('<div class="row" style="gap:8px">' +
+      (known ? '' : '<button class="soft-btn tiny" data-act="wotd-add">' + ICONS.plus + 'Add to my words</button>') +
+      '<button class="soft-btn tiny" data-act="wotd-new">Another word</button></div>') +
+    '<div class="row" style="gap:10px;align-items:baseline">' +
+      '<b style="font-size:1.35rem;letter-spacing:-.02em">' + esc(w.term) + '</b>' +
+      (w.pos ? '<span class="chip pos">' + esc(w.pos) + '</span>' : '') +
+      (known ? '<span class="faint">already in your words</span>' : '') +
+    '</div>' +
+    (w.definition ? '<p class="muted" style="margin-top:7px">' + esc(w.definition) + '</p>' : '') +
+    (w.example ? '<p class="fc-example" style="margin-top:9px">' + highlightTerm(w.example, w.term) + '</p>' : '') +
+    (w.translation ? '<p style="margin-top:9px;color:var(--accent);font-size:.9rem">' + esc(w.translation) + '</p>' : '') +
+    (w.note ? '<p class="faint" style="margin-top:6px">' + esc(w.note) + '</p>' : '') +
+  '</div>';
+}
+
+async function fetchWordOfDay(asked) {
+  if (wotdState.busy) return;
+  wotdState.busy = true; wotdState.failed = '';
+  if (currentView === 'dashboard') render('dashboard');
+  try {
+    const w = await AI.wordOfTheDay(Store.state.wotdSeen);
+    Store.setWordOfDay(w);
+  } catch (err) {
+    /* A failed fetch is not retried by itself: the next dashboard would spend
+       another request on the same problem. */
+    wotdState.failed = err.message;
+    if (asked) toast(err.message, 'err');
+  }
+  wotdState.busy = false;
+  if (currentView === 'dashboard') render('dashboard');
 }
 
 function statTile(label, value, sub, accent) {
@@ -755,8 +828,10 @@ function extrasFilled(card) {
          (card.notes ? 1 : 0);
 }
 
+/* `card` without an id is a filled-in blank rather than a card being edited —
+   the word of the day arrives that way. */
 function cardEditor(card, presetDeck) {
-  const isNew = !card;
+  const isNew = !(card && card.id);
   openModal({
     wide: true,
     title: isNew ? 'Add a word' : 'Edit word',
@@ -822,15 +897,17 @@ function cardEditor(card, presetDeck) {
       (isNew ? '' : '<button class="danger-btn" data-act="del">Delete</button>') +
       /* In the gap the spacer used to hold: on the buttons' own row, so it
          costs the dialog no height at all. */
-      (card
-        ? '<div class="foot-note" title="' + esc('Status: ' + card.srs.state + ' · seen ' +
+      /* Only a card with a history has a status to show; a filled-in blank has
+         none, and asking one for its schedule is how it breaks. */
+      (isNew
+        ? '<div class="spacer"></div>'
+        : '<div class="foot-note" title="' + esc('Status: ' + card.srs.state + ' · seen ' +
             card.stats.seen + ' times · ' + card.stats.correct + ' correct / ' + card.stats.wrong +
             ' wrong · next ' + dueText(card)) + '">' +
             'Status: ' + card.srs.state + ' · seen ' + card.stats.seen + ' times · ' +
             card.stats.correct + ' correct / ' + card.stats.wrong + ' wrong · next ' +
             dueText(card) +
-          '</div>'
-        : '<div class="spacer"></div>') +
+          '</div>') +
       '<button class="ghost-btn" data-act="cancel">Cancel</button>' +
       (isNew ? '<button class="ghost-btn" data-act="save-more">Save &amp; add another</button>' : '') +
       '<button class="primary-btn" data-act="save">Save</button>',
@@ -3623,6 +3700,10 @@ function renderSettings(host) {
         '<div class="field"><label>Your native language</label>' +
           '<input type="text" id="aiLang" value="' + esc(ai.nativeLanguage) + '">' +
           '<span class="help">Used for translations and short explanations.</span></div>' +
+        '<label class="switch" style="padding:2px 0 12px"><input type="checkbox" id="setWotd"' +
+          (Store.state.settings.wordOfDay !== false ? ' checked' : '') + '>' +
+          '<span class="track"></span><span class="txt">A word of the day on the dashboard' +
+          '<small>One request a day, the first time you open the app.</small></span></label>' +
         '<div class="row"><button class="ghost-btn" id="aiTest">Test the connection</button>' +
           '<span id="aiTestOut" class="faint"></span></div>' +
         '<p class="help" style="margin-top:12px">' +
@@ -3761,6 +3842,7 @@ function bindSettings(host) {
   const dir = $('#setDir'); if (dir) dir.onchange = () => { s.studyDirection = dir.value; Store.save(); };
   const chk = (id, key) => { const el = $('#' + id); if (el) el.onchange = () => { s[key] = el.checked; Store.save(); }; };
   chk('setEx', 'showExampleOnFront'); chk('setSpeak', 'autoSpeak'); chk('setQuizSrs', 'quizAffectsSrs');
+  chk('setWotd', 'wordOfDay');
 
   const on = $('#aiOn');
   if (on) on.onchange = () => { s.ai.enabled = on.checked; Store.save(); $('#aiBox').classList.toggle('hidden', !on.checked); };

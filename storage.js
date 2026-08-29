@@ -42,6 +42,7 @@ const Store = {
         roundPercent: 20,               // share of the available words used in a practice round
         optionCount: 4,                 // answer choices in a multiple-choice question
         cwClues: 'side',                // crossword clues beside the grid, or below it
+        wordOfDay: true,                // one AI request a day for a word to meet
         activityWeeks: 13,              // weeks shown in the Progress activity map
         ai: {
           enabled: false,
@@ -61,6 +62,8 @@ const Store = {
       daily: {},                        // 'YYYY-MM-DD': { new:0, reviews:0, correct:0, minutes:0 }
       aiUsage: { day: '', count: 0 },   // requests this app sent today, for the free allowance
       practice: [],                     // finished rounds, newest first — see addRound
+      wotd: null,                       // { day, term, pos, definition, example, translation }
+      wotdSeen: [],                     // the words already offered, so they do not come round again
       lastBackup: null
     };
   },
@@ -106,6 +109,8 @@ const Store = {
     });
     s.aiUsage = data.aiUsage || { day: '', count: 0 };
     s.practice = (data.practice || []).slice(0, PRACTICE_MAX);
+    s.wotd = data.wotd || null;
+    s.wotdSeen = (data.wotdSeen || []).slice(-90);
     s.log = data.log || [];
     s.daily = data.daily || {};
     /* Starter content that has been corrected or added since this collection
@@ -760,6 +765,15 @@ const Store = {
   },
 
   clearPractice() { this.state.practice = []; this.save(); },
+
+  /* Today's word, and a memory of the ones before it so the same word is not
+     offered twice. */
+  setWordOfDay(word) {
+    this.state.wotd = Object.assign({ day: todayKey() }, word);
+    this.state.wotdSeen = this.state.wotdSeen.concat([word.term]).slice(-90);
+    this.save();
+    return this.state.wotd;
+  },
 
   wipe() {
     try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
