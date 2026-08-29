@@ -431,6 +431,8 @@ input[type=range]::-moz-range-thumb{
 
 /* ---------- Quiz ---------------------------------------------------------- */
 .quiz-wrap{ max-width:700px; margin:0 auto; display:flex; flex-direction:column; gap:16px; }
+/* A crossword is as wide as its grid, which a question never is. */
+.quiz-wrap.wide{ max-width:1180px; }
 .opt{
   display:flex; align-items:center; gap:12px; width:100%; text-align:left;
   padding:14px 16px; border-radius:13px; border:1px solid var(--border);
@@ -565,7 +567,13 @@ input[type=range]::-moz-range-thumb{
 /* The button stays put and the answer beside it keeps its space, so revealing
    one row never moves the next. */
 .review-reveal{ display:flex; align-items:center; gap:12px; margin-top:8px; }
-.review-show{ padding:4px 11px; font-size:.78rem; border-radius:9px; }
+/* "Show" and "Hide" are different widths, and the options sit on the same
+   line — so the button is given one width and keeps it. */
+/* "Show" and "Hide" are different widths, and the options sit on the same
+   line — so the button is given one width, in ems, and keeps it whatever the
+   text size is set to. */
+.review-show{ padding:4px 11px; font-size:.78rem; border-radius:9px;
+  min-width:5.4em; justify-content:center; }
 .review-row:not(.shown) .review-a{ visibility:hidden; }
 .review-row:not(.shown) .rev-opt{ color:var(--text-dim); text-decoration:none; }
 .review-row:not(.shown) .rg-word{ display:none; }
@@ -574,22 +582,26 @@ input[type=range]::-moz-range-thumb{
 
 /* Crossword. The grid is square whatever the theme does to the surfaces, and
    scrolls sideways rather than shrinking its squares past reading size. */
-.cw-wrap{ display:flex; flex-wrap:wrap; gap:26px; align-items:flex-start; }
+/* Beside means beside: the grid keeps its squares and scrolls inside its own
+   box rather than pushing the clues onto the next line, since which of the two
+   the screen has room for is the reader's call, not the layout's. */
+.cw-wrap{ display:flex; gap:26px; align-items:flex-start; flex-wrap:nowrap; }
+.cw-wrap.stack{ flex-direction:column; flex-wrap:wrap; }
 .cw-grid{
-  display:grid; grid-template-columns:repeat(var(--cw-cols), 28px);
+  display:grid; grid-template-columns:repeat(var(--cw-cols), 34px);
   gap:2px; flex:none; overflow:auto; max-width:100%; padding:1px;
 }
-.cw-block{ width:28px; height:28px; }
-.cw-cell{ position:relative; width:28px; height:28px; border-radius:5px;
+.cw-block{ width:34px; height:34px; }
+.cw-cell{ position:relative; width:34px; height:34px; border-radius:6px;
   background:var(--surface-2); border:1px solid var(--border); }
 .cw-cell.sel{ background:var(--accent-soft); border-color:var(--accent); }
 .cw-cell.correct{ background:rgba(34,197,94,.16); border-color:var(--good); }
 .cw-cell.wrong{ background:rgba(239,68,68,.14); border-color:var(--bad); }
-.cw-cell i{ position:absolute; top:0; left:2px; font-size:.52rem; font-style:normal;
+.cw-cell i{ position:absolute; top:1px; left:3px; font-size:.56rem; font-style:normal;
   color:var(--text-faint); line-height:1; pointer-events:none; }
 .cw-in{
   width:100%; height:100%; border:0; background:transparent; text-align:center;
-  font-size:.85rem; font-weight:650; text-transform:uppercase; padding:2px 0 0;
+  font-size:.98rem; font-weight:650; text-transform:uppercase; padding:2px 0 0;
   border-radius:5px; outline:none; caret-color:var(--accent);
 }
 .cw-in:focus{ box-shadow:inset 0 0 0 2px var(--accent); }
@@ -597,7 +609,7 @@ input[type=range]::-moz-range-thumb{
 .cw-cell.wrong .cw-in{ color:var(--bad); }
 .cw-in:disabled{ opacity:1; }
 
-.cw-clues{ display:flex; gap:26px; flex-wrap:wrap; flex:1 1 320px; min-width:260px; }
+.cw-clues{ display:flex; gap:26px; flex-wrap:wrap; flex:1 1 320px; min-width:0; }
 .cw-side{ flex:1 1 240px; min-width:220px; }
 .cw-side h4{ font-size:.66rem; text-transform:uppercase; letter-spacing:.09em;
   color:var(--text-faint); margin-bottom:7px; }
@@ -619,6 +631,9 @@ input[type=range]::-moz-range-thumb{
 .cw-hint:hover{ color:var(--accent); }
 .cw-hint svg{ width:15px; height:15px; }
 .cw-clue.shown .cw-hint{ opacity:.35; }
+
+/* Too narrow for both, whatever was chosen. */
+@media (max-width:900px){ .cw-wrap{ flex-direction:column; flex-wrap:wrap; } }
 
 /* Recent rounds, one line each. */
 .history-row{ gap:12px; padding:10px 0; border-bottom:1px solid var(--border-soft); }

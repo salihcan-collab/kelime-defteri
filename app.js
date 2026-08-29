@@ -2207,7 +2207,9 @@ function drawQuizItem(host) {
   else if (item.type === 'passage') body = passageHTML(item);
   else if (item.type === 'crossword') body = crosswordHTML(item);
 
-  host.innerHTML = '<div class="quiz-wrap">' + head + body + '</div>';
+  /* A grid needs the width a question does not. */
+  host.innerHTML = '<div class="quiz-wrap' + (item.type === 'crossword' ? ' wide' : '') + '">' +
+    head + body + '</div>';
 
   if (item.speak && quiz.state === 'idle') TTS.speak(item.speak);
   bindQuizEvents(host, item);
@@ -2436,12 +2438,22 @@ function bindQuizEvents(host, item) {
     const hint = e.target.closest('[data-hint]');
     if (hint) {
       const k = +hint.dataset.hint;
-      quiz.cw.hints[k] = 1;
-      hint.closest('.cw-clue').classList.add('shown');
+      const on = !quiz.cw.hints[k];
+      quiz.cw.hints[k] = on;
+      hint.closest('.cw-clue').classList.toggle('shown', on);
       return;
     }
     const clue = e.target.closest('[data-clue]');
     if (clue) return crosswordSelect(item, +clue.dataset.clue);
+    const swap = e.target.closest('[data-act="cw-layout"]');
+    if (swap) {
+      const stacked = Store.state.settings.cwClues !== 'below';
+      Store.state.settings.cwClues = stacked ? 'below' : 'side';
+      Store.save();
+      $('#cwWrap').classList.toggle('stack', stacked);
+      swap.textContent = stacked ? 'Clues beside' : 'Clues below';
+      return;
+    }
     const g = e.target.closest('[data-gap]');
     if (g) return passageGapClick(item, parseInt(g.dataset.gap, 10));
     const bw = e.target.closest('[data-word]');
@@ -2745,13 +2757,18 @@ function crosswordHTML(item) {
         '</li>').join('') +
     '</ul></div>';
 
+  const stacked = Store.state.settings.cwClues === 'below';
   return '<div class="card">' +
     '<div class="row between" style="margin-bottom:14px">' +
       '<p class="muted">Click a clue, then type the word into the grid</p>' +
       '<span class="faint" id="cwLeft">' + (item.left
         ? item.left + ' word' + (item.left === 1 ? '' : 's') + ' would not fit the grid' : '') + '</span>' +
+      /* Where the clues sit is a matter of how wide the screen is, which only
+         the person in front of it knows. */
+      '<button class="soft-btn tiny" data-act="cw-layout">' +
+        (stacked ? 'Clues beside' : 'Clues below') + '</button>' +
     '</div>' +
-    '<div class="cw-wrap">' +
+    '<div class="cw-wrap' + (stacked ? ' stack' : '') + '" id="cwWrap">' +
       '<div class="cw-grid" id="cwGrid" style="--cw-cols:' + item.cols + '">' +
         item.cells.map(cell).join('') + '</div>' +
       '<div class="cw-clues">' + clueList('across') + clueList('down') + '</div>' +
@@ -2797,8 +2814,29 @@ function crosswordStep(item, from, delta) {
   const at = word.cells.indexOf(from);
   const next = word.cells[at + delta];
   if (next == null) return;
-  const input = $('.cw-in[data-i="' + next + '"]');
+  crosswordFocus(next);
+}
+
+function crosswordFocus(cellIndex) {
+  const input = $('.cw-in[data-i="' + cellIndex + '"]');
   if (input) { input.focus(); input.select(); }
+}
+
+/* An arrow key belongs to the grid rather than to the word: a down word can be
+   left by pressing right, which is the whole point of a crossword. Blank
+   squares in the way are stepped over, and landing somewhere takes up the word
+   that runs the way you were going. */
+function crosswordArrow(item, from, dr, dc) {
+  let r = Math.floor(from / item.cols), c = from % item.cols;
+  for (;;) {
+    r += dr; c += dc;
+    if (r < 0 || c < 0 || r >= item.rows || c >= item.cols) return;
+    const i = r * item.cols + c;
+    if (!item.cells[i]) continue;
+    const k = crosswordWordAt(item, i, dc ? 'across' : 'down');
+    if (k >= 0 && k !== quiz.cw.sel) crosswordSelect(item, k, i); else crosswordFocus(i);
+    return;
+  }
 }
 
 function bindCrossword(host, item) {
@@ -2818,8 +2856,10 @@ function bindCrossword(host, item) {
     if (!el || quiz.cw.checked) return;
     const i = +el.dataset.i;
     if (e.key === 'Backspace' && !el.value) { e.preventDefault(); crosswordStep(item, i, -1); return; }
-    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); crosswordStep(item, i, 1); return; }
-    if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); crosswordStep(item, i, -1); return; }
+    if (e.key === 'ArrowRight') { e.preventDefault(); return crosswordArrow(item, i, 0, 1); }
+    if (e.key === 'ArrowLeft')  { e.preventDefault(); return crosswordArrow(item, i, 0, -1); }
+    if (e.key === 'ArrowDown')  { e.preventDefault(); return crosswordArrow(item, i, 1, 0); }
+    if (e.key === 'ArrowUp')    { e.preventDefault(); return crosswordArrow(item, i, -1, 0); }
     if (e.key === 'Enter') { e.preventDefault(); return checkCrossword(item); }
   };
   /* Clicking a square that two words share turns the corner. */
@@ -2910,6 +2950,7 @@ function recordRound() {
     answers: quiz.results.length, correct: quiz.results.filter(r => r.ok).length,
     cardIds: ids, review: packReview()
   });
+  quiz.savedId = Store.state.practice[0].id;
 }
 
 function isAIMode(mode) { return String(mode).indexOf('ai-') === 0; }
@@ -3095,6 +3136,8 @@ function drawQuizResults(host) {
         '<div class="bar" style="margin:18px 0"><i style="width:' + score + '%"></i></div>' +
         '<div class="row" style="justify-content:center">' +
           '<button class="ghost-btn" data-act="back">Change drill</button>' +
+          (quiz.savedId ? '<button class="ghost-btn" data-act="review-round">' + ICONS.review +
+            'Review this round</button>' : '') +
           (wrong.length ? '<button class="ghost-btn" data-act="retry-wrong">Practise the ' + wrong.length + ' I missed</button>' : '') +
           '<button class="primary-btn" data-act="again">' + ICONS.play + 'Another round</button>' +
         '</div>' +
@@ -3112,9 +3155,14 @@ function drawQuizResults(host) {
         : '') +
     '</div>';
 
+  const saved = quiz.savedId;
   host.onclick = (e) => {
     if (e.target.closest('[data-act="back"]')) { quiz = null; return render('practice'); }
     if (e.target.closest('[data-act="again"]')) { quiz = null; return startQuiz(); }
+    if (e.target.closest('[data-act="review-round"]')) {
+      const entry = Store.state.practice.filter(r => r.id === saved)[0];
+      if (entry) return reviewRound(entry);
+    }
     if (e.target.closest('[data-act="retry-wrong"]')) {
       /* Ask only about the missed words, but draw the wrong answers from the
          whole pool — with the other missed words first, since those are the
@@ -3124,7 +3172,14 @@ function drawQuizResults(host) {
       const wide = practicePool(quizSetup.deckId, quizSetup.scope);
       const pool = wide.length >= 2 ? wide : missed;
       let mode = quizSetup.mode;
-      if (isMatching(mode) && missed.length < 2) mode = 'mc-meaning';
+      /* An AI drill cannot be rebuilt from the words alone — the questions were
+         written for that round — and asking for new ones would spend a request
+         on a handful of words. The missed words go into a built-in drill
+         instead: spelling for the crossword, meanings for the rest. */
+      if (isAIMode(mode)) {
+        mode = mode === 'ai-crossword' ? 'typing' : 'mc-meaning';
+        toast('The words you missed, as ' + MODES.filter(m => m.id === mode)[0].name.toLowerCase());
+      } else if (isMatching(mode) && missed.length < 2) mode = 'mc-meaning';
       quiz = newQuiz(mode, buildQuestions(mode, pool, missed.length, { cards: missed, prefer: missed }));
       if (!quiz.items.length) { quiz = null; toast('Could not rebuild those questions', 'err'); }
       render('practice');

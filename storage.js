@@ -41,6 +41,7 @@ const Store = {
         quizAffectsSrs: true,
         roundPercent: 20,               // share of the available words used in a practice round
         optionCount: 4,                 // answer choices in a multiple-choice question
+        cwClues: 'side',                // crossword clues beside the grid, or below it
         activityWeeks: 13,              // weeks shown in the Progress activity map
         ai: {
           enabled: false,
