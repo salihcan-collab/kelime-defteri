@@ -370,16 +370,28 @@ const AI = {
       { role: 'system', content: 'You are an English teacher writing texts for a gap-fill exercise. Answer only with JSON.' },
       { role: 'user', content:
         this.levelSays() + '\n\nWrite one text for each group of target words:\n' + list + '\n\n' +
-        'Each text is 5-7 sentences that hang together — a story, a report, an explanation — ' +
-        'not unrelated sentences sharing a topic.\n' +
+        /* An exam paragraph is the wrong home for "put off" and a dialogue is the
+           wrong home for "photosynthesis": the words decide which they get. */
+        'Let the words themselves decide what kind of text they belong in:\n' +
+        '  • everyday, spoken words — phrasal verbs, idioms, ordinary verbs and adjectives — ' +
+        'call for a short conversation between two people, each turn on its own line, ' +
+        'beginning "Alex:" or "Sam:".\n' +
+        '  • academic, technical or formal words call for an exam-style reading paragraph on a ' +
+        'real subject: science, history, culture, society, the environment, economics.\n' +
+        'Either way it runs 5-7 sentences (or turns) that hang together — one situation, one ' +
+        'line of thought — not unrelated sentences sharing a topic.\n' +
         /* The gaps are cut out of this text afterwards, which is why the text is
            asked for whole: a word written into the wrong hole is the one mistake
            this drill cannot survive, and prose cannot make it. */
         'Write the text out in full, with the target words in it. Do not mark, number or ' +
         'blank out anything.\n' +
-        'Use every word of the group exactly once, and nowhere else in the text in any form. ' +
-        'Keep each one in the form written above unless the sentence needs another, and do not ' +
-        'start a sentence with one of them.\n' +
+        /* Each of these is a word the learner loses: the app can only ask about a
+           word it can find exactly once, standing where a sentence does not
+           begin. */
+        'Every word of the group must appear, exactly once, and nowhere else in the text in any ' +
+        'form — a text that leaves one out, or uses one twice, is a failed text. Keep each one in ' +
+        'the form written above unless the sentence needs another, and never let one open a ' +
+        'sentence or a turn.\n' +
         'What decides whether the text is worth doing: each target word must be pinned down by ' +
         'the sentences around it, so that a reader who covered it could name it from what is ' +
         'said before and after. If another word of the group could stand in its place, say more ' +

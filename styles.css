@@ -533,42 +533,40 @@ input[type=range]::-moz-range-thumb{
 .level-pick label{ font-size:.8rem; color:var(--text-faint); white-space:nowrap; }
 .level-pick select{ width:auto; min-width:172px; padding:7px 32px 7px 12px; font-size:.84rem; }
 
-/* Reading a round back. Answers are in the page either way, so hiding them
-   swaps a word for the blank it came out of and moves nothing else. */
+/* Reading a round back. Every answer is in the page either way: hiding one
+   takes its marking off, or swaps a word for the blank it came out of, and
+   moves nothing else. */
 .review-list{ display:flex; flex-direction:column; gap:2px; }
 .review-row{ padding:11px 0; border-bottom:1px solid var(--border-soft); }
 .review-row:last-child{ border-bottom:0; }
 .review-q{ font-size:.92rem; line-height:1.6; }
-.review-a{ display:block; margin-top:7px; font-size:.92rem; }
+.review-a{ font-size:.92rem; min-width:0; }
 .review-a b{ color:var(--good); font-weight:650; }
 .review-a s{ color:var(--bad); opacity:.8; margin-right:9px; }
-.review-given{ display:block; margin-top:4px; color:var(--text-faint); font-size:.84rem; }
+.review-given{ color:var(--text-faint); font-size:.84rem; margin-left:9px; }
 /* The options as the question offered them, in the question's own size and
    with no boxes around them — a marked-up sentence, not a row of buttons. */
 .review-opts{ margin-top:7px; font-size:.92rem; line-height:1.9; }
-/* Every option carries the same weight in both states. Bolding the right one
-   would re-wrap the line when the marking came off, which is exactly the jump
-   hiding the answers is meant to avoid — colour and a rule through the word
-   change nothing about where the words sit. */
+/* Every option carries the same weight whether the row is showing its answer
+   or not. Bolding the right one would re-wrap the line when the marking came
+   off, which is the jump hiding an answer is meant to avoid — colour and a
+   rule through the word change nothing about where the words sit. */
 .rev-opt{ color:var(--text-dim); font-weight:500; }
 /* The separator hangs off the following option, so whatever comes after the
-   last one — a "not reached" note — cannot leave a dot dangling. */
+   last one cannot leave a dot dangling. */
 .rev-opt + .rev-opt::before{ content:'·'; color:var(--text-faint); margin:0 9px; }
 .rev-opt.correct{ color:var(--good); }
 .rev-opt.wrong{ color:var(--bad); text-decoration:line-through; }
-/* Hiding the answers must not move the questions, or the page jumps under the
-   reader who asked for them to go. Where the options are on the page they stay
-   readable and simply lose their marking, so the question can be worked out
-   again; where the answer is the only thing there, it is covered instead. */
-.review-list.hidden-answers .rev-opt{ color:var(--text-dim); text-decoration:none; }
-.review-list.hidden-answers .review-a{ filter:blur(7px); user-select:none; }
-.review-list.hidden-answers .review-a,
-.review-list.hidden-answers .review-a b,
-.review-list.hidden-answers .review-a s{ color:var(--text-dim); }
-.rg-word{ display:inline; }
-.review-list.hidden-answers .rg-word{ display:none; }
+
+/* The button stays put and the answer beside it keeps its space, so revealing
+   one row never moves the next. */
+.review-reveal{ display:flex; align-items:center; gap:12px; margin-top:8px; }
+.review-show{ padding:4px 11px; font-size:.78rem; border-radius:9px; }
+.review-row:not(.shown) .review-a{ visibility:hidden; }
+.review-row:not(.shown) .rev-opt{ color:var(--text-dim); text-decoration:none; }
+.review-row:not(.shown) .rg-word{ display:none; }
+.review-row:not(.shown) .rg-blank{ display:inline-block; }
 .rg-blank{ display:none; min-width:112px; border-bottom:1px dashed var(--text-faint); margin:0 4px; }
-.review-list.hidden-answers .rg-blank{ display:inline-block; }
 
 /* Recent rounds, one line each. */
 .history-row{ gap:12px; padding:10px 0; border-bottom:1px solid var(--border-soft); }

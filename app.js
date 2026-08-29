@@ -1636,11 +1636,19 @@ function drawPracticeSetup(host) {
       'around your words — the words themselves are used whatever their level.</p>' : '') +
     historyHTML();
 
-  host.onclick = (e) => {
+  host.onclick = async (e) => {
     const m = e.target.closest('[data-mode]');
     if (m) { quizSetup.mode = m.dataset.mode; return render('practice'); }
     if (e.target.closest('[data-act="start"]')) return startQuiz();
-    if (e.target.closest('[data-act="clear-history"]')) { Store.clearPractice(); return render('practice'); }
+    if (e.target.closest('[data-act="clear-history"]')) {
+      const n = Store.state.practice.length;
+      const ok = await confirmDialog('Clear practice history?',
+        'The ' + n + ' round' + (n === 1 ? '' : 's') + ' kept here will go, with the questions ' +
+        'and answers in them. Your words, their schedules and your statistics are not touched.',
+        'Clear history', true);
+      if (ok) { Store.clearPractice(); render('practice'); }
+      return;
+    }
     const back = e.target.closest('[data-review]');
     if (back) {
       const entry = Store.state.practice.filter(r => r.id === back.dataset.review)[0];
@@ -1810,6 +1818,10 @@ function buildQuestions(mode, pool, count, opts) {
   }).filter(Boolean);
 }
 
+/* A text as it is read: escaped, with its line breaks kept, so a dialogue is a
+   dialogue rather than one long run of turns. */
+function passageProse(t) { return esc(t).replace(/\n/g, '<br>'); }
+
 /* Where a word actually stands in a text. The loose match that finds
    "diagnosed" for "diagnose" also finds "objective" for "object", so every hit
    is weighed against the word it claims to be before it counts. */
@@ -1831,12 +1843,17 @@ function findTerm(text, term, from) {
    answer wrong — which is worse than no drill at all. Prose cannot come apart
    that way: whatever is cut out of the sentence is what belongs in it. */
 function buildPassageItem(p, cards, pool) {
-  const text = String(p.text || '').replace(/\s+/g, ' ').trim();
+  /* Spaces collapse, line breaks do not: a conversation is written a turn to a
+     line and has to stay that way. */
+  const text = String(p.text || '').replace(/\r/g, '')
+    .replace(/[^\S\n]+/g, ' ').replace(/\n[\s]*/g, '\n').trim();
   if (!text) return null;
 
   /* A word standing where a sentence begins wears a capital, and a capital in
-     the bank says which gap it came from. */
-  const opensSentence = (i) => i === 0 || /[.!?]\s+$/.test(text.slice(0, i));
+     the bank says which gap it came from. A turn of a conversation begins the
+     same way, speaker's name and all. */
+  const opensSentence = (i) => i === 0 ||
+    /(?:^|[.!?]|\n)\s*(?:[A-Z][A-Za-z]{1,11}:\s*)?$/.test(text.slice(0, i));
 
   /* Longest terms first, and a word never claims a place another target has
      already taken: "cake" would otherwise settle inside "a piece of cake" and
@@ -1966,6 +1983,12 @@ async function startQuiz() {
       quiz.items = out.slice(0, groups.length)
         .map((p, i) => buildPassageItem(p, groups[i], pool)).filter(Boolean);
       if (!quiz.items.length) throw new Error('The text that came back did not line up with the words. Try again.');
+      /* A word the AI left out, used twice or put at the start of a sentence
+         cannot be asked about. Losing it is right; losing it quietly is not,
+         because the round then practises fewer words than the slider promised. */
+      const asked = quiz.items.reduce((n, it) => n + it.answers.length, 0);
+      if (asked < plan.total)
+        toast(asked + ' of the ' + plan.total + ' words fitted the texts the AI wrote', 'info');
       quiz = Object.assign(newQuiz(mode, quiz.items), { startedAt: quiz.startedAt });
     } catch (err) {
       quiz = null; toast(err.message, 'err'); return render('practice');
@@ -2463,7 +2486,7 @@ function passageBody(item) {
               : filled + ' / ' + item.answers.length + ' filled') + '</span>' +
     '</div>' +
     '<p class="passage">' +
-      item.parts.map((t, i) => esc(t) + (i < item.answers.length ? gap(i) : '')).join('') + '</p>' +
+      item.parts.map((t, i) => passageProse(t) + (i < item.answers.length ? gap(i) : '')).join('') + '</p>' +
     (done ? '' : '<div class="bank">' + item.bank.map((w, i) =>
       '<button class="bank-word' + (f.placed.indexOf(i) === -1 ? '' : ' used') +
         '" data-word="' + i + '">' + esc(w) + '</button>').join('') + '</div>') +
@@ -2617,26 +2640,32 @@ function reviewRound(entry) {
       esc(o) + '</span>';
   }).join('');
 
+  /* Each row hides and shows on its own, behind a button that stays where it
+     is: a question is worth trying again one at a time, and a control that
+     disappears when used takes the line under it with it. */
+  const reveal = (inner) =>
+    '<div class="review-reveal"><button class="hint-btn review-show" data-show>Hide</button>' +
+    (inner || '') + '</div>';
+
   const body = head + '<div class="review-list" id="reviewList">' +
     (entry.review || []).map(r => {
       if (r.kind === 'passage')
-        return '<div class="review-row"><p class="passage">' +
-          r.parts.map((t, i) => esc(t) + (i < r.answers.length
+        return '<div class="review-row shown"><p class="passage">' +
+          r.parts.map((t, i) => passageProse(t) + (i < r.answers.length
             ? '<span class="rg-blank"></span><span class="rg-word">' + word(r.answers[i], (r.given || [])[i]) + '</span>'
-            : '')).join('') + '</p></div>';
+            : '')).join('') + '</p>' + reveal('') + '</div>';
       const missed = r.given != null && r.given !== '' && normalize(r.given) !== normalize(r.answer);
       const notReached = r.given == null ? '<span class="review-given">not reached</span>' : '';
-      /* A question with options keeps them in the open when the answers are
-         hidden; a question whose answer is the only thing to show has to cover
-         it up instead. */
-      return '<div class="review-row">' +
+      /* A question with options keeps them in the open while it is hidden — it
+         is the marking that gives the answer away, not the words — and once
+         they are marked, printing the answer underneath says it twice. */
+      const opts = r.options && r.options.length;
+      return '<div class="review-row shown">' +
         '<div class="review-q">' + esc(r.q) + '</div>' +
-        (r.options && r.options.length
-          ? '<div class="review-opts">' + choices(r) + notReached + '</div>'
-          : '<div class="review-a">' +
-              (missed ? '<s>' + esc(r.given) + '</s>' : '') +
-              (r.answer ? '<b>' + esc(r.answer) + '</b>' : esc(r.given || '')) +
-              notReached + '</div>') +
+        (opts ? '<div class="review-opts">' + choices(r) + '</div>' : '') +
+        reveal(notReached + (opts ? '' : '<span class="review-a">' +
+          (missed ? '<s>' + esc(r.given) + '</s>' : '') +
+          (r.answer ? '<b>' + esc(r.answer) + '</b>' : esc(r.given || '')) + '</span>')) +
         '</div>';
     }).join('') + '</div>';
 
@@ -2645,10 +2674,24 @@ function reviewRound(entry) {
     foot: '<button class="ghost-btn" data-act="toggle">Hide answers</button>' +
           '<button class="primary-btn" data-act="close">Done</button>',
     onMount: (b, f) => {
+      const rows = () => b.querySelectorAll('.review-row');
+      const label = (row) => { const btn = row.querySelector('.review-show');
+        if (btn) btn.textContent = row.classList.contains('shown') ? 'Hide' : 'Show'; };
+      const foot = f.querySelector('[data-act="toggle"]');
+      const setAll = (on) => {
+        rows().forEach(row => { row.classList.toggle('shown', on); label(row); });
+        foot.textContent = on ? 'Hide answers' : 'Show answers';
+      };
       f.querySelector('[data-act="close"]').onclick = closeModal;
-      f.querySelector('[data-act="toggle"]').onclick = (e) => {
-        const off = b.querySelector('#reviewList').classList.toggle('hidden-answers');
-        e.target.textContent = off ? 'Show answers' : 'Hide answers';
+      foot.onclick = () => setAll(!b.querySelector('.review-row.shown'));
+      b.onclick = (e) => {
+        const btn = e.target.closest('[data-show]');
+        if (!btn) return;
+        const row = btn.closest('.review-row');
+        row.classList.toggle('shown');
+        label(row);
+        /* The one button that speaks for all of them follows what is left. */
+        foot.textContent = b.querySelector('.review-row:not(.shown)') ? 'Show answers' : 'Hide answers';
       };
     }
   });
