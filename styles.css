@@ -206,6 +206,8 @@ svg{ width:20px; height:20px; fill:none; stroke:currentColor; stroke-width:1.75;
   overscroll-behavior:contain; -webkit-overflow-scrolling:touch;
   scrollbar-gutter:stable; outline:none; }
 .view{ padding:26px 26px 48px; max-width:1180px; margin:0 auto; animation:fade .28s ease; }
+/* The one view that is worth more than the reading width: a puzzle grid. */
+.view.view-wide{ max-width:1560px; }
 /* Tables, deck grids and charts read better wide; forms and flashcards do not. */
 #view-browse, #view-decks, #view-stats, #view-dashboard{ max-width:1560px; }
 @keyframes fade{ from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:none;} }
@@ -432,7 +434,7 @@ input[type=range]::-moz-range-thumb{
 /* ---------- Quiz ---------------------------------------------------------- */
 .quiz-wrap{ max-width:700px; margin:0 auto; display:flex; flex-direction:column; gap:16px; }
 /* A crossword is as wide as its grid, which a question never is. */
-.quiz-wrap.wide{ max-width:1180px; }
+.quiz-wrap.wide{ max-width:100%; }
 .opt{
   display:flex; align-items:center; gap:12px; width:100%; text-align:left;
   padding:14px 16px; border-radius:13px; border:1px solid var(--border);
@@ -631,6 +633,25 @@ input[type=range]::-moz-range-thumb{
 .cw-hint:hover{ color:var(--accent); }
 .cw-hint svg{ width:15px; height:15px; }
 .cw-clue.shown .cw-hint{ opacity:.35; }
+
+/* The puzzle again inside a review: smaller, and read rather than typed into.
+   What was written and what should have been are both in the page, so the
+   button swaps one for the other and the grid does not move. */
+.cw-grid.mini{ grid-template-columns:repeat(var(--cw-cols), 24px); gap:2px; }
+.cw-grid.mini .cw-cell, .cw-grid.mini .cw-block{ width:24px; height:24px; }
+.cw-grid.mini .cw-cell{ display:grid; place-items:center; }
+.cw-grid.mini .cw-cell i{ font-size:.46rem; top:0; left:2px; }
+.cwm-given, .cwm-answer{ font-size:.78rem; font-weight:650; line-height:1; }
+.review-row.shown .cwm-given{ display:none; }
+.review-row:not(.shown) .cwm-answer{ display:none; }
+/* Hidden, the grid is the learner's own attempt with nothing said about it —
+   colouring the squares they got right would be the answer by another name.
+   Shown, it is the solution, marked the way the puzzle marked it. */
+.review-row:not(.shown) .cw-cell.correct,
+.review-row:not(.shown) .cw-cell.wrong{ background:var(--surface-2); border-color:var(--border); }
+.review-row:not(.shown) .cwm-given{ color:var(--text); }
+.review-row.shown .cw-cell.correct .cwm-answer{ color:var(--good); }
+.review-row.shown .cw-cell.wrong .cwm-answer{ color:var(--bad); }
 
 /* Too narrow for both, whatever was chosen. */
 @media (max-width:900px){ .cw-wrap{ flex-direction:column; flex-wrap:wrap; } }

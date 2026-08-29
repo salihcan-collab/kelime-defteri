@@ -1568,6 +1568,8 @@ const CROSSWORD_MIN = 4;
 const CROSSWORD_MAX = 20;
 /* How wide the finished grid may grow before it stops fitting a screen. */
 const CROSSWORD_SPAN = 20;
+/* How far one direction may run ahead of the other, in words. */
+const CROSSWORD_LEAN = 2;
 
 /* Words are used in whole texts of four or five, so a round is the largest such
    arrangement the chosen words allow, and null below four. */
@@ -1583,6 +1585,10 @@ function passagePlan(n) {
 }
 
 function renderPractice(host) {
+  /* A grid is the one thing here that wants more than the reading width the
+     rest of the app is built around. */
+  const item = quiz && !quiz.finished && quiz.items[quiz.i];
+  host.classList.toggle('view-wide', !!(item && item.type === 'crossword'));
   if (quiz && quiz.finished) return drawQuizResults(host);
   if (quiz) return drawQuizItem(host);
   drawPracticeSetup(host);
@@ -1925,11 +1931,63 @@ function crosswordText(term) {
 }
 
 function buildCrossword(entries) {
+  /* One greedy pass is a guess: whether a crossword interlocks or falls into a
+     ladder depends on which word went down first. So the layout is tried from
+     several starting orders and the best grid kept — cheap at twenty words,
+     and the difference between a puzzle and a comb. */
+  let best = null;
+  const byLength = entries.slice().sort((a, b) => b.text.length - a.text.length);
+  for (let attempt = 0; attempt < 12; attempt++) {
+    const order = attempt === 0 ? byLength
+      : [byLength[0]].concat(shuffle(byLength.slice(1)));
+    const tried = crosswordLayout(order);
+    if (tried && (!best || tried.score > best.score)) best = tried;
+  }
+  if (!best || best.placed.length < 2) return null;
+
+  /* Crop to what was used, then number the squares a word starts on, reading
+     the grid the way the clues will be read. */
+  const b = best.bounds;
+  const rows = b.r1 - b.r0 + 1, cols = b.c1 - b.c0 + 1;
+  const cells = new Array(rows * cols).fill(null);
+  best.placed.forEach(w => w.cells.forEach(([r, c], i) => {
+    cells[(r - b.r0) * cols + (c - b.c0)] = { letter: w.entry.text[i] };
+  }));
+
+  let n = 0;
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+    const cell = cells[r * cols + c];
+    if (!cell) continue;
+    const startsAcross = c === 0 || !cells[r * cols + c - 1];
+    const startsDown = r === 0 || !cells[(r - 1) * cols + c];
+    const runAcross = startsAcross && c + 1 < cols && cells[r * cols + c + 1];
+    const runDown = startsDown && r + 1 < rows && cells[(r + 1) * cols + c];
+    if (runAcross || runDown) cell.num = ++n;
+  }
+
+  const words = best.placed.map(w => ({
+    card: w.entry.card, text: w.entry.text, clue: w.entry.clue,
+    translation: w.entry.card.translation || '', words: w.entry.words,
+    num: cells[(w.r - b.r0) * cols + (w.c - b.c0)].num, dir: w.dir,
+    cells: w.cells.map(([rr, cc]) => (rr - b.r0) * cols + (cc - b.c0))
+  }));
+  words.sort((a, b2) => (a.dir === b2.dir ? a.num - b2.num : a.dir === 'across' ? -1 : 1));
+
+  return { type: 'crossword', rows: rows, cols: cols, cells: cells, words: words,
+           cards: words.map(w => w.card), left: best.left.length, question: 'Crossword' };
+}
+
+/* One pass: take the words in the order given and put each one where it crosses
+   the most of what is already down, without letting either direction run away
+   with the grid. */
+function crosswordLayout(order) {
   const SIZE = 64, mid = SIZE >> 1;
   const grid = new Array(SIZE * SIZE).fill('');
   const at = (r, c) => (r >= 0 && r < SIZE && c >= 0 && c < SIZE) ? grid[r * SIZE + c] : null;
-  const placed = [];
+  const placed = [], left = [];
+  const counts = { across: 0, down: 0 };
   const bounds = { r0: SIZE, r1: 0, c0: SIZE, c1: 0 };
+  let crossings = 0;
 
   /* -1 when the word cannot stand here; otherwise how many letters it shares
      with what is already down. A word may only touch another where it crosses
@@ -1952,7 +2010,7 @@ function buildCrossword(entries) {
     return hits;
   };
 
-  const put = (entry, r, c, dir) => {
+  const put = (entry, r, c, dir, hits) => {
     const cells = [];
     for (let i = 0; i < entry.text.length; i++) {
       const rr = r + (dir === 'down' ? i : 0), cc = c + (dir === 'across' ? i : 0);
@@ -1962,68 +2020,56 @@ function buildCrossword(entries) {
     bounds.r0 = Math.min(bounds.r0, r); bounds.c0 = Math.min(bounds.c0, c);
     bounds.r1 = Math.max(bounds.r1, cells[cells.length - 1][0]);
     bounds.c1 = Math.max(bounds.c1, cells[cells.length - 1][1]);
+    counts[dir]++;
+    crossings += hits || 0;
     placed.push({ entry: entry, r: r, c: c, dir: dir, cells: cells });
   };
 
-  const sorted = entries.slice().sort((a, b) => b.text.length - a.text.length);
-  put(sorted[0], mid, mid - (sorted[0].text.length >> 1), 'across');
+  put(order[0], mid, mid - (order[0].text.length >> 1), 'across', 0);
 
-  const left = [];
-  sorted.slice(1).forEach(entry => {
-    let best = null;
-    placed.forEach(w => {
-      w.cells.forEach(([wr, wc], i) => {
-        const letter = grid[wr * SIZE + wc];
-        for (let j = 0; j < entry.text.length; j++) {
-          if (entry.text[j] !== letter) continue;
-          const dir = w.dir === 'across' ? 'down' : 'across';
-          const r = dir === 'down' ? wr - j : wr;
-          const c = dir === 'across' ? wc - j : wc;
-          const hits = fits(entry.text, r, c, dir);
-          if (hits < 1) continue;
-          /* crossings first, then whatever keeps the grid tight */
-          const score = hits * 100 - Math.abs(r - mid) - Math.abs(c - mid);
-          if (!best || score > best.score) best = { r: r, c: c, dir: dir, score: score };
-        }
-      });
-    });
-    if (best) put(entry, best.r, best.c, best.dir); else left.push(entry);
+  order.slice(1).forEach(entry => {
+    let pick = null, lopsided = null;
+    placed.forEach(w => w.cells.forEach(([wr, wc]) => {
+      const letter = grid[wr * SIZE + wc];
+      for (let j = 0; j < entry.text.length; j++) {
+        if (entry.text[j] !== letter) continue;
+        const dir = w.dir === 'across' ? 'down' : 'across';
+        const r = dir === 'down' ? wr - j : wr;
+        const c = dir === 'across' ? wc - j : wc;
+        const hits = fits(entry.text, r, c, dir);
+        if (hits < 1) continue;
+        /* Crossings first and heavily — a word meeting three others is worth
+           more than one sitting neatly in the middle — then whatever keeps the
+           grid small, because a tight grid is what gives the next word
+           somewhere to cross. */
+        const dr = dir === 'down' ? 1 : 0, dc = dir === 'across' ? 1 : 0;
+        const grow = (lo, hi, a, b) =>
+          Math.max(0, Math.max(a, b) - hi) + Math.max(0, lo - Math.min(a, b));
+        const growth = grow(bounds.r0, bounds.r1, r, r + dr * (entry.text.length - 1)) +
+                       grow(bounds.c0, bounds.c1, c, c + dc * (entry.text.length - 1));
+        const cand = { r: r, c: c, dir: dir, hits: hits,
+                       score: hits * 300 - growth * 25 - (Math.abs(r - mid) + Math.abs(c - mid)) / 2 };
+        const other = dir === 'across' ? 'down' : 'across';
+        if (counts[dir] + 1 - counts[other] > CROSSWORD_LEAN) {
+          if (!lopsided || cand.score > lopsided.score) lopsided = cand;
+        } else if (!pick || cand.score > pick.score) pick = cand;
+      }
+    }));
+    /* An unbalanced home beats no home at all. */
+    const chosen = pick || lopsided;
+    if (chosen) put(entry, chosen.r, chosen.c, chosen.dir, chosen.hits);
+    else left.push(entry);
   });
-  if (placed.length < 2) return null;
 
-  /* Crop to what was used, then number the squares a word starts on, reading
-     the grid the way the clues will be read. */
-  const rows = bounds.r1 - bounds.r0 + 1, cols = bounds.c1 - bounds.c0 + 1;
-  const cells = new Array(rows * cols).fill(null);
-  placed.forEach(w => w.cells.forEach(([r, c], i) => {
-    const idx = (r - bounds.r0) * cols + (c - bounds.c0);
-    cells[idx] = { letter: w.entry.text[i] };
-  }));
-
-  let n = 0;
-  const words = [];
-  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
-    const cell = cells[r * cols + c];
-    if (!cell) continue;
-    const startsAcross = !cells[r * cols + c - 1] || c === 0;
-    const startsDown = r === 0 || !cells[(r - 1) * cols + c];
-    const runAcross = startsAcross && c + 1 < cols && cells[r * cols + c + 1];
-    const runDown = startsDown && r + 1 < rows && cells[(r + 1) * cols + c];
-    if (runAcross || runDown) cell.num = ++n;
-  }
-  placed.forEach(w => {
-    const r = w.r - bounds.r0, c = w.c - bounds.c0;
-    words.push({
-      card: w.entry.card, text: w.entry.text, clue: w.entry.clue,
-      translation: w.entry.card.translation || '', words: w.entry.words,
-      num: cells[r * cols + c].num, dir: w.dir,
-      cells: w.cells.map(([rr, cc]) => (rr - bounds.r0) * cols + (cc - bounds.c0))
-    });
-  });
-  words.sort((a, b) => (a.dir === b.dir ? a.num - b.num : a.dir === 'across' ? -1 : 1));
-
-  return { type: 'crossword', rows: rows, cols: cols, cells: cells, words: words,
-           cards: words.map(w => w.card), left: left.length, question: 'Crossword' };
+  /* What makes one grid better than another, in order: words that found a home,
+     how much they interlock, and how far the two directions have drifted apart.
+     A drift past the allowance costs about a word, so a balanced grid with one
+     word left over wins over a lopsided one that took it. */
+  const lean = Math.abs(counts.across - counts.down);
+  const over = Math.max(0, lean - CROSSWORD_LEAN);
+  return { placed: placed, left: left, bounds: bounds, counts: counts, crossings: crossings,
+           score: placed.length * 10000 + crossings * 200 - over * 9000 - lean * 60 -
+                  (bounds.r1 - bounds.r0 + bounds.c1 - bounds.c0) * 3 };
 }
 
 /* Multiple-choice drills need other words to build plausible options from —
@@ -2860,7 +2906,14 @@ function bindCrossword(host, item) {
     if (e.key === 'ArrowLeft')  { e.preventDefault(); return crosswordArrow(item, i, 0, -1); }
     if (e.key === 'ArrowDown')  { e.preventDefault(); return crosswordArrow(item, i, 1, 0); }
     if (e.key === 'ArrowUp')    { e.preventDefault(); return crosswordArrow(item, i, -1, 0); }
-    if (e.key === 'Enter') { e.preventDefault(); return checkCrossword(item); }
+    /* Enter moves on rather than ending the puzzle: a key pressed out of habit
+       should not mark a grid the learner is still filling in. */
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const order = item.words.map((w, k) => k);
+      const next = order[(quiz.cw.sel + 1) % order.length];
+      return crosswordSelect(item, next);
+    }
   };
   /* Clicking a square that two words share turns the corner. */
   grid.onclick = (e) => {
@@ -2884,6 +2937,9 @@ function checkCrossword(item) {
   if (!Object.keys(cw.input).length) return toast('Fill in a word first', 'err');
   cw.checked = true;
   quiz.state = 'answered';
+  /* The letters as they were left, kept on the item: by the time the round is
+     written down the grid's own state is gone. */
+  item.filled = Object.assign({}, cw.input);
   item.words.forEach(w => {
     const given = w.cells.map(i => cw.input[i] || '·').join('');
     const ok = given === w.text;
@@ -2963,8 +3019,15 @@ function packReview() {
   quiz.items.forEach(it => {
     const term = it.card ? it.card.term : '';
     if (it.type === 'crossword') {
+      /* The grid itself, and then the clues. The answer to "look forward to"
+         was typed LOOKFORWARDTO, so whether it was right is settled here — the
+         review must not compare a grid answer with the spaces put back. */
+      out.push({ kind: 'grid', cols: it.cols, rows: it.rows,
+                 cells: it.cells.map(c => c ? { letter: c.letter, num: c.num } : null),
+                 input: Object.assign({}, it.filled || {}) });
       it.words.forEach(w => out.push({ kind: 'q', term: w.card.term,
         q: w.num + ' ' + w.dir + ' — ' + w.clue, answer: w.card.term,
+        ok: w.given === w.text,
         given: w.given == null ? null : w.given.replace(/·/g, '_').toLowerCase() }));
     } else if (it.type === 'passage') {
       out.push({ kind: 'passage', parts: it.parts, answers: it.answers, given: it.given || [] });
@@ -3021,12 +3084,29 @@ function reviewRound(entry) {
 
   const body = head + '<div class="review-list" id="reviewList">' +
     (entry.review || []).map(r => {
+      if (r.kind === 'grid') {
+        /* The puzzle again, at reading size: what was typed, and under the
+           button, the letters that should have been there. */
+        return '<div class="review-row shown"><div class="cw-grid mini" style="--cw-cols:' + r.cols + '">' +
+          r.cells.map((c, i) => {
+            if (!c) return '<div class="cw-block"></div>';
+            const given = (r.input || {})[i] || '';
+            const right = given === c.letter;
+            return '<div class="cw-cell' + (right ? ' correct' : given ? ' wrong' : '') + '">' +
+              (c.num ? '<i>' + c.num + '</i>' : '') +
+              '<span class="cwm-given">' + esc(given) + '</span>' +
+              '<span class="cwm-answer">' + esc(c.letter) + '</span></div>';
+          }).join('') + '</div>' + reveal('') + '</div>';
+      }
       if (r.kind === 'passage')
         return '<div class="review-row shown"><p class="passage">' +
           r.parts.map((t, i) => passageProse(t) + (i < r.answers.length
             ? '<span class="rg-blank"></span><span class="rg-word">' + word(r.answers[i], (r.given || [])[i]) + '</span>'
             : '')).join('') + '</p>' + reveal('') + '</div>';
-      const missed = r.given != null && r.given !== '' && normalize(r.given) !== normalize(r.answer);
+      /* A drill that knows whether it was right says so; the rest are judged by
+         comparing, as they always were. */
+      const missed = r.given != null && r.given !== '' &&
+        (typeof r.ok === 'boolean' ? !r.ok : normalize(r.given) !== normalize(r.answer));
       const notReached = r.given == null ? '<span class="review-given">not reached</span>' : '';
       /* A question with options keeps them in the open while it is hidden — it
          is the marking that gives the answer away, not the words — and once
