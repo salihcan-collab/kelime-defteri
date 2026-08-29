@@ -1643,8 +1643,7 @@ function drawPracticeSetup(host) {
     if (e.target.closest('[data-act="clear-history"]')) {
       const n = Store.state.practice.length;
       const ok = await confirmDialog('Clear practice history?',
-        'The ' + n + ' round' + (n === 1 ? '' : 's') + ' kept here will go, with the questions ' +
-        'and answers in them. Your words, their schedules and your statistics are not touched.',
+        'The ' + n + ' round' + (n === 1 ? '' : 's') + ' kept here will go. Your words are not touched.',
         'Clear history', true);
       if (ok) { Store.clearPractice(); render('practice'); }
       return;
@@ -2643,9 +2642,8 @@ function reviewRound(entry) {
   /* Each row hides and shows on its own, behind a button that stays where it
      is: a question is worth trying again one at a time, and a control that
      disappears when used takes the line under it with it. */
-  const reveal = (inner) =>
-    '<div class="review-reveal"><button class="hint-btn review-show" data-show>Hide</button>' +
-    (inner || '') + '</div>';
+  const showBtn = '<button class="hint-btn review-show" data-show>Hide</button>';
+  const reveal = (inner) => '<div class="review-reveal">' + showBtn + (inner || '') + '</div>';
 
   const body = head + '<div class="review-list" id="reviewList">' +
     (entry.review || []).map(r => {
@@ -2660,12 +2658,15 @@ function reviewRound(entry) {
          is the marking that gives the answer away, not the words — and once
          they are marked, printing the answer underneath says it twice. */
       const opts = r.options && r.options.length;
+      /* With options there is already a line to put the button on, so it goes
+         at the head of it rather than claiming a line of its own. */
       return '<div class="review-row shown">' +
         '<div class="review-q">' + esc(r.q) + '</div>' +
-        (opts ? '<div class="review-opts">' + choices(r) + '</div>' : '') +
-        reveal(notReached + (opts ? '' : '<span class="review-a">' +
-          (missed ? '<s>' + esc(r.given) + '</s>' : '') +
-          (r.answer ? '<b>' + esc(r.answer) + '</b>' : esc(r.given || '')) + '</span>')) +
+        (opts
+          ? '<div class="review-opts">' + showBtn + choices(r) + notReached + '</div>'
+          : reveal(notReached + '<span class="review-a">' +
+              (missed ? '<s>' + esc(r.given) + '</s>' : '') +
+              (r.answer ? '<b>' + esc(r.answer) + '</b>' : esc(r.given || '')) + '</span>')) +
         '</div>';
     }).join('') + '</div>';
 
@@ -2678,20 +2679,23 @@ function reviewRound(entry) {
       const label = (row) => { const btn = row.querySelector('.review-show');
         if (btn) btn.textContent = row.classList.contains('shown') ? 'Hide' : 'Show'; };
       const foot = f.querySelector('[data-act="toggle"]');
-      const setAll = (on) => {
-        rows().forEach(row => { row.classList.toggle('shown', on); label(row); });
-        foot.textContent = on ? 'Hide answers' : 'Show answers';
-      };
+      /* One rule for the button at the foot: it reads as what it will do, and
+         with a single row hidden that is showing, not hiding. */
+      const anyHidden = () => !!b.querySelector('.review-row:not(.shown)');
+      const footLabel = () => { foot.textContent = anyHidden() ? 'Show answers' : 'Hide answers'; };
       f.querySelector('[data-act="close"]').onclick = closeModal;
-      foot.onclick = () => setAll(!b.querySelector('.review-row.shown'));
+      foot.onclick = () => {
+        const show = anyHidden();
+        rows().forEach(row => { row.classList.toggle('shown', show); label(row); });
+        footLabel();
+      };
       b.onclick = (e) => {
         const btn = e.target.closest('[data-show]');
         if (!btn) return;
         const row = btn.closest('.review-row');
         row.classList.toggle('shown');
         label(row);
-        /* The one button that speaks for all of them follows what is left. */
-        foot.textContent = b.querySelector('.review-row:not(.shown)') ? 'Show answers' : 'Hide answers';
+        footLabel();
       };
     }
   });

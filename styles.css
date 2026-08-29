@@ -546,7 +546,9 @@ input[type=range]::-moz-range-thumb{
 .review-given{ color:var(--text-faint); font-size:.84rem; margin-left:9px; }
 /* The options as the question offered them, in the question's own size and
    with no boxes around them — a marked-up sentence, not a row of buttons. */
-.review-opts{ margin-top:7px; font-size:.92rem; line-height:1.9; }
+.review-opts{ display:flex; flex-wrap:wrap; align-items:center; gap:0 4px;
+  margin-top:7px; font-size:.92rem; line-height:1.9; }
+.review-opts .review-show{ margin-right:8px; }
 /* Every option carries the same weight whether the row is showing its answer
    or not. Bolding the right one would re-wrap the line when the marking came
    off, which is the jump hiding an answer is meant to avoid — colour and a
@@ -554,7 +556,9 @@ input[type=range]::-moz-range-thumb{
 .rev-opt{ color:var(--text-dim); font-weight:500; }
 /* The separator hangs off the following option, so whatever comes after the
    last one cannot leave a dot dangling. */
-.rev-opt + .rev-opt::before{ content:'·'; color:var(--text-faint); margin:0 9px; }
+/* inline-block, or the rule through a struck option would run through the
+   separator that belongs to the next one */
+.rev-opt + .rev-opt::before{ content:'·'; display:inline-block; color:var(--text-faint); margin:0 9px; }
 .rev-opt.correct{ color:var(--good); }
 .rev-opt.wrong{ color:var(--bad); text-decoration:line-through; }
 
