@@ -108,10 +108,10 @@
 :root[data-font="serif"]    { --font:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif; }
 :root[data-font="humanist"] { --font:Optima,Candara,"Gill Sans MT","Gill Sans","Trebuchet MS",sans-serif; }
 :root[data-font="mono"]     { --font:ui-monospace,SFMono-Regular,"JetBrains Mono",Menlo,Consolas,"Liberation Mono",monospace; }
-/*   Windows  -> Rockwell / Arial / Verdana      macOS -> American Typewriter / Helvetica Neue / Verdana */
+/*   Windows  -> Rockwell / Arial / Times New Roman   macOS -> American Typewriter / Helvetica Neue / Times */
 :root[data-font="slab"]     { --font:"Roboto Slab","American Typewriter",Rockwell,"Bookman Old Style",Bookman,serif; }
 :root[data-font="grotesk"]  { --font:"Helvetica Neue",Helvetica,Arial,"Liberation Sans","Nimbus Sans",sans-serif; }
-:root[data-font="clear"]    { --font:Verdana,Tahoma,"DejaVu Sans",Geneva,sans-serif; }
+:root[data-font="clear"]    { --font:"Times New Roman",Times,"Liberation Serif","Nimbus Roman",serif; }
 
 /* Four steps of 1.5px — enough to feel, small enough to fine-tune. */
 :root[data-size="sm"]{ --fs:14.5px; }

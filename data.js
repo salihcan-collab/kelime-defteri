@@ -43,7 +43,7 @@ const FONTS = [
   { id:'mono',     name:'Mono',     sample:'Aa' },
   { id:'slab',     name:'Slab',     sample:'Aa' },
   { id:'grotesk',  name:'Grotesk',  sample:'Aa' },
-  { id:'clear',    name:'Clear',    sample:'Aa' }
+  { id:'clear',    name:'Times',    sample:'Aa' }
 ];
 
 /* --------------------------------------------------------------------------

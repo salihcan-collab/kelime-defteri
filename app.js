@@ -2003,6 +2003,9 @@ function crosswordLayout(order) {
       if (cur) { if (cur !== text[i]) return -1; hits++; continue; }
       if (dir === 'across' ? (at(rr - 1, cc) || at(rr + 1, cc)) : (at(rr, cc - 1) || at(rr, cc + 1))) return -1;
     }
+    /* A word that lands on nothing but letters already written is not in the
+       grid at all — it is lying on top of another word. */
+    if (hits === text.length) return -1;
     /* and it has to leave a grid that still fits a screen */
     const span = (lo, hi, a, b) => Math.max(hi, b) - Math.min(lo, a) + 1;
     if (span(bounds.r0, bounds.r1, r, r + dr * (text.length - 1)) > CROSSWORD_SPAN ||
@@ -2145,9 +2148,14 @@ async function startQuiz() {
   } else if (mode === 'ai-crossword') {
     /* Only words that can be written into squares: letters, and neither too
        short to cross nor too long to fit a line of the grid. */
+    /* One entry per set of letters: two senses of "object" are two cards, but
+       they are the same word in a grid — and the second would sit exactly on
+       top of the first, sharing its squares and its number. */
+    const seen = {};
     const usable = pool.filter(c => {
       const t = crosswordText(c.term);
-      return t.length >= 3 && t.length <= 14;
+      if (t.length < 3 || t.length > 14 || seen[t]) return false;
+      return (seen[t] = true);
     });
     if (usable.length < CROSSWORD_MIN)
       return toast('A crossword needs at least four words of three letters or more', 'err');
