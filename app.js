@@ -1532,6 +1532,9 @@ const MODES = [
     icon:'<svg viewBox="0 0 24 24"><path d="M12 3l1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9z"/></svg>', ai:true },
   { id:'ai-passage', name:'Fill the passage', desc:'A short text with gaps, and a word bank holding one word too many.',
     icon:'<svg viewBox="0 0 24 24"><path d="M4 6h16M4 10h16M4 18h16M4 14h4M18 14h2"/><rect x="9.5" y="12" width="6.5" height="4" rx="1"/></svg>', ai:true },
+  { id:'ai-crossword', name:'Crossword', desc:'A grid built from your words, a clue for each, and the translation as a hint.',
+    icon:'<svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/>' +
+         '<path d="M9 3v18M3 9h18M15 9v12M9 15h12"/></svg>', ai:true },
   { id:'ai-writing', name:'Writing coach', desc:'Write your own sentence; the AI marks it and suggests a better one.',
     icon:'<svg viewBox="0 0 24 24"><path d="M11 4H4v16h16v-7"/><path d="M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>', ai:true }
 ];
@@ -1560,6 +1563,11 @@ const MATCH_BOARD_MAX = 6;
 /* Texts in one gap-fill round. The whole round is a single request, so this is
    what one answer can hold before the writing thins out. */
 const PASSAGE_MAX_TEXTS = 3;
+/* A crossword needs enough words to cross, and stops being a grid past twenty. */
+const CROSSWORD_MIN = 4;
+const CROSSWORD_MAX = 20;
+/* How wide the finished grid may grow before it stops fitting a screen. */
+const CROSSWORD_SPAN = 20;
 
 /* Words are used in whole texts of four or five, so a round is the largest such
    arrangement the chosen words allow, and null below four. */
@@ -1904,21 +1912,137 @@ function buildPassageItem(p, cards, pool) {
            question: 'Fill the passage' };
 }
 
+/* ---------- crossword ------------------------------------------------------ *
+   The grid is laid out here rather than asked for: a model cannot be trusted
+   to keep two words agreeing on a shared letter, and a crossword that does not
+   is not a crossword. The AI writes the clues, which is the part worth writing.
+   ------------------------------------------------------------------------- */
+
+/* What goes into the grid: letters only, so "work out" becomes WORKOUT — the
+   spaces are what the clue's "(2 words)" is for. */
+function crosswordText(term) {
+  return String(term || '').toUpperCase().replace(/[^A-Z]/g, '');
+}
+
+function buildCrossword(entries) {
+  const SIZE = 64, mid = SIZE >> 1;
+  const grid = new Array(SIZE * SIZE).fill('');
+  const at = (r, c) => (r >= 0 && r < SIZE && c >= 0 && c < SIZE) ? grid[r * SIZE + c] : null;
+  const placed = [];
+  const bounds = { r0: SIZE, r1: 0, c0: SIZE, c1: 0 };
+
+  /* -1 when the word cannot stand here; otherwise how many letters it shares
+     with what is already down. A word may only touch another where it crosses
+     it, or two words end up reading as one. */
+  const fits = (text, r, c, dir) => {
+    const dr = dir === 'down' ? 1 : 0, dc = dir === 'across' ? 1 : 0;
+    if (at(r - dr, c - dc) || at(r + dr * text.length, c + dc * text.length)) return -1;
+    let hits = 0;
+    for (let i = 0; i < text.length; i++) {
+      const rr = r + dr * i, cc = c + dc * i;
+      const cur = at(rr, cc);
+      if (cur === null) return -1;
+      if (cur) { if (cur !== text[i]) return -1; hits++; continue; }
+      if (dir === 'across' ? (at(rr - 1, cc) || at(rr + 1, cc)) : (at(rr, cc - 1) || at(rr, cc + 1))) return -1;
+    }
+    /* and it has to leave a grid that still fits a screen */
+    const span = (lo, hi, a, b) => Math.max(hi, b) - Math.min(lo, a) + 1;
+    if (span(bounds.r0, bounds.r1, r, r + dr * (text.length - 1)) > CROSSWORD_SPAN ||
+        span(bounds.c0, bounds.c1, c, c + dc * (text.length - 1)) > CROSSWORD_SPAN) return -1;
+    return hits;
+  };
+
+  const put = (entry, r, c, dir) => {
+    const cells = [];
+    for (let i = 0; i < entry.text.length; i++) {
+      const rr = r + (dir === 'down' ? i : 0), cc = c + (dir === 'across' ? i : 0);
+      grid[rr * SIZE + cc] = entry.text[i];
+      cells.push([rr, cc]);
+    }
+    bounds.r0 = Math.min(bounds.r0, r); bounds.c0 = Math.min(bounds.c0, c);
+    bounds.r1 = Math.max(bounds.r1, cells[cells.length - 1][0]);
+    bounds.c1 = Math.max(bounds.c1, cells[cells.length - 1][1]);
+    placed.push({ entry: entry, r: r, c: c, dir: dir, cells: cells });
+  };
+
+  const sorted = entries.slice().sort((a, b) => b.text.length - a.text.length);
+  put(sorted[0], mid, mid - (sorted[0].text.length >> 1), 'across');
+
+  const left = [];
+  sorted.slice(1).forEach(entry => {
+    let best = null;
+    placed.forEach(w => {
+      w.cells.forEach(([wr, wc], i) => {
+        const letter = grid[wr * SIZE + wc];
+        for (let j = 0; j < entry.text.length; j++) {
+          if (entry.text[j] !== letter) continue;
+          const dir = w.dir === 'across' ? 'down' : 'across';
+          const r = dir === 'down' ? wr - j : wr;
+          const c = dir === 'across' ? wc - j : wc;
+          const hits = fits(entry.text, r, c, dir);
+          if (hits < 1) continue;
+          /* crossings first, then whatever keeps the grid tight */
+          const score = hits * 100 - Math.abs(r - mid) - Math.abs(c - mid);
+          if (!best || score > best.score) best = { r: r, c: c, dir: dir, score: score };
+        }
+      });
+    });
+    if (best) put(entry, best.r, best.c, best.dir); else left.push(entry);
+  });
+  if (placed.length < 2) return null;
+
+  /* Crop to what was used, then number the squares a word starts on, reading
+     the grid the way the clues will be read. */
+  const rows = bounds.r1 - bounds.r0 + 1, cols = bounds.c1 - bounds.c0 + 1;
+  const cells = new Array(rows * cols).fill(null);
+  placed.forEach(w => w.cells.forEach(([r, c], i) => {
+    const idx = (r - bounds.r0) * cols + (c - bounds.c0);
+    cells[idx] = { letter: w.entry.text[i] };
+  }));
+
+  let n = 0;
+  const words = [];
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+    const cell = cells[r * cols + c];
+    if (!cell) continue;
+    const startsAcross = !cells[r * cols + c - 1] || c === 0;
+    const startsDown = r === 0 || !cells[(r - 1) * cols + c];
+    const runAcross = startsAcross && c + 1 < cols && cells[r * cols + c + 1];
+    const runDown = startsDown && r + 1 < rows && cells[(r + 1) * cols + c];
+    if (runAcross || runDown) cell.num = ++n;
+  }
+  placed.forEach(w => {
+    const r = w.r - bounds.r0, c = w.c - bounds.c0;
+    words.push({
+      card: w.entry.card, text: w.entry.text, clue: w.entry.clue,
+      translation: w.entry.card.translation || '', words: w.entry.words,
+      num: cells[r * cols + c].num, dir: w.dir,
+      cells: w.cells.map(([rr, cc]) => (rr - bounds.r0) * cols + (cc - bounds.c0))
+    });
+  });
+  words.sort((a, b) => (a.dir === b.dir ? a.num - b.num : a.dir === 'across' ? -1 : 1));
+
+  return { type: 'crossword', rows: rows, cols: cols, cells: cells, words: words,
+           cards: words.map(w => w.card), left: left.length, question: 'Crossword' };
+}
+
 /* Multiple-choice drills need other words to build plausible options from —
    but those words can come from anywhere in the collection, so one word in the
    selection is enough. Matching is the exception: it pairs the words you chose
    against each other, so it needs two of them. */
 const NEEDS_OPTIONS = ['mc-meaning', 'mc-word', 'matching', 'matching-def', 'ai-quiz'];
 function isMatching(mode) { return mode === 'matching' || mode === 'matching-def'; }
-function minWordsFor(mode) { return mode === 'ai-passage' ? 4 : isMatching(mode) ? 2 : 1; }
+function minWordsFor(mode) {
+  return mode === 'ai-passage' || mode === 'ai-crossword' ? 4 : isMatching(mode) ? 2 : 1;
+}
 function minCollectionFor(mode) { return NEEDS_OPTIONS.indexOf(mode) !== -1 ? 2 : 1; }
 
 /* Why the drill cannot start, in words, or '' when it can. */
 function startBlocker(pool, mode) {
   if (!pool.length) return 'No words match these filters yet.';
   if (pool.length < minWordsFor(mode))
-    return mode === 'ai-passage'
-      ? 'A text is written around four words — this selection has fewer.'
+    return mode === 'ai-passage' ? 'A text is written around four words — this selection has fewer.'
+      : mode === 'ai-crossword' ? 'A crossword needs at least four words to cross.'
       : 'Matching needs at least two words in this selection.';
   if (Store.state.cards.length < minCollectionFor(mode))
     return 'This drill needs other words to build wrong answers from — add a second word.';
@@ -1931,7 +2055,9 @@ function newQuiz(mode, items) {
   const q = { mode: mode, i: 0, items: items, results: [], correct: 0,
               startedAt: Date.now(), state: 'idle', match: null };
   q.pairsTotal = items.reduce((n, it) =>
-    n + (it.type === 'matching' ? it.cards.length : it.type === 'passage' ? it.answers.length : 0), 0);
+    n + (it.type === 'matching' ? it.cards.length
+       : it.type === 'passage' ? it.answers.length
+       : it.type === 'crossword' ? it.words.length : 0), 0);
   q.pairsDone = 0;
   return q;
 }
@@ -1966,6 +2092,36 @@ async function startQuiz() {
                  answer: q.answer, explanation: q.explanation, question: 'AI question' };
       });
       if (!quiz.items.length) throw new Error('No questions came back.');
+      quiz = Object.assign(newQuiz(mode, quiz.items), { startedAt: quiz.startedAt });
+    } catch (err) {
+      quiz = null; toast(err.message, 'err'); return render('practice');
+    }
+  } else if (mode === 'ai-crossword') {
+    /* Only words that can be written into squares: letters, and neither too
+       short to cross nor too long to fit a line of the grid. */
+    const usable = pool.filter(c => {
+      const t = crosswordText(c.term);
+      return t.length >= 3 && t.length <= 14;
+    });
+    if (usable.length < CROSSWORD_MIN)
+      return toast('A crossword needs at least four words of three letters or more', 'err');
+    const chosen = sample(usable, clamp(count, CROSSWORD_MIN, Math.min(CROSSWORD_MAX, usable.length)));
+    $('#view-practice').innerHTML = '<div class="quiz-wrap"><div class="card"><div class="ai-thinking">' +
+      ICONS.loader + 'The AI is writing ' + chosen.length + ' clues…</div></div></div>';
+    try {
+      const written = await AI.crosswordClues(chosen);
+      const entries = chosen.map(card => {
+        const found = written.filter(c => normalize(c.term) === normalize(card.term))[0];
+        /* A clue with its own answer inside it is no clue: the card's own
+           meaning does the job instead. */
+        const clue = found && !findTerm(String(found.clue), card.term, 0) ? String(found.clue).trim() : '';
+        return { card: card, text: crosswordText(card.term),
+                 words: String(card.term).trim().split(/\s+/).length,
+                 clue: clue || card.definition || card.translation || 'No clue for this one' };
+      });
+      const grid = buildCrossword(entries);
+      if (!grid) throw new Error('These words share too few letters to make a grid. Try another selection.');
+      quiz.items = [grid];
       quiz = Object.assign(newQuiz(mode, quiz.items), { startedAt: quiz.startedAt });
     } catch (err) {
       quiz = null; toast(err.message, 'err'); return render('practice');
@@ -2049,6 +2205,7 @@ function drawQuizItem(host) {
   else if (item.type === 'type') body = typeHTML(item);
   else if (item.type === 'write') body = writeHTML(item);
   else if (item.type === 'passage') body = passageHTML(item);
+  else if (item.type === 'crossword') body = crosswordHTML(item);
 
   host.innerHTML = '<div class="quiz-wrap">' + head + body + '</div>';
 
@@ -2276,6 +2433,15 @@ function bindQuizEvents(host, item) {
     if (opt && quiz.state !== 'answered') return answerMC(item, opt.dataset.opt);
     const mi = e.target.closest('[data-side]');
     if (mi) return matchClick(item, mi.dataset.side, mi.dataset.id);
+    const hint = e.target.closest('[data-hint]');
+    if (hint) {
+      const k = +hint.dataset.hint;
+      quiz.cw.hints[k] = 1;
+      hint.closest('.cw-clue').classList.add('shown');
+      return;
+    }
+    const clue = e.target.closest('[data-clue]');
+    if (clue) return crosswordSelect(item, +clue.dataset.clue);
     const g = e.target.closest('[data-gap]');
     if (g) return passageGapClick(item, parseInt(g.dataset.gap, 10));
     const bw = e.target.closest('[data-word]');
@@ -2290,6 +2456,7 @@ function bindQuizEvents(host, item) {
   }
   const wr = $('#qWrite');
   if (wr && quiz.state === 'idle') wr.focus();
+  if (item.type === 'crossword' && !quiz.cw.checked) bindCrossword(host, item);
 }
 
 /* Marking the question you just answered, without rebuilding it. Redrawing
@@ -2326,9 +2493,10 @@ function showAnswerInPlace(item) {
 function quizProgress() {
   const item = quiz.items[quiz.i];
   const kind = item && item.type;
-  if (kind === 'matching' || kind === 'passage')
+  if (kind === 'matching' || kind === 'passage' || kind === 'crossword')
     return { done: quiz.pairsDone, total: quiz.pairsTotal,
-             text: quiz.pairsDone + ' / ' + quiz.pairsTotal + (kind === 'matching' ? ' matched' : ' filled') };
+             text: quiz.pairsDone + ' / ' + quiz.pairsTotal +
+               (kind === 'matching' ? ' matched' : kind === 'crossword' ? ' solved' : ' filled') };
   return { done: quiz.i + (quiz.state === 'answered' ? 1 : 0), total: quiz.items.length,
            text: (quiz.i + 1) + ' / ' + quiz.items.length };
 }
@@ -2357,6 +2525,7 @@ function answerMC(item, given) {
 function checkAnswer(item) {
   if (item.type === 'write') return gradeWriting(item);
   if (item.type === 'passage') return checkPassage(item);
+  if (item.type === 'crossword') return checkCrossword(item);
   const input = $('#qInput');
   const val = input ? input.value : '';
   let g = gradeTyped(val, item.answer);
@@ -2549,12 +2718,172 @@ function checkPassage(item) {
   refreshChrome();
 }
 
+/* The grid and its clues. Drawn once: every keystroke after that touches the
+   square it belongs to and nothing else, so the caret stays where the learner
+   put it. */
+function crosswordHTML(item) {
+  if (!quiz.cw) quiz.cw = { input: {}, sel: 0, hints: {}, checked: false };
+  const cw = quiz.cw;
+  const cell = (c, i) => {
+    if (!c) return '<div class="cw-block"></div>';
+    return '<div class="cw-cell" data-cell="' + i + '">' +
+      (c.num ? '<i>' + c.num + '</i>' : '') +
+      '<input class="cw-in" data-i="' + i + '" maxlength="1" autocomplete="off" ' +
+        'autocapitalize="characters" spellcheck="false" value="' + esc(cw.input[i] || '') + '"></div>';
+  };
+  const clueList = (dir) =>
+    '<div class="cw-side"><h4>' + (dir === 'across' ? 'Across' : 'Down') + '</h4><ul>' +
+      item.words.map((w, k) => w.dir !== dir ? '' :
+        '<li class="cw-clue' + (cw.sel === k ? ' sel' : '') + (cw.hints[k] ? ' shown' : '') +
+          '" data-clue="' + k + '">' +
+          '<b>' + w.num + '</b>' +
+          '<span><span class="cw-text">' + esc(w.clue) +
+            (w.words > 1 ? ' <span class="faint">(' + w.words + ' words)</span>' : '') + '</span>' +
+            '<span class="cw-tr">' + esc(w.translation) + '</span></span>' +
+          (w.translation ? '<button class="cw-hint" data-hint="' + k + '" title="Show the translation">' +
+            ICONS.bulb + '</button>' : '') +
+        '</li>').join('') +
+    '</ul></div>';
+
+  return '<div class="card">' +
+    '<div class="row between" style="margin-bottom:14px">' +
+      '<p class="muted">Click a clue, then type the word into the grid</p>' +
+      '<span class="faint" id="cwLeft">' + (item.left
+        ? item.left + ' word' + (item.left === 1 ? '' : 's') + ' would not fit the grid' : '') + '</span>' +
+    '</div>' +
+    '<div class="cw-wrap">' +
+      '<div class="cw-grid" id="cwGrid" style="--cw-cols:' + item.cols + '">' +
+        item.cells.map(cell).join('') + '</div>' +
+      '<div class="cw-clues">' + clueList('across') + clueList('down') + '</div>' +
+    '</div>' +
+    '<div class="row end" style="margin-top:18px" id="cwFoot">' +
+      '<button class="primary-btn" data-act="check">Check</button>' +
+    '</div></div>';
+}
+
+/* Which word a square belongs to, preferring the one already being written. */
+function crosswordWordAt(item, cellIndex, prefer) {
+  const all = item.words.filter(w => w.cells.indexOf(cellIndex) !== -1);
+  if (!all.length) return -1;
+  const want = all.filter(w => w.dir === prefer);
+  return item.words.indexOf(want.length ? want[0] : all[0]);
+}
+
+function crosswordSelect(item, k, focusCell) {
+  const cw = quiz.cw;
+  if (k < 0 || k === undefined) return;
+  cw.sel = k;
+  const word = item.words[k];
+  const host = $('#view-practice');
+  if (!host) return;
+  host.querySelectorAll('.cw-cell').forEach(el => el.classList.remove('sel'));
+  word.cells.forEach(i => {
+    const el = host.querySelector('.cw-cell[data-cell="' + i + '"]');
+    if (el) el.classList.add('sel');
+  });
+  host.querySelectorAll('.cw-clue').forEach(el =>
+    el.classList.toggle('sel', +el.dataset.clue === k));
+  const target = focusCell != null ? focusCell
+    : word.cells.filter(i => !quiz.cw.input[i])[0];
+  const input = host.querySelector('.cw-in[data-i="' + (target == null ? word.cells[0] : target) + '"]');
+  if (input) { input.focus(); input.select(); }
+}
+
+/* Typing moves along the word being written, and stops at its end rather than
+   wandering into whatever square comes next in the grid. */
+function crosswordStep(item, from, delta) {
+  const word = item.words[quiz.cw.sel];
+  if (!word) return;
+  const at = word.cells.indexOf(from);
+  const next = word.cells[at + delta];
+  if (next == null) return;
+  const input = $('.cw-in[data-i="' + next + '"]');
+  if (input) { input.focus(); input.select(); }
+}
+
+function bindCrossword(host, item) {
+  const grid = host.querySelector('#cwGrid');
+  if (!grid) return;
+  grid.oninput = (e) => {
+    const el = e.target.closest('.cw-in');
+    if (!el || quiz.cw.checked) return;
+    const ch = (el.value.slice(-1) || '').toUpperCase().replace(/[^A-ZÇĞİÖŞÜ]/g, '');
+    el.value = ch;
+    const i = +el.dataset.i;
+    if (ch) { quiz.cw.input[i] = ch; crosswordStep(item, i, 1); }
+    else delete quiz.cw.input[i];
+  };
+  grid.onkeydown = (e) => {
+    const el = e.target.closest('.cw-in');
+    if (!el || quiz.cw.checked) return;
+    const i = +el.dataset.i;
+    if (e.key === 'Backspace' && !el.value) { e.preventDefault(); crosswordStep(item, i, -1); return; }
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); crosswordStep(item, i, 1); return; }
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); crosswordStep(item, i, -1); return; }
+    if (e.key === 'Enter') { e.preventDefault(); return checkCrossword(item); }
+  };
+  /* Clicking a square that two words share turns the corner. */
+  grid.onclick = (e) => {
+    const el = e.target.closest('.cw-in');
+    if (!el || quiz.cw.checked) return;
+    const i = +el.dataset.i;
+    const cur = item.words[quiz.cw.sel];
+    const mine = cur && cur.cells.indexOf(i) !== -1;
+    const k = crosswordWordAt(item, i, mine ? (cur.dir === 'across' ? 'down' : 'across') : (cur ? cur.dir : 'across'));
+    crosswordSelect(item, k, i);
+  };
+  crosswordSelect(item, quiz.cw.sel);
+}
+
+/* Every word is marked at once, each against its own card. A square shared by
+   two words is judged by its letter, so it can be right for one and wrong for
+   the other only if the letter itself is wrong. */
+function checkCrossword(item) {
+  const cw = quiz.cw;
+  if (cw.checked) return;
+  if (!Object.keys(cw.input).length) return toast('Fill in a word first', 'err');
+  cw.checked = true;
+  quiz.state = 'answered';
+  item.words.forEach(w => {
+    const given = w.cells.map(i => cw.input[i] || '·').join('');
+    const ok = given === w.text;
+    w.given = given;
+    if (ok) quiz.correct++;
+    quiz.pairsDone++;
+    Store.quizResult(w.card.id, ok);
+    quiz.results.push({ card: w.card, ok: ok, given: given.replace(/·/g, '_').toLowerCase(),
+                        answer: w.card.term });
+  });
+
+  const host = $('#view-practice');
+  item.cells.forEach((c, i) => {
+    if (!c) return;
+    const input = host.querySelector('.cw-in[data-i="' + i + '"]');
+    if (!input) return;
+    const right = (cw.input[i] || '') === c.letter;
+    input.value = c.letter;
+    input.disabled = true;
+    input.parentElement.classList.add(right ? 'correct' : 'wrong');
+  });
+  host.querySelectorAll('.cw-clue').forEach(el => {
+    const w = item.words[+el.dataset.clue];
+    el.classList.add(w.given === w.text ? 'got' : 'missed');
+  });
+  const foot = host.querySelector('#cwFoot');
+  if (foot) foot.innerHTML = '<span class="faint" style="margin-right:auto">' +
+    quiz.correct + ' of ' + item.words.length + ' right</span>' +
+    '<button class="primary-btn" data-act="next">See results</button>';
+  refreshQuizHead();
+  refreshChrome();
+}
+
 function nextQuizItem() {
   quiz.i++;
   quiz.state = 'idle'; quiz.given = ''; quiz.lastResult = null;
   quiz.hintShown = false; quiz.hintLetters = 0;
   quiz.match = null;                 /* the next matching board starts fresh */
   quiz.fill = null;                  /* and so does the next text */
+  quiz.cw = null;
   if (quiz.i >= quiz.items.length) return finishQuiz(true);
   render('practice');
 }
@@ -2592,7 +2921,11 @@ function packReview() {
   const out = [];
   quiz.items.forEach(it => {
     const term = it.card ? it.card.term : '';
-    if (it.type === 'passage') {
+    if (it.type === 'crossword') {
+      it.words.forEach(w => out.push({ kind: 'q', term: w.card.term,
+        q: w.num + ' ' + w.dir + ' — ' + w.clue, answer: w.card.term,
+        given: w.given == null ? null : w.given.replace(/·/g, '_').toLowerCase() }));
+    } else if (it.type === 'passage') {
       out.push({ kind: 'passage', parts: it.parts, answers: it.answers, given: it.given || [] });
     } else if (it.type === 'matching') {
       it.cards.forEach(c => out.push({ kind: 'q', term: c.term, q: c.term,

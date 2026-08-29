@@ -572,6 +572,54 @@ input[type=range]::-moz-range-thumb{
 .review-row:not(.shown) .rg-blank{ display:inline-block; }
 .rg-blank{ display:none; min-width:112px; border-bottom:1px dashed var(--text-faint); margin:0 4px; }
 
+/* Crossword. The grid is square whatever the theme does to the surfaces, and
+   scrolls sideways rather than shrinking its squares past reading size. */
+.cw-wrap{ display:flex; flex-wrap:wrap; gap:26px; align-items:flex-start; }
+.cw-grid{
+  display:grid; grid-template-columns:repeat(var(--cw-cols), 28px);
+  gap:2px; flex:none; overflow:auto; max-width:100%; padding:1px;
+}
+.cw-block{ width:28px; height:28px; }
+.cw-cell{ position:relative; width:28px; height:28px; border-radius:5px;
+  background:var(--surface-2); border:1px solid var(--border); }
+.cw-cell.sel{ background:var(--accent-soft); border-color:var(--accent); }
+.cw-cell.correct{ background:rgba(34,197,94,.16); border-color:var(--good); }
+.cw-cell.wrong{ background:rgba(239,68,68,.14); border-color:var(--bad); }
+.cw-cell i{ position:absolute; top:0; left:2px; font-size:.52rem; font-style:normal;
+  color:var(--text-faint); line-height:1; pointer-events:none; }
+.cw-in{
+  width:100%; height:100%; border:0; background:transparent; text-align:center;
+  font-size:.85rem; font-weight:650; text-transform:uppercase; padding:2px 0 0;
+  border-radius:5px; outline:none; caret-color:var(--accent);
+}
+.cw-in:focus{ box-shadow:inset 0 0 0 2px var(--accent); }
+.cw-cell.correct .cw-in{ color:var(--good); }
+.cw-cell.wrong .cw-in{ color:var(--bad); }
+.cw-in:disabled{ opacity:1; }
+
+.cw-clues{ display:flex; gap:26px; flex-wrap:wrap; flex:1 1 320px; min-width:260px; }
+.cw-side{ flex:1 1 240px; min-width:220px; }
+.cw-side h4{ font-size:.66rem; text-transform:uppercase; letter-spacing:.09em;
+  color:var(--text-faint); margin-bottom:7px; }
+.cw-side ul{ list-style:none; margin:0; padding:0; }
+.cw-clue{
+  display:flex; align-items:flex-start; gap:9px; padding:6px 8px; border-radius:9px;
+  font-size:.87rem; line-height:1.5; cursor:pointer;
+}
+.cw-clue:hover{ background:var(--surface-2); }
+.cw-clue.sel{ background:var(--accent-soft); }
+.cw-clue b{ color:var(--text-faint); font-size:.78rem; min-width:16px; padding-top:2px; }
+.cw-clue.got b{ color:var(--good); }
+.cw-clue.missed b{ color:var(--bad); }
+/* The translation waits behind the bulb, and takes no room until it is asked for. */
+.cw-tr{ display:none; margin-top:3px; color:var(--accent); font-size:.84rem; }
+.cw-clue.shown .cw-tr{ display:block; }
+.cw-hint{ margin-left:auto; padding:2px; background:transparent; border:0; cursor:pointer;
+  color:var(--text-faint); border-radius:7px; }
+.cw-hint:hover{ color:var(--accent); }
+.cw-hint svg{ width:15px; height:15px; }
+.cw-clue.shown .cw-hint{ opacity:.35; }
+
 /* Recent rounds, one line each. */
 .history-row{ gap:12px; padding:10px 0; border-bottom:1px solid var(--border-soft); }
 .history-row:last-child{ border-bottom:0; padding-bottom:2px; }

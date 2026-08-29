@@ -420,6 +420,28 @@ const AI = {
     return x.every((w, i) => w === y[i] || inflects(w, y[i]) || inflects(y[i], w));
   },
 
+  /* One clue per word for a crossword. The grid is the app's business — a
+     model cannot be trusted to lay one out — but the clues are the part worth
+     writing, and a definition off the card is not a clue. */
+  async crosswordClues(cards) {
+    const list = cards.map(c =>
+      '- ' + c.term + ' (' + (c.pos || '?') + '): ' + (c.definition || c.translation)).join('\n');
+    const res = await this.json([
+      { role: 'system', content: 'You write crossword clues for English learners. Answer only with JSON.' },
+      { role: 'user', content:
+        this.levelTalk() + '\n\nWrite one crossword clue for each word:\n' + list + '\n\n' +
+        /* A clue containing its own answer is the one way a crossword clue can
+           be worthless, and the app cannot rewrite it — only refuse it. */
+        'A clue names the word without ever using it: not the word, not a longer or shorter form ' +
+        'of it, and not another word from the list above.\n' +
+        'At most 12 words. A short definition, a description of what it is for, or a sentence ' +
+        'with the word left out — vary them.\n' +
+        'Say nothing about spelling or letter count; the grid takes care of that.\n' +
+        'Return JSON: {"clues":[{"term":"the word, exactly as written above","clue":"the clue"}]}' }
+    ], { temperature: 0.7, maxTokens: Math.min(4000, Math.max(600, cards.length * 140)) });
+    return (res.clues || []).filter(c => c && c.term && c.clue);
+  },
+
   /* Mark a sentence the learner wrote using the target word. */
   async gradeSentence(card, sentence) {
     const lang = this.cfg.nativeLanguage || 'Turkish';
