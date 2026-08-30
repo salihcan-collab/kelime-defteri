@@ -10,6 +10,8 @@ const SCHEMA_VERSION = 2;
 /* Rounds kept in the practice history. They carry their own questions so a
    repeat costs nothing, which is also why the list has an end. */
 const PRACTICE_MAX = 12;
+/* Words of the day kept: a hundred is a season's worth to look back over. */
+const WOTD_HISTORY = 100;
 
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 const todayKey = (d) => {
@@ -54,6 +56,16 @@ const Store = {
           level: 'B1-B2',             // CEFR band the AI writes and marks at
           roomFor: ''                 // a model that needs a wide output budget
 
+        },
+        /* The word of the day can be sent somewhere else — a free key for the
+           one small daily request, while the drills use whatever they use. */
+        wotdAi: {
+          separate: false,
+          provider: 'gemini',
+          baseUrl: '',
+          model: 'gemini-3.6-flash',
+          apiKey: '',
+          roomFor: ''
         }
       },
       decks: [],
@@ -63,7 +75,7 @@ const Store = {
       aiUsage: { day: '', count: 0 },   // requests this app sent today, for the free allowance
       practice: [],                     // finished rounds, newest first — see addRound
       wotd: null,                       // { day, term, pos, definition, example, translation }
-      wotdSeen: [],                     // the words already offered, so they do not come round again
+      wotdLog: [],                      // the last hundred, newest first — history, and the avoid list
       lastBackup: null
     };
   },
@@ -95,6 +107,7 @@ const Store = {
     const s = Object.assign(base, data);
     s.settings = Object.assign(base.settings, data.settings || {});
     s.settings.ai = Object.assign(base.settings.ai, (data.settings || {}).ai || {});
+    s.settings.wotdAi = Object.assign(base.settings.wotdAi, (data.settings || {}).wotdAi || {});
     s.decks = data.decks || [];
     s.cards = (data.cards || []).map(c => {
       if (!c.srs) c.srs = SRS.newState();
@@ -110,7 +123,10 @@ const Store = {
     s.aiUsage = data.aiUsage || { day: '', count: 0 };
     s.practice = (data.practice || []).slice(0, PRACTICE_MAX);
     s.wotd = data.wotd || null;
-    s.wotdSeen = (data.wotdSeen || []).slice(-90);
+    /* Older collections kept only the words' names; they become history with
+       nothing but a name, which is better than losing them. */
+    s.wotdLog = (data.wotdLog || (data.wotdSeen || []).slice().reverse().map(t => ({ term: t })))
+      .slice(0, WOTD_HISTORY);
     s.log = data.log || [];
     s.daily = data.daily || {};
     /* Starter content that has been corrected or added since this collection
@@ -768,9 +784,13 @@ const Store = {
 
   /* Today's word, and a memory of the ones before it so the same word is not
      offered twice. */
-  setWordOfDay(word) {
-    this.state.wotd = Object.assign({ day: todayKey() }, word);
-    this.state.wotdSeen = this.state.wotdSeen.concat([word.term]).slice(-90);
+  setWordOfDay(word, replacing) {
+    const day = todayKey();
+    /* Asking for another word replaces today's entry in the history rather than
+       adding a second one for the same day. */
+    if (replacing) this.state.wotdLog = this.state.wotdLog.filter(w => w.day !== day);
+    this.state.wotd = Object.assign({ day: day, replaced: !!replacing }, word);
+    this.state.wotdLog = [this.state.wotd].concat(this.state.wotdLog).slice(0, WOTD_HISTORY);
     this.save();
     return this.state.wotd;
   },

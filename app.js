@@ -578,6 +578,7 @@ function renderDashboard(host) {
     if (g) return go(g.dataset.go);
     if (e.target.closest('[data-act="quick-add"]')) return cardEditor(null);
     if (e.target.closest('[data-act="wotd-new"]')) return fetchWordOfDay(true);
+    if (e.target.closest('[data-act="wotd-history"]')) return wordOfDayHistory();
     if (e.target.closest('[data-act="wotd-add"]')) {
       const w = Store.state.wotd;
       /* An id would make this an edit of a card that does not exist; without
@@ -596,8 +597,14 @@ function renderDashboard(host) {
 /* ---------- word of the day ------------------------------------------------ */
 let wotdState = { busy: false, failed: '' };
 
+/* The word of the day may have an assistant of its own — a free key for one
+   small request a day — and falls back to the one the drills use. */
+function wotdAI() {
+  const alt = Store.state.settings.wotdAi;
+  return alt && alt.separate ? AI.as(Object.assign({ enabled: true }, alt)) : AI;
+}
 function wordOfDayWanted() {
-  return AI.available() && Store.state.settings.wordOfDay !== false;
+  return wotdAI().available() && Store.state.settings.wordOfDay !== false;
 }
 function wordOfDayToday() {
   const w = Store.state.wotd;
@@ -620,9 +627,16 @@ function wordOfDayHTML() {
       '<p class="muted">' + esc(wotdState.failed || 'No word yet today.') + '</p></div>';
 
   const known = Store.cardByTerm ? Store.cardByTerm(w.term) : null;
+  /* One word a day means one replacement too: "another word" is a change of
+     mind, not a way to spend the morning shopping for a nicer word. */
   return head('<div class="row" style="gap:8px">' +
       (known ? '' : '<button class="soft-btn tiny" data-act="wotd-add">' + ICONS.plus + 'Add to my words</button>') +
-      '<button class="soft-btn tiny" data-act="wotd-new">Another word</button></div>') +
+      (w.replaced
+        ? '<span class="faint">another one tomorrow</span>'
+        : '<button class="soft-btn tiny" data-act="wotd-new">Another word</button>') +
+      (Store.state.wotdLog.length > 1
+        ? '<button class="soft-btn tiny" data-act="wotd-history">' + ICONS.review + 'History</button>' : '') +
+      '</div>') +
     '<div class="row" style="gap:10px;align-items:baseline">' +
       '<b style="font-size:1.35rem;letter-spacing:-.02em">' + esc(w.term) + '</b>' +
       (w.pos ? '<span class="chip pos">' + esc(w.pos) + '</span>' : '') +
@@ -635,13 +649,59 @@ function wordOfDayHTML() {
   '</div>';
 }
 
+/* The last hundred, newest first. A word that never made it onto a card can
+   still be taken from here. */
+function wordOfDayHistory() {
+  const days = Store.state.wotdLog;
+  const when = (d) => {
+    if (!d) return '';
+    const day = new Date(d + 'T00:00:00');
+    return day.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+  };
+  openModal({
+    wide: true, noFocus: true,
+    title: 'Words of the day',
+    body: '<p class="faint" style="margin-bottom:12px">' + days.length + ' word' +
+        (days.length === 1 ? '' : 's') + ', newest first. The last hundred are kept.</p>' +
+      '<div class="review-list">' + days.map((w, i) =>
+        '<div class="review-row">' +
+          '<div class="row between" style="gap:12px;align-items:baseline">' +
+            '<div style="min-width:0">' +
+              '<b>' + esc(w.term) + '</b>' +
+              (w.pos ? ' <span class="chip pos">' + esc(w.pos) + '</span>' : '') +
+              (w.translation ? ' <span class="faint">· ' + esc(w.translation) + '</span>' : '') +
+            '</div>' +
+            '<div class="row" style="gap:10px;flex:none">' +
+              '<span class="faint">' + esc(when(w.day)) + '</span>' +
+              (Store.cardByTerm(w.term) ? '<span class="faint">saved</span>'
+                : '<button class="soft-btn tiny" data-keep="' + i + '">' + ICONS.plus + 'Add</button>') +
+            '</div>' +
+          '</div>' +
+          (w.definition ? '<div class="muted" style="margin-top:4px">' + esc(w.definition) + '</div>' : '') +
+        '</div>').join('') + '</div>',
+    foot: '<button class="primary-btn" data-act="close">Done</button>',
+    onMount: (b, f) => {
+      f.querySelector('[data-act="close"]').onclick = closeModal;
+      b.onclick = (e) => {
+        const keep = e.target.closest('[data-keep]');
+        if (!keep) return;
+        const w = days[+keep.dataset.keep];
+        closeModal();
+        cardEditor({ term: w.term, pos: w.pos || '', definition: w.definition || '',
+                     example: w.example || '', translation: w.translation || '', notes: '',
+                     collocations: [], related: [] });
+      };
+    }
+  });
+}
+
 async function fetchWordOfDay(asked) {
   if (wotdState.busy) return;
   wotdState.busy = true; wotdState.failed = '';
   if (currentView === 'dashboard') render('dashboard');
   try {
-    const w = await AI.wordOfTheDay(Store.state.wotdSeen);
-    Store.setWordOfDay(w);
+    const w = await wotdAI().wordOfTheDay(Store.state.wotdLog.map(x => x.term));
+    Store.setWordOfDay(w, asked);
   } catch (err) {
     /* A failed fetch is not retried by itself: the next dashboard would spend
        another request on the same problem. */
@@ -3606,6 +3666,7 @@ const AI_PRESETS = {
 function renderSettings(host) {
   const s = Store.state.settings;
   const ai = s.ai;
+  const wa = s.wotdAi;
 
   host.innerHTML =
     '<div class="section-title" style="margin-top:0"><h2>Appearance</h2><span class="hint">Applies instantly</span></div>' +
@@ -3701,10 +3762,33 @@ function renderSettings(host) {
         '<div class="field"><label>Your native language</label>' +
           '<input type="text" id="aiLang" value="' + esc(ai.nativeLanguage) + '">' +
           '<span class="help">Used for translations and short explanations.</span></div>' +
-        '<label class="switch" style="padding:2px 0 12px"><input type="checkbox" id="setWotd"' +
+        '<label class="switch" style="padding:2px 0 10px"><input type="checkbox" id="setWotd"' +
           (Store.state.settings.wordOfDay !== false ? ' checked' : '') + '>' +
           '<span class="track"></span><span class="txt">A word of the day on the dashboard' +
           '<small>One request a day, the first time you open the app.</small></span></label>' +
+        /* One small request a day is exactly what a free key is for, so it can
+           be sent somewhere other than the drills. */
+        '<label class="switch" style="padding:0 0 10px"><input type="checkbox" id="wotdSep"' +
+          (wa.separate ? ' checked' : '') + '>' +
+          '<span class="track"></span><span class="txt">Send it to a different provider' +
+          '<small>A free key for the daily word, while the drills use the one above.</small></span></label>' +
+        '<div id="wotdBox" class="' + (wa.separate ? '' : 'hidden') + '" style="margin:0 0 14px;padding:12px 14px;' +
+          'border:1px solid var(--border-soft);border-radius:12px;background:var(--surface-2)">' +
+          '<div class="inline-fields">' +
+            '<div class="field"><label>API type</label><select id="wotdProvider">' +
+              [['openai', 'OpenAI'], ['compatible', 'OpenAI-compatible'], ['gemini', 'Google Gemini']].map(o =>
+                '<option value="' + o[0] + '"' + (wa.provider === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') +
+            '</select></div>' +
+            '<div class="field"><label>Model</label>' +
+              '<input type="text" id="wotdModel" value="' + esc(wa.model) + '" placeholder="gemini-3.6-flash"></div>' +
+          '</div>' +
+          '<div class="field"><label>API base URL</label>' +
+            '<input type="text" id="wotdBase" value="' + esc(wa.baseUrl) + '" placeholder="ignored for Gemini"></div>' +
+          '<div class="field" style="margin-bottom:8px"><label>API key</label>' +
+            '<input type="password" id="wotdKey" value="' + esc(wa.apiKey) + '" placeholder="AIza…" autocomplete="off"></div>' +
+          '<span class="help">Google Gemini has a free tier, and one word a day fits inside it. ' +
+            'Get a key at <b>aistudio.google.com/apikey</b>.</span>' +
+        '</div>' +
         '<div class="row"><button class="ghost-btn" id="aiTest">Test the connection</button>' +
           '<span id="aiTestOut" class="faint"></span></div>' +
         '<p class="help" style="margin-top:12px">' +
@@ -3844,6 +3928,15 @@ function bindSettings(host) {
   const chk = (id, key) => { const el = $('#' + id); if (el) el.onchange = () => { s[key] = el.checked; Store.save(); }; };
   chk('setEx', 'showExampleOnFront'); chk('setSpeak', 'autoSpeak'); chk('setQuizSrs', 'quizAffectsSrs');
   chk('setWotd', 'wordOfDay');
+  const sep = $('#wotdSep');
+  if (sep) sep.onchange = () => {
+    s.wotdAi.separate = sep.checked; Store.save();
+    $('#wotdBox').classList.toggle('hidden', !sep.checked);
+  };
+  const bindWotd = (id, key) => { const el = $('#' + id);
+    if (el) el.onchange = () => { s.wotdAi[key] = el.value.trim(); Store.save(); }; };
+  bindWotd('wotdProvider', 'provider'); bindWotd('wotdModel', 'model');
+  bindWotd('wotdBase', 'baseUrl'); bindWotd('wotdKey', 'apiKey');
 
   const on = $('#aiOn');
   if (on) on.onchange = () => { s.ai.enabled = on.checked; Store.save(); $('#aiBox').classList.toggle('hidden', !on.checked); };

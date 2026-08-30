@@ -17,6 +17,16 @@
 const AI = {
   get cfg() { return Store.state.settings.ai; },
 
+  /* The same assistant pointed at a different provider: one small daily
+     request can go to a free key while the drills use whichever key the
+     learner pays for. Everything else — the prompts, the budgets, the
+     counting — is shared. */
+  as(cfg) {
+    const alt = Object.create(this);
+    Object.defineProperty(alt, 'cfg', { get: function () { return cfg; } });
+    return alt;
+  },
+
   available() {
     const c = this.cfg;
     if (!c.enabled) return false;
@@ -459,7 +469,12 @@ const AI = {
         '"definition":"a clear English definition, at most 25 words",' +
         '"example":"one natural sentence that CONTAINS the word",' +
         '"translation":"what it means in ' + lang + ', 2-3 alternatives where the word has them",' +
-        '"note":"one short line in ' + lang + ' on when or how it is used"}' }
+        /* Where a word belongs is half of knowing it: a learner who uses a
+           courtroom word at a bus stop has learned the meaning and not the
+           word. */
+        '"note":"one short line in ' + lang + ' on where the word belongs — formal or everyday, ' +
+        'spoken or written, and the setting it is at home in (academic, business, medical, ' +
+        'journalism, slang…), with a caution if it is easily misused"}' }
     ], { temperature: 0.9, maxTokens: 1200 });
     if (!res.term) throw new Error('No word came back. Try again.');
     return { term: String(res.term).trim(), pos: res.pos || '', definition: res.definition || '',
