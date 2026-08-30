@@ -609,7 +609,8 @@ function wordOfDayHTML() {
   const w = wordOfDayToday();
   const head = (right) =>
     '<div class="card wotd" style="margin-top:16px">' +
-      '<div class="section-title" style="margin:0 0 10px"><h2>' + ICONS.spark + 'Word of the day</h2>' +
+      '<div class="section-title" style="margin:0 0 10px">' +
+        '<h2>' + ICONS.spark + '<span class="wotd-title">Word of the day</span></h2>' +
         (right || '') + '</div>';
 
   if (wotdState.busy)
@@ -1772,8 +1773,8 @@ function modeCards(wanted) {
   return MODES.filter(m => !(m.needsTTS && !TTS.ok)).filter(wanted).map(m =>
     '<button class="mode-card' + (quizSetup.mode === m.id ? ' sel' : '') + '" data-mode="' + m.id + '"' +
       (m.ai && !aiOn ? ' disabled title="Connect an AI assistant in Settings"' : '') + '>' +
-      '<span class="mi">' + m.icon + '</span>' +
-      (m.ai ? '<span class="ai-tag">AI</span>' : '') +
+      '<span class="mi-row"><span class="mi">' + m.icon + '</span>' +
+        (m.ai ? '<span class="ai-tag">AI</span>' : '') + '</span>' +
       '<strong>' + esc(m.name) + '</strong><span>' + esc(m.desc) + '</span>' +
     '</button>').join('');
 }
@@ -3172,7 +3173,7 @@ function reviewRound(entry) {
       if (r.kind === 'grid') {
         /* The puzzle again, at reading size: what was typed, and under the
            button, the letters that should have been there. */
-        return '<div class="review-row shown"><div class="cw-grid mini" style="--cw-cols:' + r.cols + '">' +
+        return '<div class="review-row shown cw-row"><div class="cw-grid mini" style="--cw-cols:' + r.cols + '">' +
           r.cells.map((c, i) => {
             if (!c) return '<div class="cw-block"></div>';
             const given = (r.input || {})[i] || '';

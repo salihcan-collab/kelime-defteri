@@ -653,12 +653,25 @@ input[type=range]::-moz-range-thumb{
 .review-row.shown .cw-cell.correct .cwm-answer{ color:var(--good); }
 .review-row.shown .cw-cell.wrong .cwm-answer{ color:var(--bad); }
 
+/* A puzzle read back sits in the middle of the page, with its button under it —
+   it is a picture at that size, not a paragraph. */
+.cw-row .cw-grid{ width:max-content; max-width:100%; margin-inline:auto; }
+.cw-row .review-reveal{ justify-content:center; }
+
 /* Too narrow for both, whatever was chosen. */
 @media (max-width:900px){ .cw-wrap{ flex-direction:column; flex-wrap:wrap; } }
 
-/* Word of the day: a card that says what it is with its own mark. */
-.wotd .section-title h2{ display:flex; align-items:center; gap:8px; }
-.wotd .section-title h2 svg{ width:17px; height:17px; color:var(--accent); }
+/* Word of the day: the one heading in the app that is allowed to show off. */
+.wotd .section-title h2{ display:flex; align-items:center; gap:9px; font-size:1.22rem; }
+.wotd .section-title h2 svg{ width:19px; height:19px; color:#f59e0b; }
+.wotd-title{
+  background:linear-gradient(90deg,#f43f5e,#f59e0b,#22c55e,#06b6d4,#6366f1,#d946ef,#f43f5e);
+  background-size:220% 100%;
+  -webkit-background-clip:text; background-clip:text; color:transparent;
+  animation:wotdShift 14s linear infinite;
+}
+@keyframes wotdShift{ to{ background-position:-220% 0; } }
+@media (prefers-reduced-motion:reduce){ .wotd-title{ animation:none; } }
 
 /* Recent rounds, one line each. */
 .history-row{ gap:12px; padding:10px 0; border-bottom:1px solid var(--border-soft); }
@@ -675,7 +688,9 @@ input[type=range]::-moz-range-thumb{
 .mode-card .mi{ width:34px; height:34px; border-radius:10px; background:var(--surface-2); display:grid; place-items:center; color:var(--accent); }
 .mode-card strong{ font-size:.9rem; }
 .mode-card span{ font-size:.76rem; color:var(--text-faint); line-height:1.45; }
-.mode-card .ai-tag{ align-self:flex-start; font-size:.64rem; font-weight:700; letter-spacing:.06em;
+/* The mark belongs beside the drill's own icon, not on a line of its own. */
+.mode-card .mi-row{ display:flex; align-items:center; gap:9px; }
+.mode-card .ai-tag{ font-size:.64rem; font-weight:700; letter-spacing:.06em;
   text-transform:uppercase; color:var(--accent); background:var(--accent-soft); padding:2px 7px; border-radius:99px; }
 
 /* ---------- Table / browse ------------------------------------------------ */
@@ -724,7 +739,10 @@ input[type=range]::-moz-range-thumb{
 .empty h3{ font-size:1rem; color:var(--text-dim); }
 
 /* ---------- Heatmap / charts ---------------------------------------------- */
-.heatmap-wrap{ overflow-x:auto; padding-bottom:4px; }
+/* The ring a hovered day wears sits outside the square, so the box it scrolls
+   in has to leave room for it — without the padding it is cut off against
+   every edge. */
+.heatmap-wrap{ overflow-x:auto; padding:3px 3px 6px; }
 .hm-months{ display:flex; gap:3px; height:16px; margin-bottom:5px; }
 .hm-months span{
   width:var(--hm-cell,12px); flex:none; position:relative; font-size:.68rem; color:var(--text-faint);
