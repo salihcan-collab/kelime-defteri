@@ -597,6 +597,37 @@ function renderDashboard(host) {
 /* ---------- word of the day ------------------------------------------------ */
 let wotdState = { busy: false, failed: '' };
 
+/* The two providers worth pointing one small daily request at: both are free.
+   Ollama is an OpenAI-compatible server on the learner's own machine, so it
+   carries the address that finds it. */
+const WOTD_PROVIDERS = [
+  { id: 'gemini', label: 'Google Gemini (free tier)', provider: 'gemini',
+    baseUrl: '', model: 'gemini-3.6-flash' },
+  { id: 'ollama', label: 'Ollama (on your PC)', provider: 'compatible',
+    baseUrl: 'http://localhost:11434/v1', model: 'llama3.1' }
+];
+function wotdKind(cfg) { return cfg.provider === 'gemini' ? 'gemini' : 'ollama'; }
+function wotdProviderHelp(cfg) {
+  return wotdKind(cfg) === 'gemini'
+    ? 'Google Gemini has a free tier, and one word a day fits well inside it. ' +
+      'Get a key at <b>aistudio.google.com/apikey</b>.'
+    : 'Ollama runs on your own computer, so it needs no key and costs nothing — ' +
+      'start it with <b>ollama serve</b> and pull the model first.';
+}
+
+/* Who is answering, in the words the learner chose it by. */
+function providerLabel(cfg) {
+  if (cfg.provider === 'gemini') return 'Google Gemini';
+  if (cfg.provider === 'openai') return 'OpenAI';
+  const known = Object.keys(AI_PRESETS).filter(k =>
+    AI_PRESETS[k].baseUrl && cfg.baseUrl && cfg.baseUrl.indexOf(AI_PRESETS[k].baseUrl) === 0)[0];
+  /* "by Ollama", not "by Ollama (on your PC)" — the bracket is for choosing it,
+     not for signing its work. */
+  if (known) return AI_PRESETS[known].label.replace(/\s*\(.*\)$/, '');
+  try { return new URL(cfg.baseUrl).hostname.replace(/^www\./, ''); }
+  catch (e) { return 'your own provider'; }
+}
+
 /* The word of the day may have an assistant of its own — a free key for one
    small request a day — and falls back to the one the drills use. */
 function wotdAI() {
@@ -646,6 +677,9 @@ function wordOfDayHTML() {
     (w.example ? '<p class="fc-example" style="margin-top:9px">' + highlightTerm(w.example, w.term) + '</p>' : '') +
     (w.translation ? '<p style="margin-top:9px;color:var(--accent);font-size:.9rem">' + esc(w.translation) + '</p>' : '') +
     (w.note ? '<p class="faint" style="margin-top:6px">' + esc(w.note) + '</p>' : '') +
+    /* Whose answer this is, quietly, in the corner. */
+    '<p class="faint" style="margin-top:10px;text-align:right;opacity:.65">by ' +
+      esc(providerLabel(wotdAI().cfg)) + '</p>' +
   '</div>';
 }
 
@@ -3727,6 +3761,8 @@ function renderSettings(host) {
       '<label class="switch"><input type="checkbox" id="setQuizSrs"' + (s.quizAffectsSrs ? ' checked' : '') + '>' +
         '<span class="track"></span><span class="txt">Practice results affect scheduling' +
         '<small>A word you miss in a quiz comes back sooner.</small></span></label>' +
+      '<label class="switch"><input type="checkbox" id="setWotd"' + (s.wordOfDay !== false ? ' checked' : '') + '>' +
+        '<span class="track"></span><span class="txt">Word of the day</span></label>' +
     '</div>' +
 
     '<div class="section-title"><h2>AI assistant</h2><span class="hint">Entirely optional</span></div>' +
@@ -3762,10 +3798,6 @@ function renderSettings(host) {
         '<div class="field"><label>Your native language</label>' +
           '<input type="text" id="aiLang" value="' + esc(ai.nativeLanguage) + '">' +
           '<span class="help">Used for translations and short explanations.</span></div>' +
-        '<label class="switch" style="padding:2px 0 10px"><input type="checkbox" id="setWotd"' +
-          (Store.state.settings.wordOfDay !== false ? ' checked' : '') + '>' +
-          '<span class="track"></span><span class="txt">A word of the day on the dashboard' +
-          '<small>One request a day, the first time you open the app.</small></span></label>' +
         /* One small request a day is exactly what a free key is for, so it can
            be sent somewhere other than the drills. */
         '<label class="switch" style="padding:0 0 10px"><input type="checkbox" id="wotdSep"' +
@@ -3774,20 +3806,22 @@ function renderSettings(host) {
           '<small>A free key for the daily word, while the drills use the one above.</small></span></label>' +
         '<div id="wotdBox" class="' + (wa.separate ? '' : 'hidden') + '" style="margin:0 0 14px;padding:12px 14px;' +
           'border:1px solid var(--border-soft);border-radius:12px;background:var(--surface-2)">' +
+          /* Only the two that cost nothing: one word a day is exactly what a
+             free tier is for, and paying twice over for it would be silly. */
           '<div class="inline-fields">' +
             '<div class="field"><label>API type</label><select id="wotdProvider">' +
-              [['openai', 'OpenAI'], ['compatible', 'OpenAI-compatible'], ['gemini', 'Google Gemini']].map(o =>
-                '<option value="' + o[0] + '"' + (wa.provider === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') +
+              WOTD_PROVIDERS.map(o => '<option value="' + o.id + '"' +
+                (wotdKind(wa) === o.id ? ' selected' : '') + '>' + o.label + '</option>').join('') +
             '</select></div>' +
             '<div class="field"><label>Model</label>' +
               '<input type="text" id="wotdModel" value="' + esc(wa.model) + '" placeholder="gemini-3.6-flash"></div>' +
           '</div>' +
-          '<div class="field"><label>API base URL</label>' +
-            '<input type="text" id="wotdBase" value="' + esc(wa.baseUrl) + '" placeholder="ignored for Gemini"></div>' +
-          '<div class="field" style="margin-bottom:8px"><label>API key</label>' +
+          '<div class="field" id="wotdKeyRow"' + (wotdKind(wa) === 'ollama' ? ' hidden' : '') + '>' +
+            '<label>API key</label>' +
             '<input type="password" id="wotdKey" value="' + esc(wa.apiKey) + '" placeholder="AIza…" autocomplete="off"></div>' +
-          '<span class="help">Google Gemini has a free tier, and one word a day fits inside it. ' +
-            'Get a key at <b>aistudio.google.com/apikey</b>.</span>' +
+          '<div class="row"><button class="ghost-btn" id="wotdTest">Test this one</button>' +
+            '<span id="wotdTestOut" class="faint"></span></div>' +
+          '<span class="help" style="margin-top:10px;display:block" id="wotdHelp">' + wotdProviderHelp(wa) + '</span>' +
         '</div>' +
         '<div class="row"><button class="ghost-btn" id="aiTest">Test the connection</button>' +
           '<span id="aiTestOut" class="faint"></span></div>' +
@@ -3935,8 +3969,25 @@ function bindSettings(host) {
   };
   const bindWotd = (id, key) => { const el = $('#' + id);
     if (el) el.onchange = () => { s.wotdAi[key] = el.value.trim(); Store.save(); }; };
-  bindWotd('wotdProvider', 'provider'); bindWotd('wotdModel', 'model');
-  bindWotd('wotdBase', 'baseUrl'); bindWotd('wotdKey', 'apiKey');
+  bindWotd('wotdModel', 'model'); bindWotd('wotdKey', 'apiKey');
+  const kind = $('#wotdProvider');
+  /* Choosing between the two fills in what each one needs — an address for
+     Ollama, none for Gemini — rather than leaving it to be typed. */
+  if (kind) kind.onchange = () => {
+    const preset = WOTD_PROVIDERS.filter(o => o.id === kind.value)[0];
+    Object.assign(s.wotdAi, { provider: preset.provider, baseUrl: preset.baseUrl, model: preset.model });
+    Store.save(); render('settings');
+  };
+  const wtest = $('#wotdTest');
+  if (wtest) wtest.onclick = async () => {
+    const out = $('#wotdTestOut');
+    wtest.disabled = true; out.textContent = 'Asking…';
+    try {
+      const said = await AI.as(Object.assign({ enabled: true }, s.wotdAi)).test();
+      out.textContent = 'Connected. Reply: "' + said + '"';
+    } catch (err) { out.textContent = err.message; }
+    wtest.disabled = false;
+  };
 
   const on = $('#aiOn');
   if (on) on.onchange = () => { s.ai.enabled = on.checked; Store.save(); $('#aiBox').classList.toggle('hidden', !on.checked); };
