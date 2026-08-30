@@ -530,6 +530,7 @@ function renderDashboard(host) {
       statTile('30-day recall', ret == null ? '—' : ret + '%', ret == null ? 'no data yet' : 'answers correct') +
     '</div>' +
 
+    backupNudgeHTML() +
     wordOfDayHTML() +
 
     '<div class="grid g2" style="margin-top:16px;align-items:start">' +
@@ -577,6 +578,11 @@ function renderDashboard(host) {
     const g = e.target.closest('[data-go]');
     if (g) return go(g.dataset.go);
     if (e.target.closest('[data-act="quick-add"]')) return cardEditor(null);
+    if (e.target.closest('[data-act="back-up"]')) {
+      download('lexio-backup-' + stamp() + '.json', Store.exportJSON());
+      toast('Backup downloaded — keep it somewhere you would find it again', 'ok');
+      return render('dashboard');
+    }
     if (e.target.closest('[data-act="wotd-new"]')) return fetchWordOfDay(true);
     if (e.target.closest('[data-act="wotd-history"]')) return wordOfDayHistory();
     if (e.target.closest('[data-act="wotd-add"]')) {
@@ -592,6 +598,22 @@ function renderDashboard(host) {
   /* One word a day, fetched the first time the dashboard is opened that day —
      never twice, and never again after it has failed until it is asked for. */
   if (wordOfDayWanted() && !wordOfDayToday() && !wotdState.busy && !wotdState.failed) fetchWordOfDay(false);
+}
+
+/* A collection worth keeping, and no backup for a week. Said once, quietly,
+   with the thing that fixes it right there — the copies the app keeps are for
+   accidents in this browser, and a file on disk is for everything else. */
+function backupNudgeHTML() {
+  const days = Store.state.lastBackup
+    ? Math.floor((Date.now() - Store.state.lastBackup) / 86400000) : null;
+  if (Store.state.cards.length < 20 || (days !== null && days < 7)) return '';
+  return '<div class="card row between" style="margin-top:16px;gap:14px;padding:12px 16px">' +
+    '<span class="faint" style="min-width:0">' +
+      (days === null
+        ? 'Your ' + Store.state.cards.length + ' words have never been backed up to a file.'
+        : 'Your last backup was ' + days + ' days ago.') +
+      ' A backup is a file on your computer — this app cannot get it back for you without one.</span>' +
+    '<button class="soft-btn tiny" data-act="back-up" style="flex:none">Back up now</button></div>';
 }
 
 /* ---------- word of the day ------------------------------------------------ */
@@ -2300,7 +2322,15 @@ async function startQuiz() {
     try {
       const qs = await AI.makeQuestions(cards, cards.length, optionCount());
       quiz.items = qs.map(q => {
-        const card = cards.find(c => c.term.toLowerCase() === String(q.term || '').toLowerCase()) || cards[0];
+        /* The question says which word it is about. Match it generously — a
+           model writes "analyze" for "analyse" and "postponing" for "postpone" —
+           but never fall back on the first word of the round: a question pinned
+           to the wrong card marks that card's schedule for an answer that was
+           never about it, and says so in the review afterwards. */
+        const named = String(q.term || '');
+        const card = cards.filter(c => normalize(c.term) === normalize(named))[0] ||
+                     cards.filter(c => AI.sameWord(named, c.term))[0];
+        if (!card) return null;
         /* The same option listed twice would mean two right answers, and no wording
            of the prompt can promise that away — so the duplicates go here. */
         const seen = {};
@@ -2314,7 +2344,11 @@ async function startQuiz() {
         return { type: 'mc', card: card, prompt: q.prompt, options: shuffle(opts),
                  answer: q.answer, explanation: q.explanation, question: 'AI question' };
       });
-      if (!quiz.items.length) throw new Error('No questions came back.');
+      quiz.items = quiz.items.filter(Boolean);
+      if (!quiz.items.length) throw new Error('The questions that came back were about other words. Try again.');
+      if (quiz.items.length < qs.length)
+        toast((qs.length - quiz.items.length) + ' question' + (qs.length - quiz.items.length === 1 ? '' : 's') +
+          ' asked about words that were not in this round', 'info');
       quiz = Object.assign(newQuiz(mode, quiz.items), { startedAt: quiz.startedAt });
     } catch (err) {
       quiz = null; toast(err.message, 'err'); return render('practice');
@@ -3881,6 +3915,27 @@ function renderSettings(host) {
         'starter words rev ' + (Store.state.starterRevision || 0) + '/' + STARTER_REVISION +
         (Store.state.lastBackup ? ' · last backup ' + new Date(Store.state.lastBackup).toLocaleDateString() : ' · never backed up') +
       '</p>' +
+      /* What the app has kept by itself. A downloaded backup is still the real
+         safety net — these live in this browser and go with it — but they cover
+         the day something goes wrong and there is no backup to hand. */
+      (Store.snapshots().length
+        ? '<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border-soft)">' +
+            '<div class="section-title" style="margin:0 0 8px"><h2 style="font-size:.92rem">Copies this app kept</h2></div>' +
+            Store.snapshots().map(sn =>
+              '<div class="row between history-row">' +
+                '<div style="min-width:0"><b>' + esc(new Date(sn.at).toLocaleDateString(undefined,
+                  { day:'numeric', month:'short', year:'numeric' })) + '</b>' +
+                  '<div class="faint">' + sn.cards + ' words · ' + sn.decks + ' decks · ' + esc(sn.why) + '</div>' +
+                '</div>' +
+                '<div class="row" style="gap:8px;flex:none">' +
+                  '<button class="soft-btn tiny" data-snap-get="' + sn.at + '">Download</button>' +
+                  '<button class="soft-btn tiny" data-snap="' + sn.at + '">Restore</button>' +
+                '</div>' +
+              '</div>').join('') +
+            '<p class="faint" style="margin-top:8px">One a day when the app opens, and one before ' +
+              'anything that deletes. Kept in this browser only.</p>' +
+          '</div>'
+        : '') +
       /* A save that could not be read is still on the machine; whoever lost it
          should be able to take it away and try to restore it. */
       (Store.rescued
@@ -3945,6 +4000,29 @@ function bindSettings(host) {
     if (e.target.closest('[data-act="backup"]')) {
       download('lexio-backup-' + stamp() + '.json', Store.exportJSON());
       toast('Backup downloaded', 'ok'); return render('settings');
+    }
+    const snapGet = e.target.closest('[data-snap-get]');
+    if (snapGet) {
+      const sn = Store.snapshots().filter(x => x.at === +snapGet.dataset.snapGet)[0];
+      if (sn) { download('lexio-copy-' + sn.day + '.json', sn.raw, 'application/json');
+                toast('Copy downloaded', 'ok'); }
+      return;
+    }
+    const snap = e.target.closest('[data-snap]');
+    if (snap) {
+      const sn = Store.snapshots().filter(x => x.at === +snap.dataset.snap)[0];
+      if (!sn) return;
+      confirmDialog('Go back to this copy?',
+        'Your words, decks and schedules become what they were on ' +
+        new Date(sn.at).toLocaleDateString() + ' (' + sn.cards + ' words). ' +
+        'What is here now is kept as another copy first.',
+        'Restore this copy', true).then(ok => {
+          if (!ok) return;
+          Store.restoreSnapshot(sn.at);
+          toast('Restored ' + sn.cards + ' words', 'ok');
+          render('settings'); refreshChrome();
+        });
+      return;
     }
     if (e.target.closest('[data-act="rescued"]')) {
       download('lexio-unreadable-' + stamp() + '.json', Store.rescued.raw, 'application/json');

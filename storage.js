@@ -8,6 +8,11 @@
 const STORAGE_KEY = 'lexio.v1';
 /* Where a save that could not be read is kept, rather than being written over. */
 const RESCUE_KEY = 'lexio.v1.rescued';
+/* And where the app keeps its own copies: one a day, plus one before anything
+   destructive. They live under their own key, so wiping the collection — or an
+   update going wrong — does not take them with it. */
+const SNAPSHOT_KEY = 'lexio.v1.snapshots';
+const SNAPSHOT_MAX = 3;
 const SCHEMA_VERSION = 2;
 /* Rounds kept in the practice history. They carry their own questions so a
    repeat costs nothing, which is also why the list has an end. */
@@ -93,6 +98,9 @@ const Store = {
       try {
         const parsed = JSON.parse(raw);
         this.state = this.migrate(parsed);
+        /* A copy of the collection as it was found, before this session touches
+           it. Once a day is enough to undo a bad day. */
+        if (this.state.cards.length) this.snapshot(raw);
       } catch (e) {
         /* Whatever went wrong, the one thing that must not happen is quietly
            replacing a collection with a fresh one. The unreadable save is put
@@ -440,6 +448,8 @@ const Store = {
      A single-deck reset only drops that deck's entries — the daily activity
      record is about what you did, not about which deck you did it in. */
   resetProgress(deckId) {
+    /* Schedules and statistics are about to go; a copy of them first. */
+    if (this.state.cards.length) this.snapshot(JSON.stringify(this.state), 'before resetting progress');
     const reset = {};
     this.state.cards.forEach(c => {
       if (!deckId || c.deckId === deckId) {
@@ -785,6 +795,41 @@ const Store = {
     return { added: added, skipped: skipped };
   },
 
+  /* ---------- the app's own copies -------------------------------------- */
+  snapshots() {
+    try { return JSON.parse(localStorage.getItem(SNAPSHOT_KEY) || '[]'); }
+    catch (e) { return []; }
+  },
+
+  /* Keep the collection as it stands. One a day unless something is about to
+     destroy it, in which case one now. Storage can be full, so the list is
+     shortened until it fits rather than failing outright. */
+  snapshot(raw, force) {
+    if (!raw) return null;
+    const list = this.snapshots();
+    const day = todayKey();
+    if (!force && list.some(sn => sn.day === day)) return null;
+    const entry = { at: Date.now(), day: day, why: force || 'daily',
+                    cards: this.state.cards.length, decks: this.state.decks.length, raw: raw };
+    const all = [entry].concat(list).slice(0, SNAPSHOT_MAX);
+    for (let n = all.length; n > 0; n--) {
+      try { localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(all.slice(0, n))); return entry; }
+      catch (e) { /* no room — keep one fewer and try again */ }
+    }
+    return null;
+  },
+
+  /* Put one back. The copy that is being replaced is kept first, so restoring
+     the wrong one is not the end of the story either. */
+  restoreSnapshot(at) {
+    const sn = this.snapshots().filter(x => x.at === at)[0];
+    if (!sn) return false;
+    this.snapshot(JSON.stringify(this.state), 'before restoring');
+    this.state = this.migrate(JSON.parse(sn.raw));
+    this.saveNow();
+    return true;
+  },
+
   /* A finished round, kept so it can be done again. An AI round brings its
      questions with it: repeating one is then free, which is the whole point of
      being able to. */
@@ -812,6 +857,10 @@ const Store = {
   },
 
   wipe() {
+    /* The copies live under their own key and are deliberately left alone: the
+       one moment a copy is worth most is just after everything is deleted. */
+    if (this.state && this.state.cards && this.state.cards.length)
+      this.snapshot(JSON.stringify(this.state), 'before deleting everything');
     try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
     this.state = this.defaults();
     this.seed();
