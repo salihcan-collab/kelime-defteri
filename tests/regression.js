@@ -1752,6 +1752,42 @@ const head = (s) => console.log('\n— ' + s + ' —');
   is(accents === appearance.accents, `all ${appearance.accents} accents paint their own colour`);
 
   /* ------------------------------------------------------------------ *
+     A collection saved by an older version has to open in this one.
+
+     The bug: migrate() merged the saved data over the defaults object
+     itself, so the defaults' own `settings` was replaced by the saved one
+     — and the next line, reaching into a group of settings that older
+     save had never heard of, threw. load() answered a thrown migration by
+     starting the collection again from scratch.
+   * ------------------------------------------------------------------ */
+  head('an older save still opens');
+  const older = await page.evaluate(() => {
+    const now = JSON.parse(JSON.stringify(Store.state));
+    /* strip everything added since, the way a save from an older copy looks */
+    const old = { version: 2, starterRevision: now.starterRevision, createdAt: now.createdAt,
+                  settings: { theme: 'nord', newPerDay: 7, ai: { enabled: true, apiKey: 'zz' } },
+                  decks: now.decks, cards: now.cards, log: [{ ts: Date.now(), cardId: now.cards[0].id,
+                    rating: 3, correct: true, mode: 'quiz' }], daily: {}, wotdSeen: ['alpha', 'beta'] };
+    let thrown = '';
+    let out = null;
+    try { out = Store.migrate(JSON.parse(JSON.stringify(old))); } catch (e) { thrown = e.message; }
+    return { thrown: thrown,
+             cards: out ? out.cards.length : 0, log: out ? out.log.length : 0,
+             kept: out ? out.settings.theme + '/' + out.settings.newPerDay : '',
+             key: out ? out.settings.ai.apiKey : '',
+             /* and the settings that did not exist then arrive with their defaults */
+             level: out ? out.settings.ai.level : '', wotdAi: !!(out && out.settings.wotdAi),
+             cw: out ? out.settings.cwClues : '', practice: !!(out && out.practice),
+             history: out ? out.wotdLog.map(w => w.term).join() : '' };
+  });
+  is(!older.thrown, older.thrown ? 'migration threw: ' + older.thrown : 'an older save migrates without throwing');
+  is(older.cards === 83 && older.log === 1, `its ${older.cards} words and its review history survive`);
+  is(older.kept === 'nord/7' && older.key === 'zz', 'the settings it had are kept');
+  is(older.level === 'B1-B2' && older.wotdAi && older.cw === 'side' && older.practice,
+     'and the ones added since arrive with their defaults');
+  is(older.history === 'beta,alpha', 'the words it had already been shown become history');
+
+  /* ------------------------------------------------------------------ *
      11. Scrolling.
 
      The bug: the page could not be scrolled at all. Browse was 6457px tall

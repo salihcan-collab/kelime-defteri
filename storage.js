@@ -6,6 +6,8 @@
    ========================================================================== */
 
 const STORAGE_KEY = 'lexio.v1';
+/* Where a save that could not be read is kept, rather than being written over. */
+const RESCUE_KEY = 'lexio.v1.rescued';
 const SCHEMA_VERSION = 2;
 /* Rounds kept in the practice history. They carry their own questions so a
    repeat costs nothing, which is also why the list has an end. */
@@ -23,6 +25,7 @@ const startOfDay = (d) => { const t = d ? new Date(d) : new Date(); t.setHours(0
 const Store = {
   state: null,
   memoryOnly: false,
+  rescued: null,                        // a save that could not be read, kept aside
 
   defaults() {
     return {
@@ -91,7 +94,12 @@ const Store = {
         const parsed = JSON.parse(raw);
         this.state = this.migrate(parsed);
       } catch (e) {
-        console.error('Could not parse saved data', e);
+        /* Whatever went wrong, the one thing that must not happen is quietly
+           replacing a collection with a fresh one. The unreadable save is put
+           aside under its own key, and the app says so. */
+        console.error('Could not read the saved collection', e);
+        this.rescued = { at: Date.now(), why: e.message, raw: raw };
+        try { localStorage.setItem(RESCUE_KEY, raw); } catch (e2) {}
         this.state = this.defaults();
         this.seed();
       }
@@ -102,14 +110,22 @@ const Store = {
     return this.state;
   },
 
+  /* Bringing a saved collection up to date. Every merge writes into a fresh
+     object: `Object.assign(base, data)` replaced the defaults' own `settings`
+     with the saved one, so the next line asking for `base.settings.wotdAi` —
+     a group of settings the save was made before — got undefined and threw,
+     and load() answered a thrown migration by starting the collection again.
+     Two people's worth of practice went that way. */
   migrate(data) {
     const base = this.defaults();
-    const s = Object.assign(base, data);
-    s.settings = Object.assign(base.settings, data.settings || {});
-    s.settings.ai = Object.assign(base.settings.ai, (data.settings || {}).ai || {});
-    s.settings.wotdAi = Object.assign(base.settings.wotdAi, (data.settings || {}).wotdAi || {});
-    s.decks = data.decks || [];
-    s.cards = (data.cards || []).map(c => {
+    const d = data || {};
+    const ds = d.settings || {};
+    const s = Object.assign({}, base, d);
+    s.settings = Object.assign({}, base.settings, ds);
+    s.settings.ai = Object.assign({}, base.settings.ai, ds.ai || {});
+    s.settings.wotdAi = Object.assign({}, base.settings.wotdAi, ds.wotdAi || {});
+    s.decks = d.decks || [];
+    s.cards = (d.cards || []).map(c => {
       if (!c.srs) c.srs = SRS.newState();
       if (!c.stats) c.stats = { seen: 0, correct: 0, wrong: 0 };
       /* Added in schema 2. Older backups simply have none of these. */
@@ -120,20 +136,20 @@ const Store = {
       if (!Array.isArray(c.related)) c.related = [];
       return c;
     });
-    s.aiUsage = data.aiUsage || { day: '', count: 0 };
-    s.practice = (data.practice || []).slice(0, PRACTICE_MAX);
-    s.wotd = data.wotd || null;
+    s.aiUsage = d.aiUsage || { day: '', count: 0 };
+    s.practice = (d.practice || []).slice(0, PRACTICE_MAX);
+    s.wotd = d.wotd || null;
     /* Older collections kept only the words' names; they become history with
        nothing but a name, which is better than losing them. */
-    s.wotdLog = (data.wotdLog || (data.wotdSeen || []).slice().reverse().map(t => ({ term: t })))
+    s.wotdLog = (d.wotdLog || (d.wotdSeen || []).slice().reverse().map(t => ({ term: t })))
       .slice(0, WOTD_HISTORY);
-    s.log = data.log || [];
-    s.daily = data.daily || {};
+    s.log = d.log || [];
+    s.daily = d.daily || {};
     /* Starter content that has been corrected or added since this collection
        was created. Gated on its own counter, never on the schema version —
        a release that only bumps the schema would otherwise lock the collection
        out of every content fix written after it. */
-    s.starterRevision = data.starterRevision || 0;
+    s.starterRevision = d.starterRevision || 0;
     if (s.starterRevision < STARTER_REVISION) {
       this.upgradeStarters(s);
       s.starterRevision = STARTER_REVISION;
@@ -679,17 +695,17 @@ const Store = {
   },
 
   importJSON(text, mode) {
-    const data = JSON.parse(text);
-    if (!data || !Array.isArray(data.cards)) throw new Error('This file does not look like a Lexio backup.');
+    const backup = JSON.parse(text);
+    if (!backup || !Array.isArray(backup.cards)) throw new Error('This file does not look like a Lexio backup.');
     if (mode === 'merge') {
       const known = new Set(this.state.cards.map(c => (c.term + '|' + c.deckId).toLowerCase()));
       const deckMap = {};
-      (data.decks || []).forEach(d => {
+      (backup.decks || []).forEach(d => {
         const existing = this.state.decks.find(x => x.name === d.name);
         deckMap[d.id] = existing ? existing.id : this.addDeck(d, true).id;
       });
       let added = 0;
-      data.cards.forEach(c => {
+      backup.cards.forEach(c => {
         const target = deckMap[c.deckId] || (this.state.decks[0] || {}).id;
         if (known.has((c.term + '|' + target).toLowerCase())) return;
         this.addCard(Object.assign({}, c, { id: undefined, deckId: target }), true);
@@ -698,7 +714,7 @@ const Store = {
       this.saveNow();
       return { added: added, mode: 'merge' };
     }
-    this.state = this.migrate(data);
+    this.state = this.migrate(backup);
     this.saveNow();
     return { added: this.state.cards.length, mode: 'replace' };
   },

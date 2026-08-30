@@ -661,7 +661,7 @@ function wordOfDayHTML() {
   /* One word a day means one replacement too: "another word" is a change of
      mind, not a way to spend the morning shopping for a nicer word. */
   return head('<div class="row" style="gap:8px">' +
-      (known ? '' : '<button class="soft-btn tiny" data-act="wotd-add">' + ICONS.plus + 'Add to my words</button>') +
+      (known ? '' : '<button class="soft-btn tiny" data-act="wotd-add">' + ICONS.plus + 'Add to deck</button>') +
       (w.replaced
         ? '<span class="faint">another one tomorrow</span>'
         : '<button class="soft-btn tiny" data-act="wotd-new">Another word</button>') +
@@ -676,10 +676,12 @@ function wordOfDayHTML() {
     (w.definition ? '<p class="muted" style="margin-top:7px">' + esc(w.definition) + '</p>' : '') +
     (w.example ? '<p class="fc-example" style="margin-top:9px">' + highlightTerm(w.example, w.term) + '</p>' : '') +
     (w.translation ? '<p style="margin-top:9px;color:var(--accent);font-size:.9rem">' + esc(w.translation) + '</p>' : '') +
-    (w.note ? '<p class="faint" style="margin-top:6px">' + esc(w.note) + '</p>' : '') +
-    /* Whose answer this is, quietly, in the corner. */
-    '<p class="faint" style="margin-top:10px;text-align:right;opacity:.65">by ' +
-      esc(providerLabel(wotdAI().cfg)) + '</p>' +
+    /* Whose answer this is, quietly, at the end of the line the note is on
+       rather than on a line of its own. */
+    '<div class="row between" style="margin-top:6px;gap:18px;align-items:baseline">' +
+      '<span class="faint">' + esc(w.note || '') + '</span>' +
+      '<span class="faint" style="flex:none;opacity:.6">by ' + esc(providerLabel(wotdAI().cfg)) + '</span>' +
+    '</div>' +
   '</div>';
 }
 
@@ -3802,7 +3804,7 @@ function renderSettings(host) {
            be sent somewhere other than the drills. */
         '<label class="switch" style="padding:0 0 10px"><input type="checkbox" id="wotdSep"' +
           (wa.separate ? ' checked' : '') + '>' +
-          '<span class="track"></span><span class="txt">Send it to a different provider' +
+          '<span class="track"></span><span class="txt">Different provider for Word of the day' +
           '<small>A free key for the daily word, while the drills use the one above.</small></span></label>' +
         '<div id="wotdBox" class="' + (wa.separate ? '' : 'hidden') + '" style="margin:0 0 14px;padding:12px 14px;' +
           'border:1px solid var(--border-soft);border-radius:12px;background:var(--surface-2)">' +
@@ -3862,6 +3864,16 @@ function renderSettings(host) {
         'starter words rev ' + (Store.state.starterRevision || 0) + '/' + STARTER_REVISION +
         (Store.state.lastBackup ? ' · last backup ' + new Date(Store.state.lastBackup).toLocaleDateString() : ' · never backed up') +
       '</p>' +
+      /* A save that could not be read is still on the machine; whoever lost it
+         should be able to take it away and try to restore it. */
+      (Store.rescued
+        ? '<div class="feedback no" style="margin-top:14px">' +
+            '<b>A saved collection here could not be read</b> (' + esc(Store.rescued.why) + '). ' +
+            'It has been kept rather than written over, and this collection was started fresh. ' +
+            'Download it and try Restore, or send it on.' +
+            '<div class="row" style="margin-top:10px"><button class="soft-btn" data-act="rescued">' +
+              ICONS.back + 'Download the unreadable save</button></div></div>'
+        : '') +
       '<div class="row" style="margin-top:18px;padding-top:16px;border-top:1px solid var(--border-soft)">' +
         '<button class="danger-btn" data-act="reset">Reset all progress</button>' +
         '<button class="danger-btn" data-act="wipe">Delete everything</button>' +
@@ -3916,6 +3928,10 @@ function bindSettings(host) {
     if (e.target.closest('[data-act="backup"]')) {
       download('lexio-backup-' + stamp() + '.json', Store.exportJSON());
       toast('Backup downloaded', 'ok'); return render('settings');
+    }
+    if (e.target.closest('[data-act="rescued"]')) {
+      download('lexio-unreadable-' + stamp() + '.json', Store.rescued.raw, 'application/json');
+      return toast('Saved to your downloads — try Restore with it', 'ok');
     }
     if (e.target.closest('[data-act="starters"]')) {
       const r = Store.refreshStarters();
@@ -4108,6 +4124,12 @@ function boot() {
 
   /* An older collection has just had its starter words brought up to date.
      Say so — words appearing on their own would otherwise be alarming. */
+  /* Nothing is more alarming than an empty app, so it is never left to be
+     guessed at. */
+  if (Store.rescued)
+    setTimeout(() => toast('A saved collection here could not be read — it has been kept, ' +
+      'see Settings → Your data', 'err'), 500);
+
   if (Store._starterUpgrade) {
     const u = Store._starterUpgrade;
     const parts = [];
