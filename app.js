@@ -3214,8 +3214,20 @@ function packReview() {
     } else if (it.type === 'passage') {
       out.push({ kind: 'passage', parts: it.parts, answers: it.answers, given: it.given || [] });
     } else if (it.type === 'matching') {
-      it.cards.forEach(c => out.push({ kind: 'q', term: c.term, q: c.term,
-        answer: it.byDefinition ? c.definition : c.translation }));
+      /* A board records a result per pair as it is solved, and another on every
+         mismatch. Reading those back is the only way to know which pairs were
+         reached at all — without it every word on the board read "not reached",
+         solved or not. */
+      it.cards.forEach(c => {
+        const mine = quiz.results.filter(r => r.card && r.card.id === c.id);
+        const misses = mine.filter(r => !r.ok).length;
+        const solved = mine.some(r => r.ok);
+        out.push({ kind: 'q', term: c.term, q: c.term,
+                   answer: it.byDefinition ? c.definition : c.translation,
+                   ok: solved, misses: misses,
+                   /* '' means it was answered; null is what "not reached" reads. */
+                   given: solved || misses ? '' : null });
+      });
     } else if (it.type === 'write') {
       out.push({ kind: 'q', term: term, q: 'Write a sentence using "' + term + '"',
                  answer: '', given: it.given == null ? null : String(it.given), ok: !!it.ok });
@@ -3289,7 +3301,11 @@ function reviewRound(entry) {
          comparing, as they always were. */
       const missed = r.given != null && r.given !== '' &&
         (typeof r.ok === 'boolean' ? !r.ok : normalize(r.given) !== normalize(r.answer));
-      const notReached = r.given == null ? '<span class="review-given">not reached</span>' : '';
+      const notReached = r.given == null ? '<span class="review-given">not reached</span>'
+        /* A pair solved after a fumble or two is worth saying so about. */
+        : r.misses ? '<span class="review-given">' + r.misses + ' wrong ' +
+            (r.misses === 1 ? 'try' : 'tries') + '</span>'
+        : '';
       /* A question with options keeps them in the open while it is hidden — it
          is the marking that gives the answer away, not the words — and once
          they are marked, printing the answer underneath says it twice. */
@@ -3764,7 +3780,8 @@ function renderSettings(host) {
         '<span class="track"></span><span class="txt">Practice results affect scheduling' +
         '<small>A word you miss in a quiz comes back sooner.</small></span></label>' +
       '<label class="switch"><input type="checkbox" id="setWotd"' + (s.wordOfDay !== false ? ' checked' : '') + '>' +
-        '<span class="track"></span><span class="txt">Word of the day</span></label>' +
+        '<span class="track"></span><span class="txt">Word of the day' +
+        '<small>One new word on the dashboard each day.</small></span></label>' +
     '</div>' +
 
     '<div class="section-title"><h2>AI assistant</h2><span class="hint">Entirely optional</span></div>' +
@@ -3821,7 +3838,7 @@ function renderSettings(host) {
           '<div class="field" id="wotdKeyRow"' + (wotdKind(wa) === 'ollama' ? ' hidden' : '') + '>' +
             '<label>API key</label>' +
             '<input type="password" id="wotdKey" value="' + esc(wa.apiKey) + '" placeholder="AIza…" autocomplete="off"></div>' +
-          '<div class="row"><button class="ghost-btn" id="wotdTest">Test this one</button>' +
+          '<div class="row"><button class="ghost-btn" id="wotdTest">Test the provider</button>' +
             '<span id="wotdTestOut" class="faint"></span></div>' +
           '<span class="help" style="margin-top:10px;display:block" id="wotdHelp">' + wotdProviderHelp(wa) + '</span>' +
         '</div>' +
@@ -4233,6 +4250,8 @@ function onKey(e) {
     }
     if (e.key.toLowerCase() === 's') { const c = currentCard(); if (c) TTS.speak(c.term); return; }
     if (e.key.toLowerCase() === 'u') return undoAnswer();
+    /* E for extras, since the button is a click away from a hand on the keys. */
+    if (e.key.toLowerCase() === 'e') { const b = $('[data-act="extras"]'); if (b) b.click(); return; }
     return;
   }
 
