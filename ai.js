@@ -420,6 +420,24 @@ const AI = {
     return (res.passages || []).filter(p => p && p.text);
   },
 
+  /* The forms of a word that no ending would produce. Whoever goes looking for
+     a word in a sentence needs these to know what to look for — "fell" is not
+     "fall" with anything on the end. */
+  formsOf(word) {
+    return (IRREGULAR[String(word || '').trim().toLowerCase()] || []).slice();
+  },
+
+  /* The stems a regular ending is built on. "study" becomes "studies" and
+     "rise" becomes "rising", neither of which is the word with something added
+     to the end of it, so a search for the word alone would miss both. */
+  stemsOf(word) {
+    const w = String(word || '').trim().toLowerCase();
+    const out = [];
+    if (/e$/.test(w) && w.length > 3) out.push(w.slice(0, -1));
+    if (/[^aeiou]y$/.test(w) && w.length > 2) out.push(w.slice(0, -1) + 'i');
+    return out;
+  },
+
   /* Whether two forms are the same word: a sentence may need "diagnosed" where
      the card says "diagnose", or "worked out" for "work out". Word by word, so
      a phrase is judged as a phrase. */
@@ -556,9 +574,40 @@ function isInflectionOf(form, term) {
   return inflects(a, b);
 }
 
+/* English verbs that do not take their endings the regular way. Without these
+   a drill cannot find its own word in its own sentence: "The car has broken
+   down" would not match "break down", and the gap could not be cut. Each entry
+   is the plain form followed by the past and the participle; the -s and -ing
+   forms are regular and are handled below. */
+const IRREGULAR = ('be was been|beat beat beaten|become became become|begin began begun|' +
+  'bend bent|bet bet|bite bit bitten|bleed bled|blow blew blown|break broke broken|' +
+  'bring brought|build built|burn burnt|buy bought|catch caught|choose chose chosen|' +
+  'come came come|cost cost|cut cut|deal dealt|dig dug|do did done|draw drew drawn|' +
+  'dream dreamt|drink drank drunk|drive drove driven|eat ate eaten|fall fell fallen|' +
+  'feed fed|feel felt|fight fought|find found|fly flew flown|forget forgot forgotten|' +
+  'forgive forgave forgiven|freeze froze frozen|get got gotten|give gave given|' +
+  'go went gone|grow grew grown|hang hung|have had|hear heard|hide hid hidden|hit hit|' +
+  'hold held|hurt hurt|keep kept|know knew known|lay laid|lead led|learn learnt|' +
+  'leave left|lend lent|let let|lie lay lain|light lit|lose lost|make made|mean meant|' +
+  'meet met|pay paid|put put|quit quit|read read|ride rode ridden|ring rang rung|' +
+  'rise rose risen|run ran run|say said|see saw seen|sell sold|send sent|set set|' +
+  'sew sewed sewn|shake shook shaken|shine shone|shoot shot|show showed shown|' +
+  'shut shut|sing sang sung|sink sank sunk|sit sat|sleep slept|slide slid|smell smelt|' +
+  'speak spoke spoken|spell spelt|spend spent|spill spilt|split split|spoil spoilt|' +
+  'spread spread|stand stood|steal stole stolen|stick stuck|sting stung|swear swore sworn|' +
+  'sweep swept|swim swam swum|swing swung|take took taken|teach taught|tear tore torn|' +
+  'tell told|think thought|throw threw thrown|understand understood|wake woke woken|' +
+  'wear wore worn|win won|write wrote written').split('|').reduce((map, line) => {
+    const parts = line.split(' ');
+    map[parts[0]] = parts.slice(1);
+    return map;
+  }, {});
+
 /* The mechanical half of that question, with no opinion about what the learner
    has saved: is `a` simply `b` wearing a regular ending? */
 function inflects(a, b) {
+  const irregular = IRREGULAR[b];
+  if (irregular && irregular.indexOf(a) !== -1) return true;
   /* Plurals that do not simply add an s — common enough in medical and academic
      English that leaving them out would let half of them through. */
   const latin = [['is', 'es'], ['us', 'i'], ['um', 'a'], ['on', 'a'],

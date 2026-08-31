@@ -373,10 +373,15 @@ function termMatch(sentence, term) {
   const words = String(term).trim().split(/\s+/).filter(Boolean);
   if (!words.length) return null;
 
+  /* Regular endings are covered by the \w* on the outer words; the forms that
+     no ending produces have to be named. Without "fell" beside "fall" the
+     search never even offers the word for checking. */
   const pattern = (fuzzyFirst) => words.map((w, i) => {
     if (i === 0 && fuzzyFirst) return "[A-Za-z\u00C0-\u024F']+";
     const tail = (i === 0 || i === words.length - 1) ? '\\w*' : '';
-    return reEscape(w) + tail;
+    const odd = AI.formsOf(w).concat(tail ? AI.stemsOf(w) : []);
+    const self = reEscape(w) + tail;
+    return odd.length ? '(?:' + self + '|' + odd.map(x => reEscape(x) + tail).join('|') + ')' : self;
   }).join('\\s+');
 
   const attempts = words.length > 1 ? [false, true] : [false];
