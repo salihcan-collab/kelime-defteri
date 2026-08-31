@@ -1796,6 +1796,40 @@ const head = (s) => console.log('\n— ' + s + ' —');
   });
   is(accents === appearance.accents, `all ${appearance.accents} accents paint their own colour`);
 
+  /* A typeface has to be shown in itself. The bug: the option's sample was
+     styled from a list in app.js that knew five of the eight fonts, so the
+     other three quietly wore whatever the page was set to — which is exactly
+     the comparison the picker exists to make. */
+  const samples = await page.evaluate(async () => {
+    const was = Store.state.settings.font;
+    go('settings', {});
+    await new Promise(r => setTimeout(r, 250));
+    const read = () => {
+      const out = {};
+      document.querySelectorAll('.font-opt').forEach(o => {
+        out[o.dataset.pickFont] = [getComputedStyle(o).fontFamily,
+                                   getComputedStyle(o.querySelector('.nm')).fontFamily];
+      });
+      return out;
+    };
+    /* read them with the page set to two very different families */
+    Store.state.settings.font = 'sans'; applyAppearance(); render('settings');
+    await new Promise(r => setTimeout(r, 200));
+    const underSans = read();
+    Store.state.settings.font = 'mono'; applyAppearance(); render('settings');
+    await new Promise(r => setTimeout(r, 200));
+    const underMono = read();
+    Store.state.settings.font = was; applyAppearance(); Store.save();
+    return { underSans, underMono, ids: FONTS.map(f => f.id) };
+  });
+  const shown = samples.ids.map(id => samples.underSans[id] && samples.underSans[id][0]);
+  is(shown.every(Boolean) && new Set(shown).size === samples.ids.length,
+     `each of the ${samples.ids.length} typeface options is shown in its own family`);
+  is(samples.ids.every(id => samples.underSans[id][0] === samples.underMono[id][0]),
+     'and stays in it whatever the page itself is set to');
+  is(samples.ids.every(id => samples.underSans[id][1] === samples.underSans[id][0]),
+     'the name of a typeface is written in that typeface, like its letters');
+
   /* ------------------------------------------------------------------ *
      A collection saved by an older version has to open in this one.
 

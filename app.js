@@ -1414,9 +1414,7 @@ function drawStudySetup(host) {
             (c.dueLearning === 1 ? 'is' : 'are') + ' still in short-term learning steps</p>'
           : '<div style="height:12px"></div>') +
         '<div class="field" style="max-width:340px;margin:0 auto 16px;text-align:left">' +
-          '<label>Decks</label>' + deckPicker(studyDecks) +
-          '<div class="faint" style="margin-top:6px">Every deck is in the session' +
-          ' until you turn it off in the list.</div></div>' +
+          '<label>Decks</label>' + deckPicker(studyDecks) + '</div>' +
         '<div class="row" style="justify-content:center">' +
           (ready
             ? '<button class="primary-btn" data-act="start">' + ICONS.play + 'Start session</button>'
@@ -1429,6 +1427,7 @@ function drawStudySetup(host) {
         '<div class="shortcut-row"><span>Reveal the answer</span><kbd>Space</kbd></div>' +
         '<div class="shortcut-row"><span>Rate: again / hard / good / easy</span><span><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> <kbd>4</kbd></span></div>' +
         '<div class="shortcut-row"><span>Hear the word</span><kbd>S</kbd></div>' +
+        '<div class="shortcut-row"><span>Show or hide the extras</span><kbd>E</kbd></div>' +
         '<div class="shortcut-row"><span>Undo the last answer</span><kbd>U</kbd></div>' +
       '</div>' +
     '</div>';
@@ -1543,8 +1542,8 @@ function drawStudyCard(host) {
         '<button class="soft-btn tiny end-btn" data-act="quit">' + ICONS.finish +
           '<span>End session</span></button>' +
         '<button class="soft-btn tiny toggle-btn' + (s.showExtras === false ? '' : ' on') + '" data-act="extras" ' +
-          'title="Collocations, related words, word family and your notes on the back of the card">' +
-          '<span class="dot"></span>Extras</button>' +
+          'title="Collocations, related words, word family and your notes on the back of the card (E)">' +
+          '<span class="dot"></span>Extras<kbd>E</kbd></button>' +
         '<div class="bar" style="flex:1"><i style="width:' + progress + '%"></i></div>' +
         '<div class="counts"><span class="c-due">' + remaining + ' left</span>' +
           (session.ahead ? '<span class="c-new">ahead of schedule</span>' : '') + '</div>' +
@@ -1820,7 +1819,7 @@ let quiz = null;
 let quizSetup = { mode: 'mc-meaning', decks: [], scope: 'all' };
 /* Round length is a share of the words the current filters make available,
    so it means the same thing whether a deck holds 20 words or 2,000. */
-function roundPercent() { return clamp(Store.state.settings.roundPercent || 20, 10, 100); }
+function roundPercent() { return clamp(Store.state.settings.roundPercent || 20, 5, 100); }
 function roundLength(poolSize) {
   if (!poolSize) return 0;
   return Math.max(1, Math.round(poolSize * roundPercent() / 100));
@@ -1893,9 +1892,9 @@ function drawPracticeSetup(host) {
         '<div class="field" style="margin-bottom:10px">' +
           '<div class="row between"><label style="margin:0">Round length</label>' +
             '<b id="pCountOut" style="font-size:.88rem">' + roundLabel(pool.length) + '</b></div>' +
-          '<input type="range" id="pPct" min="10" max="100" step="5" value="' + roundPercent() + '"' +
-            ' style="--fill:' + ((roundPercent() - 10) / 90 * 100) + '%">' +
-          '<div class="row between"><span class="faint">10%</span><span class="faint">100%</span></div>' +
+          '<input type="range" id="pPct" min="5" max="100" step="5" value="' + roundPercent() + '"' +
+            ' style="--fill:' + ((roundPercent() - 5) / 95 * 100) + '%">' +
+          '<div class="row between"><span class="faint">5%</span><span class="faint">100%</span></div>' +
         '</div>' +
         '<div class="row between" style="margin-top:4px">' +
           '<span class="muted">' + pool.length + ' word' + (pool.length === 1 ? '' : 's') + ' available</span>' +
@@ -1957,11 +1956,11 @@ function drawPracticeSetup(host) {
       const v = parseInt(slider.value, 10);
       $('#pCountOut').textContent = roundLabel(pool.length, v);
       /* Colour the travelled part of the track (Chrome has no ::-moz-range-progress). */
-      slider.style.setProperty('--fill', ((v - 10) / 90 * 100) + '%');
+      slider.style.setProperty('--fill', ((v - 5) / 95 * 100) + '%');
     };
     slider.oninput = paint;
     slider.onchange = () => {
-      Store.state.settings.roundPercent = clamp(parseInt(slider.value, 10) || 20, 10, 100);
+      Store.state.settings.roundPercent = clamp(parseInt(slider.value, 10) || 20, 5, 100);
       Store.save(); paint();
     };
   }
@@ -3887,7 +3886,7 @@ function renderSettings(host) {
 
       '<div class="field"><label>Typeface</label><div class="font-opts">' +
         FONTS.map(f => '<button class="font-opt' + (s.font === f.id ? ' sel' : '') + '" data-pick-font="' + f.id + '">' +
-          '<div class="sample" style="font-family:' + fontStack(f.id) + '">Aa</div>' +
+          '<div class="sample">' + esc(f.sample) + '</div>' +
           '<div class="nm">' + f.name + '</div></button>').join('') +
       '</div></div>' +
 
@@ -4074,6 +4073,7 @@ function renderSettings(host) {
       '<div class="shortcut-row"><span>Rate a card</span><span><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> <kbd>4</kbd></span></div>' +
       '<div class="shortcut-row"><span>Pick a quiz option</span><span><kbd>1</kbd> … <kbd>4</kbd></span></div>' +
       '<div class="shortcut-row"><span>Pronounce the word</span><kbd>S</kbd></div>' +
+      '<div class="shortcut-row"><span>Show or hide the extras on a card</span><kbd>E</kbd></div>' +
       '<div class="shortcut-row"><span>Undo the last answer</span><kbd>U</kbd></div>' +
       '<div class="shortcut-row"><span>Add a new word</span><kbd>N</kbd></div>' +
       '<div class="shortcut-row"><span>Close a dialog</span><kbd>Esc</kbd></div>' +
@@ -4081,12 +4081,6 @@ function renderSettings(host) {
     '<p class="faint" style="margin:18px 0 6px;text-align:center">Lexio · runs entirely on your computer · v1.0</p>';
 
   bindSettings(host);
-}
-
-function fontStack(id) {
-  return ({ sans: 'Inter,system-ui,sans-serif', rounded: 'ui-rounded,"SF Pro Rounded",Nunito,system-ui,sans-serif',
-    serif: '"Iowan Old Style",Georgia,serif', humanist: 'Optima,Candara,"Trebuchet MS",sans-serif',
-    mono: 'ui-monospace,Menlo,Consolas,monospace' })[id];
 }
 
 function bindSettings(host) {

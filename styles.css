@@ -103,15 +103,28 @@
    Segoe UI, so a rounded stack ending there was indistinguishable from Sans.
      Windows  -> Segoe UI / Century Gothic (or Trebuchet) / Palatino / Candara / Consolas
      macOS    -> SF Pro Text / SF Pro Rounded / Iowan Old Style / Optima / SF Mono */
-:root[data-font="sans"]     { --font:"Inter","SF Pro Text",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif; }
-:root[data-font="rounded"]  { --font:ui-rounded,"SF Pro Rounded","Varela Round",Quicksand,"Century Gothic","Trebuchet MS",Verdana,sans-serif; }
-:root[data-font="serif"]    { --font:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif; }
-:root[data-font="humanist"] { --font:Optima,Candara,"Gill Sans MT","Gill Sans","Trebuchet MS",sans-serif; }
-:root[data-font="mono"]     { --font:ui-monospace,SFMono-Regular,"JetBrains Mono",Menlo,Consolas,"Liberation Mono",monospace; }
-/*   Windows  -> Rockwell / Arial / Times New Roman   macOS -> American Typewriter / Helvetica Neue / Times */
-:root[data-font="slab"]     { --font:"Roboto Slab","American Typewriter",Rockwell,"Bookman Old Style",Bookman,serif; }
-:root[data-font="grotesk"]  { --font:"Helvetica Neue",Helvetica,Arial,"Liberation Sans","Nimbus Sans",sans-serif; }
-:root[data-font="clear"]    { --font:"Times New Roman",Times,"Liberation Serif","Nimbus Roman",serif; }
+/*   Windows  -> Rockwell / Arial / Times New Roman   macOS -> American Typewriter / Helvetica Neue / Times
+   Each stack is written once, here, and read twice: by the page, which takes
+   the chosen one, and by that typeface's own button in Settings, which has to
+   show itself whatever the page is set to. */
+:root{
+  --font-sans:"Inter","SF Pro Text",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --font-rounded:ui-rounded,"SF Pro Rounded","Varela Round",Quicksand,"Century Gothic","Trebuchet MS",Verdana,sans-serif;
+  --font-serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+  --font-humanist:Optima,Candara,"Gill Sans MT","Gill Sans","Trebuchet MS",sans-serif;
+  --font-mono:ui-monospace,SFMono-Regular,"JetBrains Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --font-slab:"Roboto Slab","American Typewriter",Rockwell,"Bookman Old Style",Bookman,serif;
+  --font-grotesk:"Helvetica Neue",Helvetica,Arial,"Liberation Sans","Nimbus Sans",sans-serif;
+  --font-clear:"Times New Roman",Times,"Liberation Serif","Nimbus Roman",serif;
+}
+:root[data-font="sans"]     { --font:var(--font-sans); }
+:root[data-font="rounded"]  { --font:var(--font-rounded); }
+:root[data-font="serif"]    { --font:var(--font-serif); }
+:root[data-font="humanist"] { --font:var(--font-humanist); }
+:root[data-font="mono"]     { --font:var(--font-mono); }
+:root[data-font="slab"]     { --font:var(--font-slab); }
+:root[data-font="grotesk"]  { --font:var(--font-grotesk); }
+:root[data-font="clear"]    { --font:var(--font-clear); }
 
 /* Four steps of 1.5px — enough to feel, small enough to fine-tune. */
 :root[data-size="sm"]{ --fs:14.5px; }
@@ -863,7 +876,17 @@ input[type=range]::-moz-range-thumb{
 .font-opt:hover{ transform:translateY(-2px); }
 .font-opt.sel{ border-color:var(--accent); background:var(--accent-soft); }
 .font-opt .sample{ font-size:1.28rem; font-weight:650; }
-.font-opt .nm{ font-size:.72rem; color:var(--text-faint); margin-top:3px; font-family:var(--font); }
+.font-opt .nm{ font-size:.72rem; color:var(--text-faint); margin-top:3px; }
+/* A typeface has to be shown in itself — the name as much as the letters, and
+   whichever one the page happens to be set to. */
+.font-opt[data-pick-font="sans"]    { font-family:var(--font-sans); }
+.font-opt[data-pick-font="rounded"] { font-family:var(--font-rounded); }
+.font-opt[data-pick-font="serif"]   { font-family:var(--font-serif); }
+.font-opt[data-pick-font="humanist"]{ font-family:var(--font-humanist); }
+.font-opt[data-pick-font="mono"]    { font-family:var(--font-mono); }
+.font-opt[data-pick-font="slab"]    { font-family:var(--font-slab); }
+.font-opt[data-pick-font="grotesk"] { font-family:var(--font-grotesk); }
+.font-opt[data-pick-font="clear"]   { font-family:var(--font-clear); }
 .seg{ display:inline-flex; align-self:flex-start; background:var(--surface-2);
   border-radius:10px; padding:3px; gap:2px; }
 .seg button{ padding:6px 14px; border-radius:8px; border:0; background:transparent; cursor:pointer;
@@ -1056,6 +1079,8 @@ kbd{
 }
 .toggle-btn.on{ color:var(--text); }
 .toggle-btn.on .dot{ background:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); }
+/* The key that does the same thing, said quietly beside the button. */
+.toggle-btn kbd{ font-size:.6rem; padding:0 4px; opacity:.6; background:none; border-color:var(--border-soft); }
 
 
 /* The letter-by-letter hint in the listening drill. */
