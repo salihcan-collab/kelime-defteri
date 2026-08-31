@@ -446,7 +446,7 @@ const head = (s) => console.log('\n— ' + s + ' —');
   /* The bug this prevents: "What does object mean?" offering both "a thing"
      and "to protest" — two correct answers, one of them marked wrong. */
   const noSiblingOptions = await page.evaluate(() => {
-    quizSetup.scope = 'all'; quizSetup.deckId = '';
+    quizSetup.scope = 'all'; quizSetup.decks = [];
     const pool = practicePool(null, 'all');
     const object = pool.filter(c => Store.headKey(c.term) === 'object');
     let clashes = 0, asked = 0;
@@ -1097,7 +1097,7 @@ const head = (s) => console.log('\n— ' + s + ' —');
 
   const listening = await page.evaluate(async () => {
     Store.wipe();
-    quizSetup.scope = 'all'; quizSetup.deckId = '';
+    quizSetup.scope = 'all'; quizSetup.decks = [];
     go('practice', {});
     const pool = practicePool(null, 'all').filter(c => c.term.length > 4);
     quiz = newQuiz('listening', buildQuestions('listening', pool, 3, { cards: pool.slice(0, 3) }));
@@ -1160,7 +1160,7 @@ const head = (s) => console.log('\n— ' + s + ' —');
   /* The question header used to print the part of speech twice. */
   const header = await page.evaluate(() => {
     Store.wipe();
-    quizSetup.scope = 'all'; quizSetup.deckId = '';
+    quizSetup.scope = 'all'; quizSetup.decks = [];
     const pool = practicePool(null, 'all');
     quiz = newQuiz('mc-meaning', buildQuestions('mc-meaning', pool, 1, { cards: pool.slice(0, 1) }));
     render('practice');
@@ -1199,7 +1199,7 @@ const head = (s) => console.log('\n— ' + s + ' —');
     const away = read();
 
     go('practice', {});
-    quizSetup.scope = 'all'; quizSetup.deckId = '';
+    quizSetup.scope = 'all'; quizSetup.decks = [];
     const pool = practicePool(null, 'all');
     quizSetup.mode = 'mc-meaning';
     startQuiz();                       /* the real entry point, as the button uses it */
@@ -1243,7 +1243,7 @@ const head = (s) => console.log('\n— ' + s + ' —');
     const only = Store.addCard({ term: 'zzzlonely', pos: 'noun', definition: 'the only word in its deck',
                                  translation: 'tek', deckId: deck.id }, true);
     Store.saveNow();
-    quizSetup.deckId = deck.id;
+    quizSetup.decks = [deck.id];
     const pool = practicePool(deck.id, 'all');
     const out = { pool: pool.length, blocked: startBlocker(pool, 'mc-meaning'),
                   matchBlocked: startBlocker(pool, 'matching') };
@@ -1283,7 +1283,7 @@ const head = (s) => console.log('\n— ' + s + ' —');
   is(twoWords.matchOk, 'and two words is enough for matching');
   await page.evaluate(() => {
     Store.state.settings.optionCount = 4;
-    quizSetup.deckId = ''; Store.wipe(); Store.saveNow();
+    quizSetup.decks = []; Store.wipe(); Store.saveNow();
   });
 
   /* ------------------------------------------------------------------ *
@@ -1292,7 +1292,7 @@ const head = (s) => console.log('\n— ' + s + ' —');
   head('a matching board says which column is which');
   const board = await page.evaluate(() => {
     Store.wipe();
-    quizSetup.scope = 'all'; quizSetup.deckId = '';
+    quizSetup.scope = 'all'; quizSetup.decks = [];
     go('practice', {});
     const pool = practicePool(null, 'all');
     quiz = newQuiz('matching', buildQuestions('matching', pool, 6, {}));
@@ -1320,7 +1320,7 @@ const head = (s) => console.log('\n— ' + s + ' —');
      `and both columns are padded alike (${board[0].padding})`);
   const forms = await page.evaluate(() => {
     Store.wipe();
-    quizSetup.scope = 'all'; quizSetup.deckId = '';
+    quizSetup.scope = 'all'; quizSetup.decks = [];
     const pool = practicePool(null, 'all');
     const read = (mode) => {
       quiz = newQuiz(mode, buildQuestions(mode, pool, 6, {}));
@@ -1400,7 +1400,7 @@ const head = (s) => console.log('\n— ' + s + ' —');
     document.querySelectorAll('canvas.confetti').forEach(c => c.remove());
     session = null; quiz = null;
     Store.wipe();
-    quizSetup.scope = 'all'; quizSetup.deckId = '';
+    quizSetup.scope = 'all'; quizSetup.decks = [];
     go('practice', {});
     const pool = practicePool(null, 'all');
 
@@ -1521,7 +1521,7 @@ const head = (s) => console.log('\n— ' + s + ' —');
   const answeredInPlace = await page.evaluate(async () => {
     session = null; quiz = null;
     Store.wipe();
-    quizSetup.scope = 'all'; quizSetup.deckId = ''; quizSetup.mode = 'mc-meaning';
+    quizSetup.scope = 'all'; quizSetup.decks = []; quizSetup.mode = 'mc-meaning';
     go('practice', {});
     const pool = practicePool(null, 'all');
     quiz = newQuiz('mc-meaning', buildQuestions('mc-meaning', pool, 4, {}));
@@ -1627,7 +1627,7 @@ const head = (s) => console.log('\n— ' + s + ' —');
     Store.state.settings.optionCount = 5;
     Store.state.settings.roundPercent = 50;
     Store.saveNow();
-    quizSetup.scope = 'all'; quizSetup.deckId = '';
+    quizSetup.scope = 'all'; quizSetup.decks = [];
     const pool = practicePool(null, 'all');
     const missed = pool.slice(0, 3);           /* the "practice the 3 I missed" case */
     const big = buildQuestions('mc-word', pool, roundLength(pool.length), {});
@@ -1669,7 +1669,7 @@ const head = (s) => console.log('\n— ' + s + ' —');
      so the final word still has to be chosen. */
   const match = await page.evaluate(() => {
     Store.wipe();
-    quizSetup.scope = 'all'; quizSetup.deckId = '';
+    quizSetup.scope = 'all'; quizSetup.decks = [];
     const pool = practicePool(null, 'all');
     const out = {};
     [4, 10, 20].forEach(n => {
@@ -1688,6 +1688,51 @@ const head = (s) => console.log('\n— ' + s + ' —');
   }
   is([4, 10, 20].every(n => match[n].allHaveSpare && match[n].spareIsOutside),
      'every matching board carries one spare meaning, so the last pair is not free');
+
+  /* A session can span several decks. An empty selection is every deck, which
+     is what the old "All decks" option meant, so the two must agree. */
+  head('picking more than one deck');
+  const picking = await page.evaluate(() => {
+    Store.wipe(); Store.saveNow();
+    const ids = Store.state.decks.map(d => d.id);
+    const words = (list) => Store.cardsOf(list).map(c => c.id).sort();
+    const two = [ids[0], ids[1]];
+    /* toggling: from all, turning one off leaves the rest */
+    const dropped = deckPick([], ids[0]);
+    /* and turning every one off comes back to all of them */
+    let empty = ids.slice();
+    ids.forEach(id => { empty = deckPick(empty, id); });
+    return {
+      decks: ids.length,
+      pair: words(two).length,
+      sum: Store.cardsOf(ids[0]).length + Store.cardsOf(ids[1]).length,
+      whole: Store.cardsOf(null).length,
+      clean: Store.cardsOf(two).every(c => two.indexOf(c.deckId) !== -1),
+      dropped: dropped,
+      rest: ids.slice(1),
+      empty: empty,
+      allSame: JSON.stringify(words([])) === JSON.stringify(words(null)),
+      pool: practicePool(two, 'all').every(c => two.indexOf(c.deckId) !== -1),
+      queue: Store.queue(two, { ahead: true }).every(c => two.indexOf(c.deckId) !== -1),
+      counted: Store.counts(two).total,
+      countedApart: Store.counts(ids[0]).total + Store.counts(ids[1]).total,
+      labels: [deckPickLabel([]), deckPickLabel([ids[0]]), deckPickLabel(two), deckPickLabel(ids)],
+      deck1: Store.deck(ids[0]).emoji + ' ' + Store.deck(ids[0]).name
+    };
+  });
+  is(picking.pair === picking.sum && picking.pair < picking.whole,
+     `two decks give ${picking.pair} words — both decks' worth, not all ${picking.whole}`);
+  is(picking.clean && picking.pool && picking.queue,
+     'the pool, the queue and the card list all stay inside the chosen decks');
+  is(picking.counted === picking.countedApart,
+     'and the counts add up to what the decks hold apart');
+  is(JSON.stringify(picking.dropped) === JSON.stringify(picking.rest),
+     'turning one deck off leaves the other ' + picking.rest.length + ' selected');
+  is(!picking.empty.length && picking.allSame,
+     'turning the last one off means every deck again — a session of nothing is never meant');
+  is(picking.labels[0] === 'All decks' && picking.labels[1] === picking.deck1 &&
+     picking.labels[2] === '2 decks' && picking.labels[3] === 'All decks',
+     `a selection says what it is: ${picking.labels.join(' / ')}`);
 
   /* ------------------------------------------------------------------ *
      10. Appearance.
@@ -1838,7 +1883,7 @@ const head = (s) => console.log('\n— ' + s + ' —');
   head('hints hold their height');
   await page.evaluate(() => {
     Store.wipe(); Store.state.settings.optionCount = 4; Store.saveNow();
-    quizSetup.mode = 'mc-word'; quizSetup.scope = 'all'; quizSetup.deckId = '';
+    quizSetup.mode = 'mc-word'; quizSetup.scope = 'all'; quizSetup.decks = [];
     go('practice', {});
   });
   await page.waitForTimeout(300);

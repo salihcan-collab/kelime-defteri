@@ -305,6 +305,41 @@ function dueCell(card) {
     ? '<span class="due-now">due now</span>'
     : '<span class="faint">' + dueText(card) + '</span>';
 }
+/* Which decks a session covers. An empty list is every deck — the same thing
+   the old "All decks" option meant — and a deck is dropped out of a session by
+   turning its chip off rather than by hunting for a filter. */
+function deckPicker(chosen) {
+  const decks = Store.state.decks;
+  const all = !chosen.length;
+  return '<div class="deck-picker">' +
+    '<button class="deck-chip' + (all ? ' on' : '') + '" data-deck="">All decks</button>' +
+    decks.map(d => {
+      const on = !all && chosen.indexOf(d.id) !== -1;
+      return '<button class="deck-chip' + (on ? ' on' : '') + '" data-deck="' + d.id + '">' +
+        esc(d.emoji + ' ' + d.name) + '<span class="faint">' + Store.cardsOf(d.id).length + '</span></button>';
+    }).join('') + '</div>';
+}
+
+/* Clicking a chip: "All decks" clears the list, any other one is added or taken
+   away. Turning the last one off means all of them again, since a session of
+   nothing is never what was meant. */
+function deckPick(chosen, id) {
+  if (!id) return [];
+  const all = !chosen.length;
+  const next = all ? Store.state.decks.map(d => d.id) : chosen.slice();
+  const at = next.indexOf(id);
+  if (at === -1) next.push(id); else next.splice(at, 1);
+  return next.length === Store.state.decks.length || !next.length ? [] : next;
+}
+
+/* What to call a selection, once it is made. A list naming every deck there is
+   says the same thing as an empty one. */
+function deckPickLabel(chosen) {
+  if (!chosen || !chosen.length || chosen.length >= Store.state.decks.length) return 'All decks';
+  if (chosen.length === 1) { const d = Store.deck(chosen[0]); return d ? d.emoji + ' ' + d.name : '1 deck'; }
+  return chosen.length + ' decks';
+}
+
 function deckOptions(selected, allLabel) {
   return (allLabel ? '<option value="">' + esc(allLabel) + '</option>' : '') +
     Store.state.decks.map(d => '<option value="' + d.id + '"' + (d.id === selected ? ' selected' : '') + '>' +
@@ -367,6 +402,20 @@ function download(filename, text, mime) {
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1500);
 }
+/* Dates the learner reads are written the same way everywhere: 31-08-2026.
+   Takes a timestamp, a Date, or the 'YYYY-MM-DD' keys the day records use. */
+function dmy(v) {
+  if (v == null || v === '') return '';
+  if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(v)) {
+    const p = v.slice(0, 10).split('-');
+    return p[2] + '-' + p[1] + '-' + p[0];
+  }
+  const d = new Date(v);
+  if (isNaN(d)) return String(v);
+  return String(d.getDate()).padStart(2, '0') + '-' +
+         String(d.getMonth() + 1).padStart(2, '0') + '-' + d.getFullYear();
+}
+
 function stamp() {
   const d = new Date();
   return d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0');
@@ -399,7 +448,7 @@ function heatmapHTML(weeks, withMonths) {
       const n = map[k] || 0;
       const lvl = n === 0 ? 0 : clamp(Math.ceil(4 * n / max), 1, 4);
       const future = cur > today;
-      cells += '<div class="hm-cell" data-lvl="' + (future ? 0 : lvl) + '" title="' + k + ' · ' + n +
+      cells += '<div class="hm-cell" data-lvl="' + (future ? 0 : lvl) + '" title="' + dmy(k) + ' · ' + n +
                ' review' + (n === 1 ? '' : 's') + '"></div>';
       cur.setDate(cur.getDate() + 1);
     }
@@ -423,9 +472,11 @@ function heatmapHTML(weeks, withMonths) {
     }).join('') + '</div>';
   }
 
-  /* Fewer weeks, bigger squares — a one-month map should not sit in a corner. */
+  /* Fewer weeks, bigger squares — a one-month map should not sit in a corner.
+     The size is a ceiling, not a width: the columns shrink to whatever room
+     there is, so a year of days needs no scrollbar to see the end of. */
   const cell = weeks <= 6 ? 30 : weeks <= 14 ? 20 : weeks <= 30 ? 15 : 12;
-  return '<div class="heatmap-wrap" style="--hm-cell:' + cell + 'px">' + months +
+  return '<div class="heatmap-wrap" style="--hm-cell:' + cell + 'px;--hm-cols:' + columns.length + '">' + months +
     '<div class="heatmap">' + columns.map(c => '<div class="hm-col">' + c.cells + '</div>').join('') + '</div>' +
     '</div>';
 }
@@ -714,7 +765,7 @@ function wordOfDayHistory() {
   const when = (d) => {
     if (!d) return '';
     const day = new Date(d + 'T00:00:00');
-    return day.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+    return dmy(day);
   };
   openModal({
     wide: true, noFocus: true,
@@ -860,11 +911,18 @@ function renderDeckDetail(host, deck) {
 }
 
 function cardTable(cards) {
+  /* Headings are the quickest way to reorder a table, so they are buttons —
+     with the arrow showing on all of them, lit on the one in force. */
+  const head = (cls, label, key) => {
+    const on = browseState.sort === key;
+    return '<th class="' + cls + ' sortable' + (on ? ' sorted' : '') + '" data-sort="' + key + '">' +
+      esc(label) + '<i class="sort-arrow">' + (on && browseState.desc ? '▼' : '▲') + '</i></th>';
+  };
   return '<table class="table"><thead><tr>' +
-    '<th class="col-word">Word</th><th class="col-type">Type</th>' +
-    '<th class="col-meaning">Meaning</th><th class="col-translation">Translation</th>' +
-    '<th class="col-level">Level</th>' +
-    '<th class="col-next">Next review</th><th class="col-actions"></th>' +
+    head('col-word', 'Word', 'alpha') + head('col-type', 'Type', 'pos') +
+    head('col-meaning', 'Meaning', 'meaning') + head('col-translation', 'Translation', 'translation') +
+    head('col-level', 'Level', 'strong') + head('col-next', 'Next review', 'due') +
+    '<th class="col-actions"></th>' +
     '</tr></thead><tbody>' +
     cards.map(c =>
       '<tr data-card="' + c.id + '">' +
@@ -1305,6 +1363,7 @@ function aiDeckDialog() {
    Study — spaced repetition session
    ========================================================================== */
 let session = null;
+let studyDecks = [];          /* empty means every deck, the way it always was */
 
 function renderStudy(host) {
   /* finished wins: quitting early leaves cards in the queue but must still
@@ -1315,10 +1374,12 @@ function renderStudy(host) {
 }
 
 function drawStudySetup(host) {
-  const deckId = viewParams.deckId || '';
-  const c = Store.counts(deckId || null);
+  if (viewParams.deckId) { studyDecks = [viewParams.deckId]; viewParams.deckId = ''; }
+  studyDecks = studyDecks.filter(id => Store.deck(id));
+  const pick = studyDecks.length ? studyDecks : null;
+  const c = Store.counts(pick);
   const ready = c.ready;
-  const deck = deckId ? Store.deck(deckId) : null;
+  const deck = studyDecks.length === 1 ? Store.deck(studyDecks[0]) : null;
 
   host.innerHTML =
     '<div class="study-wrap">' +
@@ -1338,8 +1399,11 @@ function drawStudySetup(host) {
           ? '<p class="faint" style="margin-bottom:14px">' + c.dueLearning + ' of them ' +
             (c.dueLearning === 1 ? 'is' : 'are') + ' still in short-term learning steps</p>'
           : '<div style="height:12px"></div>') +
-        '<div class="field" style="max-width:320px;margin:0 auto 16px;text-align:left">' +
-          '<label>Deck</label><select id="sDeck">' + deckOptions(deckId, 'All decks') + '</select></div>' +
+        '<div class="field" style="max-width:420px;margin:0 auto 16px;text-align:left">' +
+          '<label>Decks</label>' + deckPicker(studyDecks) +
+          '<div class="faint" style="margin-top:6px">Studying ' +
+          (studyDecks.length ? esc(deckPickLabel(studyDecks)) : 'every deck') +
+          '. Turn a deck off to leave it out.</div></div>' +
         '<div class="row" style="justify-content:center">' +
           (ready
             ? '<button class="primary-btn" data-act="start">' + ICONS.play + 'Start session</button>'
@@ -1357,20 +1421,23 @@ function drawStudySetup(host) {
     '</div>';
 
   host.onclick = (e) => {
+    const chip = e.target.closest('[data-deck]');
+    if (chip) { studyDecks = deckPick(studyDecks, chip.dataset.deck); return render('study'); }
     const g = e.target.closest('[data-go]'); if (g) return go(g.dataset.go);
-    if (e.target.closest('[data-act="start"]')) return startSession($('#sDeck').value || null, false);
-    if (e.target.closest('[data-act="ahead"]')) return startSession($('#sDeck').value || null, true);
+    if (e.target.closest('[data-act="start"]')) return startSession(pick, false);
+    if (e.target.closest('[data-act="ahead"]')) return startSession(pick, true);
   };
-  const sel = $('#sDeck');
-  if (sel) sel.onchange = () => go('study', { deckId: sel.value });
 }
 
 function startSession(deckId, ahead) {
   const queue = Store.queue(deckId, { ahead: ahead });
   if (!queue.length) {
+    /* deckId is a list of decks or null for all of them, so the wording has to
+       stretch to more than one. */
+    const many = deckId && deckId.length > 1;
     return toast(Store.cardsOf(deckId).length
-      ? 'Every word in this deck is already scheduled — nothing left to bring forward'
-      : 'This deck has no words yet', 'err');
+      ? 'Every word in ' + (many ? 'these decks is' : 'this deck is') + ' already scheduled — nothing left to bring forward'
+      : (many ? 'These decks have' : 'This deck has') + ' no words yet', 'err');
   }
   session = {
     deckId: deckId, ahead: !!ahead, queue: queue.slice(0, ahead ? 60 : queue.length),
@@ -1736,7 +1803,7 @@ const MODES = [
 ];
 
 let quiz = null;
-let quizSetup = { mode: 'mc-meaning', deckId: '', scope: 'all' };
+let quizSetup = { mode: 'mc-meaning', decks: [], scope: 'all' };
 /* Round length is a share of the words the current filters make available,
    so it means the same thing whether a deck holds 20 words or 2,000. */
 function roundPercent() { return clamp(Store.state.settings.roundPercent || 20, 10, 100); }
@@ -1791,15 +1858,15 @@ function renderPractice(host) {
 }
 
 function drawPracticeSetup(host) {
-  const pool = practicePool(quizSetup.deckId, quizSetup.scope);
+  const pool = practicePool(quizSetup.decks, quizSetup.scope);
   const aiOn = AI.available();
   const blocked = startBlocker(pool, quizSetup.mode);
   host.innerHTML =
     '<div class="grid g2" style="margin-bottom:18px;align-items:start">' +
       '<div class="card">' +
-        '<div class="field"><label>Deck</label><select id="pDeck">' + deckOptions(quizSetup.deckId, 'All decks') + '</select></div>' +
+        '<div class="field"><label>Decks</label>' + deckPicker(quizSetup.decks) + '</div>' +
         '<div class="field" style="margin-bottom:0"><label>Which words</label><select id="pScope">' +
-          [['all', 'Everything in the deck'], ['due', 'Only what is due now'], ['weak', 'My weakest words'],
+          [['all', 'Everything in the decks I picked'], ['due', 'Only what is due now'], ['weak', 'My weakest words'],
            ['new', 'Words I have not started'], ['recent', 'Recently added']]
             .map(o => '<option value="' + o[0] + '"' + (quizSetup.scope === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') +
         '</select></div>' +
@@ -1812,7 +1879,7 @@ function drawPracticeSetup(host) {
         '<div class="field" style="margin-bottom:10px">' +
           '<div class="row between"><label style="margin:0">Round length</label>' +
             '<b id="pCountOut" style="font-size:.88rem">' + roundLabel(pool.length) + '</b></div>' +
-          '<input type="range" id="pPct" min="10" max="100" step="10" value="' + roundPercent() + '"' +
+          '<input type="range" id="pPct" min="10" max="100" step="5" value="' + roundPercent() + '"' +
             ' style="--fill:' + ((roundPercent() - 10) / 90 * 100) + '%">' +
           '<div class="row between"><span class="faint">10%</span><span class="faint">100%</span></div>' +
         '</div>' +
@@ -1847,6 +1914,8 @@ function drawPracticeSetup(host) {
     historyHTML();
 
   host.onclick = async (e) => {
+    const chip = e.target.closest('[data-deck]');
+    if (chip) { quizSetup.decks = deckPick(quizSetup.decks, chip.dataset.deck); return render('practice'); }
     const m = e.target.closest('[data-mode]');
     if (m) { quizSetup.mode = m.dataset.mode; return render('practice'); }
     if (e.target.closest('[data-act="start"]')) return startQuiz();
@@ -1864,7 +1933,6 @@ function drawPracticeSetup(host) {
       if (entry) return reviewRound(entry);
     }
   };
-  $('#pDeck').onchange = (e) => { quizSetup.deckId = e.target.value; render('practice'); };
   $('#pScope').onchange = (e) => { quizSetup.scope = e.target.value; render('practice'); };
   const level = $('#pLevel');   /* absent while there is no AI to set a level for */
   if (level) level.onchange = (e) => { Store.state.settings.ai.level = e.target.value; Store.save(); };
@@ -1905,6 +1973,7 @@ function roundLabel(poolSize, percent) {
 }
 
 function practicePool(deckId, scope) {
+  /* deckId is a list of decks now; an empty one already means every deck. */
   let pool = Store.cardsOf(deckId || null).filter(c => c.term && (c.translation || c.definition));
   if (scope === 'due') pool = pool.filter(c => SRS.isDue(c.srs) && c.srs.state !== 'new');
   else if (scope === 'new') pool = pool.filter(c => c.srs.state === 'new');
@@ -2308,7 +2377,7 @@ function newQuiz(mode, items) {
 }
 
 async function startQuiz() {
-  const pool = practicePool(quizSetup.deckId, quizSetup.scope);
+  const pool = practicePool(quizSetup.decks, quizSetup.scope);
   const mode = quizSetup.mode;
   const blocked = startBlocker(pool, mode);
   if (blocked) return toast(blocked, 'err');
@@ -3217,7 +3286,7 @@ function recordRound() {
   const ids = [];
   quiz.results.forEach(r => { if (r.card && ids.indexOf(r.card.id) === -1) ids.push(r.card.id); });
   Store.addRound({
-    mode: quiz.mode, deckId: quizSetup.deckId, scope: quizSetup.scope,
+    mode: quiz.mode, decks: quizSetup.decks.slice(), scope: quizSetup.scope,
     level: Store.state.settings.ai.level,
     answers: quiz.results.length, correct: quiz.results.filter(r => r.ok).length,
     cardIds: ids, review: packReview()
@@ -3279,9 +3348,8 @@ function packReview() {
    first. Both states are in the page, so the toggle moves no other pixel. */
 function reviewRound(entry) {
   const modeName = (id) => { const m = MODES.filter(m => m.id === id)[0]; return m ? m.name : id; };
-  const deck = Store.deck(entry.deckId);
   const head = '<p class="faint" style="margin-bottom:14px">' +
-    esc(deck ? deck.emoji + ' ' + deck.name : 'All decks') + ' · ' + esc(SCOPE_NAMES[entry.scope] || entry.scope) +
+    esc(deckPickLabel(roundDecks(entry))) + ' · ' + esc(SCOPE_NAMES[entry.scope] || entry.scope) +
     (isAIMode(entry.mode) && entry.level ? ' · ' + esc(entry.level) : '') +
     ' · ' + agoLabel(entry.at) + ' · ' + pct(entry.correct, entry.answers) + '% of ' + entry.answers + '</p>';
 
@@ -3397,10 +3465,15 @@ function agoLabel(ts) {
   const days = Math.round(hours / 24);
   if (days === 1) return 'yesterday';
   if (days < 7) return days + ' days ago';
-  return new Date(ts).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+  return dmy(ts);
 }
 
 const SCOPE_NAMES = { all: 'all words', due: 'due now', weak: 'weakest', new: 'not started', recent: 'recently added' };
+
+/* Rounds kept before decks could be picked in bunches named a single deck. */
+function roundDecks(r) {
+  return r.decks || (r.deckId ? [r.deckId] : []);
+}
 
 /* The last few rounds, each one a click away from being done again. */
 function historyHTML() {
@@ -3410,11 +3483,10 @@ function historyHTML() {
   return '<div class="section-title" style="margin-top:26px"><h2>Recent practice</h2>' +
       '<button class="ghost-btn tiny" data-act="clear-history">Clear</button></div>' +
     '<div class="card">' + rounds.map(r => {
-      const deck = Store.deck(r.deckId);
       return '<div class="row between history-row">' +
         '<div style="min-width:0">' +
           '<b>' + esc(modeName(r.mode)) + '</b>' +
-          '<div class="faint">' + esc(deck ? deck.emoji + ' ' + deck.name : 'All decks') +
+          '<div class="faint">' + esc(deckPickLabel(roundDecks(r))) +
             ' · ' + esc(SCOPE_NAMES[r.scope] || r.scope) +
             (isAIMode(r.mode) && r.level ? ' · ' + esc(r.level) : '') +
             ' · ' + agoLabel(r.at) + '</div>' +
@@ -3481,7 +3553,7 @@ function drawQuizResults(host) {
          ones actually being confused. */
       const seen = {};
       const missed = wrong.map(r => r.card).filter(c => c && !seen[c.id] && (seen[c.id] = 1));
-      const wide = practicePool(quizSetup.deckId, quizSetup.scope);
+      const wide = practicePool(quizSetup.decks, quizSetup.scope);
       const pool = wide.length >= 2 ? wide : missed;
       let mode = quizSetup.mode;
       /* An AI drill cannot be rebuilt from the words alone — the questions were
@@ -3503,7 +3575,22 @@ function drawQuizResults(host) {
 /* ==========================================================================
    Browse
    ========================================================================== */
-let browseState = { q: '', deck: '', status: '', sort: 'recent' };
+let browseState = { q: '', deck: '', status: '', pos: '', sort: 'recent', desc: false };
+
+/* Every way the table can be ordered, and which heading says so. A sort knows
+   its own natural direction — newest first, A to Z — and the arrow on the
+   heading turns it round. */
+const BROWSE_SORTS = {
+  recent:      { label: 'Newest first', by: (a, b) => b.createdAt - a.createdAt },
+  alpha:       { label: 'A → Z',        by: (a, b) => a.term.localeCompare(b.term) },
+  pos:         { label: 'Type',         by: (a, b) => (a.pos || '~').localeCompare(b.pos || '~') || a.term.localeCompare(b.term) },
+  meaning:     { label: 'Meaning',      by: (a, b) => (a.definition || '~').localeCompare(b.definition || '~') },
+  translation: { label: 'Translation',  by: (a, b) => (a.translation || '~').localeCompare(b.translation || '~') },
+  strong:      { label: 'Best known',   by: (a, b) => SRS.strength(b.srs) - SRS.strength(a.srs) },
+  due:         { label: 'Due date',     by: (a, b) => (a.srs.due || 0) - (b.srs.due || 0) },
+  hard:        { label: 'Hardest first', by: (a, b) => (b.stats.wrong + b.srs.lapses * 2) - (a.stats.wrong + a.srs.lapses * 2) },
+  seen:        { label: 'Most seen',    by: (a, b) => (b.stats.seen || 0) - (a.stats.seen || 0) }
+};
 
 function renderBrowse(host) {
   let rows = Store.state.cards.slice();
@@ -3516,20 +3603,15 @@ function renderBrowse(host) {
     if (browseState.status === 'later') return c.srs.state !== 'new' && !isDueNow(c);
     return SRS.bucket(c.srs) === browseState.status;   /* a knowledge level */
   });
-  const sorters = {
-    recent: (a, b) => b.createdAt - a.createdAt,
-    alpha:  (a, b) => a.term.localeCompare(b.term),
-    due:    (a, b) => (a.srs.due || 0) - (b.srs.due || 0),
-    hard:   (a, b) => (b.stats.wrong + b.srs.lapses * 2) - (a.stats.wrong + a.srs.lapses * 2),
-    strong: (a, b) => SRS.strength(b.srs) - SRS.strength(a.srs)
-  };
-  rows.sort(sorters[browseState.sort]);
+  if (browseState.pos) rows = rows.filter(c => (c.pos || '') === browseState.pos);
+  rows.sort((BROWSE_SORTS[browseState.sort] || BROWSE_SORTS.recent).by);
+  if (browseState.desc) rows.reverse();
 
   host.innerHTML =
     '<div class="toolbar">' +
       '<div class="search">' +
         '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>' +
-        '<input type="search" id="bQ" placeholder="Search words, meanings, examples…" value="' + esc(browseState.q) + '">' +
+        '<input type="search" id="bQ" placeholder="Search your words…" value="' + esc(browseState.q) + '">' +
       '</div>' +
       '<select id="bDeck">' + deckOptions(browseState.deck, 'All decks') + '</select>' +
       '<select id="bStatus">' +
@@ -3543,9 +3625,17 @@ function renderBrowse(host) {
             .map(o => '<option value="' + o[0] + '"' + (browseState.status === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') +
         '</optgroup>' +
       '</select>' +
+      /* Only the parts of speech actually in the collection: a list of twelve
+         when eleven of them match nothing is a list of dead ends. */
+      '<select id="bPos">' +
+        '<option value=""' + (browseState.pos === '' ? ' selected' : '') + '>Any type</option>' +
+        PARTS_OF_SPEECH.filter(pos => Store.state.cards.some(c => c.pos === pos)).map(pos =>
+          '<option value="' + esc(pos) + '"' + (browseState.pos === pos ? ' selected' : '') + '>' +
+            esc(cap(pos)) + '</option>').join('') +
+      '</select>' +
       '<select id="bSort">' +
-        [['recent', 'Newest first'], ['alpha', 'A → Z'], ['due', 'Due date'], ['hard', 'Hardest first'], ['strong', 'Best known']]
-          .map(o => '<option value="' + o[0] + '"' + (browseState.sort === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') +
+        Object.keys(BROWSE_SORTS).map(k => '<option value="' + k + '"' +
+          (browseState.sort === k ? ' selected' : '') + '>' + esc(BROWSE_SORTS[k].label) + '</option>').join('') +
       '</select>' +
       '<div class="spacer"></div>' +
       '<button class="soft-btn" data-act="import">Import</button>' +
@@ -3560,6 +3650,15 @@ function renderBrowse(host) {
         '<p class="faint">Try a different search or filter.</p></div></div>');
 
   host.onclick = (e) => {
+    /* A heading sorts by its own column; the same heading again turns the
+       order round. */
+    const th = e.target.closest('[data-sort]');
+    if (th) {
+      const key = th.dataset.sort;
+      if (browseState.sort === key) browseState.desc = !browseState.desc;
+      else { browseState.sort = key; browseState.desc = false; }
+      return render('browse');
+    }
     if (e.target.closest('[data-act="add"]')) return cardEditor(null, browseState.deck || null);
     if (e.target.closest('[data-act="import"]')) return importDialog();
     if (e.target.closest('[data-act="export"]')) {
@@ -3572,7 +3671,8 @@ function renderBrowse(host) {
   $('#bQ').oninput = (e) => { clearTimeout(t); const v = e.target.value; t = setTimeout(() => { browseState.q = v; render('browse'); const i = $('#bQ'); if (i) { i.focus(); i.setSelectionRange(v.length, v.length); } }, 220); };
   $('#bDeck').onchange   = (e) => { browseState.deck = e.target.value; render('browse'); };
   $('#bStatus').onchange = (e) => { browseState.status = e.target.value; render('browse'); };
-  $('#bSort').onchange   = (e) => { browseState.sort = e.target.value; render('browse'); };
+  $('#bPos').onchange    = (e) => { browseState.pos = e.target.value; render('browse'); };
+  $('#bSort').onchange   = (e) => { browseState.sort = e.target.value; browseState.desc = false; render('browse'); };
 }
 
 /* ==========================================================================
@@ -3872,7 +3972,7 @@ function renderSettings(host) {
           '<div class="field" id="wotdKeyRow"' + (wotdKind(wa) === 'ollama' ? ' hidden' : '') + '>' +
             '<label>API key</label>' +
             '<input type="password" id="wotdKey" value="' + esc(wa.apiKey) + '" placeholder="AIza…" autocomplete="off"></div>' +
-          '<div class="row"><button class="ghost-btn" id="wotdTest">Test the provider</button>' +
+          '<div class="row"><button class="ghost-btn tiny" id="wotdTest">Test the provider</button>' +
             '<span id="wotdTestOut" class="faint"></span></div>' +
           '<span class="help" style="margin-top:10px;display:block" id="wotdHelp">' + wotdProviderHelp(wa) + '</span>' +
         '</div>' +
@@ -3913,18 +4013,17 @@ function renderSettings(host) {
         Store.state.log.length + ' reviews recorded · ' +
         /* Printed so a collection that is behind can be spotted at a glance. */
         'starter words rev ' + (Store.state.starterRevision || 0) + '/' + STARTER_REVISION +
-        (Store.state.lastBackup ? ' · last backup ' + new Date(Store.state.lastBackup).toLocaleDateString() : ' · never backed up') +
+        (Store.state.lastBackup ? ' · last backup ' + dmy(Store.state.lastBackup) : ' · never backed up') +
       '</p>' +
       /* What the app has kept by itself. A downloaded backup is still the real
          safety net — these live in this browser and go with it — but they cover
          the day something goes wrong and there is no backup to hand. */
       (Store.snapshots().length
-        ? '<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border-soft)">' +
-            '<div class="section-title" style="margin:0 0 8px"><h2 style="font-size:.92rem">Copies this app kept</h2></div>' +
+        ? '<div style="margin-top:16px">' +
+            '<div class="section-title" style="margin:0 0 8px"><h2 style="font-size:.92rem">Copies this app keeps</h2></div>' +
             Store.snapshots().map(sn =>
               '<div class="row between history-row">' +
-                '<div style="min-width:0"><b>' + esc(new Date(sn.at).toLocaleDateString(undefined,
-                  { day:'numeric', month:'short', year:'numeric' })) + '</b>' +
+                '<div style="min-width:0"><b>' + esc(dmy(sn.at)) + '</b>' +
                   '<div class="faint">' + sn.cards + ' words · ' + sn.decks + ' decks · ' + esc(sn.why) + '</div>' +
                 '</div>' +
                 '<div class="row" style="gap:8px;flex:none">' +
@@ -4014,7 +4113,7 @@ function bindSettings(host) {
       if (!sn) return;
       confirmDialog('Go back to this copy?',
         'Your words, decks and schedules become what they were on ' +
-        new Date(sn.at).toLocaleDateString() + ' (' + sn.cards + ' words). ' +
+        dmy(sn.at) + ' (' + sn.cards + ' words). ' +
         'What is here now is kept as another copy first.',
         'Restore this copy', true).then(ok => {
           if (!ok) return;
@@ -4163,7 +4262,7 @@ function importDialog() {
         if (file) text = await file.text();
         if (!text) return toast('Choose a file or paste some rows', 'err');
         let deckId = $('#impDeck').value;
-        if (!deckId) deckId = Store.addDeck({ name: 'Imported ' + new Date().toLocaleDateString(), emoji: '📥' }).id;
+        if (!deckId) deckId = Store.addDeck({ name: 'Imported ' + dmy(Date.now()), emoji: '📥' }).id;
         try {
           const r = Store.importCSV(text, deckId);
           closeModal();

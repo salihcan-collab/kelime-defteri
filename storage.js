@@ -438,7 +438,18 @@ const Store = {
     return out.sort((a, b) => a.term.localeCompare(b.term));
   },
 
+  /* One deck, several, or all of them. Everything that works from a deck —
+     the queue, the counts, the practice pool — comes through here, so taking a
+     list of ids is all it costs to let a session span decks. An empty list
+     means every deck, the same as no deck at all: that is what a picker with
+     nothing turned on has always meant. */
   cardsOf(deckId) {
+    if (Array.isArray(deckId)) {
+      if (!deckId.length) return this.state.cards.slice();
+      const want = {};
+      deckId.forEach(id => { want[id] = 1; });
+      return this.state.cards.filter(c => want[c.deckId]);
+    }
     return deckId ? this.state.cards.filter(c => c.deckId === deckId) : this.state.cards.slice();
   },
 
