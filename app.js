@@ -141,6 +141,7 @@ function go(view, params) {
   /* Leaving a finished session behind: start clean next time. */
   if (currentView === 'study' && view !== 'study' && session && session.finished) session = null;
   if (currentView === 'practice' && view !== 'practice' && quiz && quiz.finished) quiz = null;
+  if (view !== currentView) deckMenuOpen = false;   /* never reopens by itself */
   currentView = view; viewParams = params || {};
   $$('.nav-item').forEach(b => b.classList.toggle('is-active', b.dataset.view === view));
   $$('.view').forEach(v => v.classList.add('hidden'));
@@ -305,19 +306,32 @@ function dueCell(card) {
     ? '<span class="due-now">due now</span>'
     : '<span class="faint">' + dueText(card) + '</span>';
 }
-/* Which decks a session covers. An empty list is every deck — the same thing
-   the old "All decks" option meant — and a deck is dropped out of a session by
-   turning its chip off rather than by hunting for a filter. */
+/* Which decks a session covers. One button says what is chosen, and opens a
+   list to change it; an empty list is every deck — the same thing the old
+   "All decks" option meant — and a deck is dropped out of a session by turning
+   it off in that list rather than by hunting for a filter.
+
+   The list stays open while decks are ticked off, since choosing several is
+   the whole point of it: only a click outside, Escape, or the button itself
+   closes it. */
+let deckMenuOpen = false;
+
 function deckPicker(chosen) {
-  const decks = Store.state.decks;
   const all = !chosen.length;
-  return '<div class="deck-picker">' +
-    '<button class="deck-chip' + (all ? ' on' : '') + '" data-deck="">All decks</button>' +
-    decks.map(d => {
-      const on = !all && chosen.indexOf(d.id) !== -1;
-      return '<button class="deck-chip' + (on ? ' on' : '') + '" data-deck="' + d.id + '">' +
-        esc(d.emoji + ' ' + d.name) + '<span class="faint">' + Store.cardsOf(d.id).length + '</span></button>';
-    }).join('') + '</div>';
+  const row = (id, label, on, count) =>
+    '<button type="button" class="deck-opt' + (on ? ' on' : '') + '" data-deck="' + id + '">' +
+      '<i class="tick">' + (on ? '✓' : '') + '</i>' + esc(label) +
+      '<span class="faint">' + count + '</span></button>';
+  return '<div class="deck-pick' + (deckMenuOpen ? ' open' : '') + '">' +
+    '<button type="button" class="deck-pick-btn" data-deck-menu="1"' +
+      ' aria-expanded="' + (deckMenuOpen ? 'true' : 'false') + '">' +
+      esc(deckPickLabel(chosen)) + '</button>' +
+    '<div class="deck-pick-menu"' + (deckMenuOpen ? '' : ' hidden') + '>' +
+      row('', 'All decks', all, Store.state.cards.length) +
+      Store.state.decks.map(d =>
+        row(d.id, d.emoji + ' ' + d.name, !all && chosen.indexOf(d.id) !== -1, Store.cardsOf(d.id).length)
+      ).join('') +
+    '</div></div>';
 }
 
 /* Clicking a chip: "All decks" clears the list, any other one is added or taken
@@ -920,7 +934,7 @@ function cardTable(cards) {
   };
   return '<table class="table"><thead><tr>' +
     head('col-word', 'Word', 'alpha') + head('col-type', 'Type', 'pos') +
-    head('col-meaning', 'Meaning', 'meaning') + head('col-translation', 'Translation', 'translation') +
+    '<th class="col-meaning">Meaning</th><th class="col-translation">Translation</th>' +
     head('col-level', 'Level', 'strong') + head('col-next', 'Next review', 'due') +
     '<th class="col-actions"></th>' +
     '</tr></thead><tbody>' +
@@ -1399,11 +1413,10 @@ function drawStudySetup(host) {
           ? '<p class="faint" style="margin-bottom:14px">' + c.dueLearning + ' of them ' +
             (c.dueLearning === 1 ? 'is' : 'are') + ' still in short-term learning steps</p>'
           : '<div style="height:12px"></div>') +
-        '<div class="field" style="max-width:420px;margin:0 auto 16px;text-align:left">' +
+        '<div class="field" style="max-width:340px;margin:0 auto 16px;text-align:left">' +
           '<label>Decks</label>' + deckPicker(studyDecks) +
-          '<div class="faint" style="margin-top:6px">Studying ' +
-          (studyDecks.length ? esc(deckPickLabel(studyDecks)) : 'every deck') +
-          '. Turn a deck off to leave it out.</div></div>' +
+          '<div class="faint" style="margin-top:6px">Every deck is in the session' +
+          ' until you turn it off in the list.</div></div>' +
         '<div class="row" style="justify-content:center">' +
           (ready
             ? '<button class="primary-btn" data-act="start">' + ICONS.play + 'Start session</button>'
@@ -1421,8 +1434,9 @@ function drawStudySetup(host) {
     '</div>';
 
   host.onclick = (e) => {
-    const chip = e.target.closest('[data-deck]');
-    if (chip) { studyDecks = deckPick(studyDecks, chip.dataset.deck); return render('study'); }
+    if (e.target.closest('[data-deck-menu]')) { deckMenuOpen = !deckMenuOpen; return render('study'); }
+    const opt = e.target.closest('[data-deck]');
+    if (opt) { studyDecks = deckPick(studyDecks, opt.dataset.deck); return render('study'); }
     const g = e.target.closest('[data-go]'); if (g) return go(g.dataset.go);
     if (e.target.closest('[data-act="start"]')) return startSession(pick, false);
     if (e.target.closest('[data-act="ahead"]')) return startSession(pick, true);
@@ -1914,8 +1928,9 @@ function drawPracticeSetup(host) {
     historyHTML();
 
   host.onclick = async (e) => {
-    const chip = e.target.closest('[data-deck]');
-    if (chip) { quizSetup.decks = deckPick(quizSetup.decks, chip.dataset.deck); return render('practice'); }
+    if (e.target.closest('[data-deck-menu]')) { deckMenuOpen = !deckMenuOpen; return render('practice'); }
+    const opt = e.target.closest('[data-deck]');
+    if (opt) { quizSetup.decks = deckPick(quizSetup.decks, opt.dataset.deck); return render('practice'); }
     const m = e.target.closest('[data-mode]');
     if (m) { quizSetup.mode = m.dataset.mode; return render('practice'); }
     if (e.target.closest('[data-act="start"]')) return startQuiz();
@@ -3580,12 +3595,13 @@ let browseState = { q: '', deck: '', status: '', pos: '', sort: 'recent', desc: 
 /* Every way the table can be ordered, and which heading says so. A sort knows
    its own natural direction — newest first, A to Z — and the arrow on the
    heading turns it round. */
+/* Meaning and translation are not among these on purpose: alphabetical order
+   over a sentence sorts by whichever word happens to start it, which tells the
+   learner nothing. */
 const BROWSE_SORTS = {
   recent:      { label: 'Newest first', by: (a, b) => b.createdAt - a.createdAt },
   alpha:       { label: 'A → Z',        by: (a, b) => a.term.localeCompare(b.term) },
   pos:         { label: 'Type',         by: (a, b) => (a.pos || '~').localeCompare(b.pos || '~') || a.term.localeCompare(b.term) },
-  meaning:     { label: 'Meaning',      by: (a, b) => (a.definition || '~').localeCompare(b.definition || '~') },
-  translation: { label: 'Translation',  by: (a, b) => (a.translation || '~').localeCompare(b.translation || '~') },
   strong:      { label: 'Best known',   by: (a, b) => SRS.strength(b.srs) - SRS.strength(a.srs) },
   due:         { label: 'Due date',     by: (a, b) => (a.srs.due || 0) - (b.srs.due || 0) },
   hard:        { label: 'Hardest first', by: (a, b) => (b.stats.wrong + b.srs.lapses * 2) - (a.stats.wrong + a.srs.lapses * 2) },
@@ -4365,6 +4381,13 @@ function boot() {
   };
 
   document.addEventListener('keydown', onKey);
+  /* An open deck list closes when the page is used elsewhere. The clicked
+     element may already have been swept away by the redraw the view itself
+     ran, but its chain is intact, so this still knows where the click was. */
+  document.addEventListener('click', (e) => {
+    if (!deckMenuOpen || e.target.closest('.deck-pick')) return;
+    deckMenuOpen = false; render(currentView);
+  });
   window.addEventListener('beforeunload', () => Store.saveNow());
 
   go('dashboard', {});
@@ -4408,6 +4431,7 @@ function onKey(e) {
 
   if (e.key === 'Escape') {
     if (modalOpen) return closeModal();
+    if (deckMenuOpen) { deckMenuOpen = false; return render(currentView); }
     if (currentView === 'study' && session) return endSession();
     if (currentView === 'practice' && quiz) { quiz = null; return render('practice'); }
     return;

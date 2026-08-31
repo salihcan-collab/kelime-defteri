@@ -686,18 +686,36 @@ input[type=range]::-moz-range-thumb{
 .history-row:last-child{ border-bottom:0; padding-bottom:2px; }
 .history-row .faint{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 
-/* Deck chips. A session covers whichever ones are lit, so they have to read as
-   pressed or not at a glance rather than as buttons that do something. */
-.deck-picker{ display:flex; flex-wrap:wrap; gap:7px; }
-.deck-chip{
-  display:inline-flex; align-items:center; gap:7px; padding:6px 11px; border-radius:99px;
-  font-size:.78rem; font-weight:600; cursor:pointer; transition:.14s;
-  background:var(--surface-2); color:var(--text-dim); border:1px solid var(--border-soft);
+/* The deck picker. The button is a dropdown as far as the eye is concerned —
+   it borrows the form controls' shape and their little triangle — but the list
+   it opens holds several answers at once instead of one. */
+.deck-pick{ position:relative; }
+.deck-pick-btn{
+  width:100%; padding:10px 34px 10px 13px; border-radius:10px; text-align:left;
+  background:var(--surface-2); border:1px solid var(--border-soft); font-size:.9rem;
+  color:inherit; cursor:pointer; transition:.15s;
+  background-image:linear-gradient(45deg,transparent 50%,currentColor 50%),linear-gradient(135deg,currentColor 50%,transparent 50%);
+  background-position:calc(100% - 17px) 52%, calc(100% - 12px) 52%;
+  background-size:5px 5px,5px 5px; background-repeat:no-repeat;
 }
-.deck-chip:hover{ border-color:var(--accent); color:var(--text); }
-.deck-chip.on{ background:var(--accent-soft); color:var(--accent); border-color:var(--accent); }
-.deck-chip .faint{ font-size:.7rem; font-weight:600; }
-.deck-chip.on .faint{ color:inherit; opacity:.75; }
+.deck-pick-btn:hover{ border-color:var(--accent); }
+.deck-pick.open .deck-pick-btn{
+  border-color:var(--accent); background-color:var(--surface); box-shadow:0 0 0 3px var(--accent-soft);
+}
+.deck-pick-menu{
+  position:absolute; z-index:30; top:calc(100% + 5px); left:0; right:0; padding:5px;
+  background:var(--surface); border:1px solid var(--border); border-radius:11px;
+  box-shadow:var(--shadow-lg); max-height:266px; overflow-y:auto;
+}
+.deck-opt{
+  display:flex; align-items:center; gap:9px; width:100%; padding:8px 10px; border-radius:8px;
+  background:none; border:0; color:var(--text-dim); font-size:.84rem; font-weight:600;
+  text-align:left; cursor:pointer; transition:.12s;
+}
+.deck-opt:hover{ background:var(--surface-2); color:var(--text); }
+.deck-opt.on{ color:var(--accent); }
+.deck-opt .tick{ width:13px; flex:none; font-style:normal; font-size:.8rem; }
+.deck-opt .faint{ margin-left:auto; font-size:.72rem; font-weight:600; }
 
 .mode-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(215px,1fr)); gap:12px; }
 .mode-card{
