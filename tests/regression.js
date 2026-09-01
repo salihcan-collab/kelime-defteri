@@ -1734,6 +1734,40 @@ const head = (s) => console.log('\n— ' + s + ' —');
      picking.labels[2] === '2 decks' && picking.labels[3] === 'All decks',
      `a selection says what it is: ${picking.labels.join(' / ')}`);
 
+  /* The deck the app ships with goes into a collection already in use. It has
+     to add and never disturb: a word the learner has rewritten keeps its
+     wording, its schedule and its statistics. */
+  head('installing the shipped deck');
+  const shipped = await page.evaluate(async () => {
+    Store.wipe(); Store.saveNow();
+    const mine = Store.state.cards[0];
+    mine.definition = 'my own words'; mine.srs.reps = 7; mine.stats.correct = 3;
+    const before = Store.state.cards.length;
+    const first = Store.installDeck(B1_DECK);
+    const mid = Store.state.cards.length;
+    const again = Store.installDeck(B1_DECK);          /* pressing it twice */
+    const kept = Store.state.cards.filter(c => c.id === mine.id)[0];
+    const deck = Store.state.decks.filter(d => d.name === B1_DECK.name)[0];
+    return {
+      want: B1_DECK.cards.length, added: first.added, addedAgain: again.added,
+      grew: mid - before, unchanged: Store.state.cards.length - mid,
+      inDeck: Store.cardsOf(deck.id).length,
+      sameDeck: first.deck.id === again.deck.id,
+      decks: Store.state.decks.filter(d => d.name === B1_DECK.name).length,
+      kept: kept.definition === 'my own words' && kept.srs.reps === 7 && kept.stats.correct === 3,
+      filled: Store.cardsOf(deck.id).every(c => c.term && c.pos && c.definition && c.example && c.translation)
+    };
+  });
+  is(shipped.added === shipped.want && shipped.grew === shipped.want,
+     `installing it adds all ${shipped.want} of its words`);
+  is(shipped.inDeck === shipped.want && shipped.decks === 1,
+     'into one deck of its own');
+  is(shipped.addedAgain === 0 && shipped.unchanged === 0 && shipped.sameDeck,
+     'and installing it again adds nothing and makes no second deck');
+  is(shipped.kept, 'a word the learner had rewritten keeps its wording, its schedule and its score');
+  is(shipped.filled, 'every card it brings has a meaning, an example and a translation');
+  await page.evaluate(() => { Store.wipe(); Store.saveNow(); });   /* as it was found */
+
   /* ------------------------------------------------------------------ *
      10. Appearance.
 
@@ -1850,7 +1884,7 @@ const head = (s) => console.log('\n— ' + s + ' —');
     let thrown = '';
     let out = null;
     try { out = Store.migrate(JSON.parse(JSON.stringify(old))); } catch (e) { thrown = e.message; }
-    return { thrown: thrown,
+    return { thrown: thrown, had: now.cards.length,
              cards: out ? out.cards.length : 0, log: out ? out.log.length : 0,
              kept: out ? out.settings.theme + '/' + out.settings.newPerDay : '',
              key: out ? out.settings.ai.apiKey : '',
@@ -1860,7 +1894,8 @@ const head = (s) => console.log('\n— ' + s + ' —');
              history: out ? out.wotdLog.map(w => w.term).join() : '' };
   });
   is(!older.thrown, older.thrown ? 'migration threw: ' + older.thrown : 'an older save migrates without throwing');
-  is(older.cards === 83 && older.log === 1, `its ${older.cards} words and its review history survive`);
+  is(older.cards === older.had && older.log === 1,
+     `its ${older.cards} words and its review history survive`);
   is(older.kept === 'nord/7' && older.key === 'zz', 'the settings it had are kept');
   is(older.level === 'B1-B2' && older.wotdAi && older.cw === 'side' && older.practice,
      'and the ones added since arrive with their defaults');

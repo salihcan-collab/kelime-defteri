@@ -854,6 +854,17 @@ function quickCard(view, icon, title, desc) {
 /* ==========================================================================
    Decks
    ========================================================================== */
+/* The deck the app ships with. It is offered until the collection has all of
+   it, and the offer goes away once it does — a button that does nothing is
+   worse than no button. */
+function shippedDeckMissing() {
+  if (typeof B1_DECK === 'undefined') return false;
+  const key = (v) => String(v == null ? '' : v).trim().toLowerCase();
+  const have = {};
+  Store.state.cards.forEach(c => { have[key(c.term) + '|' + key(c.pos) + '|' + key(c.sense)] = 1; });
+  return B1_DECK.cards.some(c => !have[key(c.term) + '|' + key(c.pos) + '|' + key(c.sense)]);
+}
+
 function renderDecks(host) {
   if (viewParams.deckId && Store.deck(viewParams.deckId)) return renderDeckDetail(host, Store.deck(viewParams.deckId));
 
@@ -861,6 +872,8 @@ function renderDecks(host) {
     '<div class="row between" style="margin-bottom:16px">' +
       '<p class="muted">' + Store.state.decks.length + ' decks · ' + Store.state.cards.length + ' words</p>' +
       '<div class="row">' +
+        (shippedDeckMissing() ? '<button class="ghost-btn" data-act="ship-deck">' + ICONS.plus +
+          esc(B1_DECK.emoji + ' ' + B1_DECK.name) + '</button>' : '') +
         (AI.available() ? '<button class="ghost-btn" data-act="ai-deck">' + ICONS.spark + 'Generate with AI</button>' : '') +
         '<button class="primary-btn" data-act="new-deck">' + ICONS.plus + 'New deck</button>' +
       '</div>' +
@@ -888,6 +901,13 @@ function renderDecks(host) {
   host.onclick = (e) => {
     if (e.target.closest('[data-act="new-deck"]')) return deckEditor(null);
     if (e.target.closest('[data-act="ai-deck"]')) return aiDeckDialog();
+    if (e.target.closest('[data-act="ship-deck"]')) {
+      const r = Store.installDeck(B1_DECK);
+      toast(r.added
+        ? r.added + ' word' + (r.added === 1 ? '' : 's') + ' added to ' + B1_DECK.name
+        : B1_DECK.name + ' was already complete', r.added ? 'ok' : 'info');
+      return go('decks', { deckId: r.deck.id });
+    }
     const d = e.target.closest('[data-deck]');
     if (d) go('decks', { deckId: d.dataset.deck });
   };

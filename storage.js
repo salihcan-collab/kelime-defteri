@@ -274,6 +274,27 @@ const Store = {
     this.saveNow();
   },
 
+  /* A deck that ships with the app, put into a collection that is already in
+     use. Nothing there is disturbed: a word the deck already holds is left
+     exactly as it is, edits and review history included, so pressing this
+     twice does nothing the second time. */
+  installDeck(src) {
+    const key = (v) => String(v == null ? '' : v).trim().toLowerCase();
+    const sig = (c) => key(c.term) + '|' + key(c.pos) + '|' + key(c.sense);
+    let deck = this.state.decks.filter(d => key(d.name) === key(src.name))[0];
+    if (!deck) deck = this.addDeck({ name: src.name, emoji: src.emoji, description: src.description }, true);
+    const have = {};
+    this.cardsOf(deck.id).forEach(c => { have[sig(c)] = 1; });
+    let added = 0;
+    src.cards.forEach(c => {
+      if (have[sig(c)]) return;
+      this.addCard(Object.assign({ deckId: deck.id }, c), true);
+      added++;
+    });
+    this.saveNow();
+    return { deck: deck, added: added };
+  },
+
   /* ---------- decks ------------------------------------------------------ */
   addDeck(data, quiet) {
     const deck = {
