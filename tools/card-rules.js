@@ -130,4 +130,7 @@ function toCard(raw, word) {
   return card;
 }
 
-module.exports = { POS, PROMPT, checkCard, toCard };
+/* Read from a page as well as from Node: the checks belong to the deck, not to
+   whichever of the two happens to be running them. */
+const CardRules = { POS, PROMPT, checkCard, toCard };
+if (typeof module !== 'undefined' && module.exports) module.exports = CardRules;

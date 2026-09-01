@@ -49,26 +49,32 @@ order, and those are reported as its own.
 exclamations, the plural nouns, the words carrying a British/American note, and
 the words split into several senses whose examples have to be told apart.
 Those are written by hand. The other 2,949 are ordinary nouns, verbs,
-adjectives and adverbs, and `generate.js` drafts them against your own Ollama.
+adjectives and adverbs, drafted against an Ollama running on your own machine.
 
-    ollama pull qwen2.5:14b                     # or whatever your machine runs
+**`uret.html` is the way to do it** — a page like the app itself, needing
+nothing installed. Start the folder's own `sunucu-baslat` and open
+<http://localhost:8000/tools/uret.html>. (It has to be served: a page opened
+straight off the disk cannot read the word list beside it.)
+
+`generate.js` does the same job from a terminal, for anyone who would rather:
+
     node tools/generate.js --calibrate          # 20 words spread across the list
     node tools/generate.js                      # the whole run, resumable
     node tools/generate.js --merge              # the ones that passed
 
-Run `--calibrate` first and read what comes back. It is twenty words taken from
-across the alphabet rather than the first twenty, because the As are not the
-hard part. If the Turkish is thin or the examples are stiff, try a bigger model
+Either way, try twenty words first and read what comes back. They are taken
+from across the alphabet rather than off the front, because the As are not the
+hard part. If the Turkish is thin or the examples are stiff, change the model
 before spending hours on the full run.
 
 Nothing the model says is trusted. Every card goes through the same checks in
 `card-rules.js` that the deck itself is held to, and a card that fails is asked
 for again with the reason attached. A word that fails three times is left out
-and listed at the end. The run writes `drafts.json` after every batch, so it
-can be stopped with ctrl-C and picked up where it left off.
-
-`--merge` writes `drafted-cards.json`: the drafts that still pass, ready to be
-folded into `deck-b1.js`.
+and listed at the end. Both keep what they have written after every batch — the page in the browser's
+own store, the script in `drafts.json` — so a run survives a closed laptop and
+picks up where it left off rather than starting again. Neither ever writes into
+`deck-b1.js`: they hand over `drafted-cards.json`, and folding that in is a
+separate, reviewed step.
 
 ## The rules
 

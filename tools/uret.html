@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="tr" data-theme="dark" data-font="sans" data-accent="indigo" data-size="md">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lexio — kart üretici</title>
+<link rel="stylesheet" href="../styles.css">
+<style>
+  body{ padding:26px; max-width:900px; margin:0 auto; background:var(--bg); color:var(--text); }
+  h1{ font-size:1.35rem; margin:0 0 4px; }
+  .lead{ color:var(--text-dim); font-size:.9rem; line-height:1.6; margin:0 0 22px; }
+  .step{ border:1px solid var(--border-soft); border-radius:14px; padding:16px 18px; margin-bottom:14px;
+         background:var(--surface); }
+  .step h2{ font-size:.95rem; margin:0 0 10px; display:flex; align-items:center; gap:9px; }
+  .num{ width:22px; height:22px; border-radius:50%; background:var(--accent-soft); color:var(--accent);
+        display:grid; place-items:center; font-size:.75rem; font-weight:700; flex:none; }
+  .step.done .num{ background:var(--good); color:#fff; }
+  .say{ font-size:.84rem; color:var(--text-dim); line-height:1.6; margin:8px 0 0; }
+  .bad{ color:var(--bad); }  .good{ color:var(--good); }
+  .bar{ height:8px; border-radius:99px; background:var(--surface-2); overflow:hidden; margin:12px 0 8px; }
+  .bar i{ display:block; height:100%; background:var(--accent); width:0; transition:width .3s; }
+  .nums{ display:flex; gap:18px; font-size:.82rem; color:var(--text-dim); flex-wrap:wrap; }
+  .nums b{ color:var(--text); }
+  pre.out{ background:var(--surface-2); border:1px solid var(--border-soft); border-radius:10px;
+       padding:12px 14px; font-size:.78rem; line-height:1.6; max-height:340px; overflow:auto;
+       white-space:pre-wrap; margin:12px 0 0; }
+  code{ background:var(--surface-2); padding:2px 6px; border-radius:5px; font-size:.82rem; }
+</style>
+</head>
+<body>
+
+<h1>Lexio — kart üretici</h1>
+<p class="lead">Bilgisayarındaki Ollama ile B1 destesinin düz kartlarını yazar. Hiçbir şey
+internete gitmez ve hiçbir ücret doğmaz. Yazdığı her kart, destenin tabi olduğu
+denetimlerden geçer; geçemeyen kart sebebi söylenerek yeniden istenir.</p>
+
+<div class="step" id="s1">
+  <h2><span class="num">1</span> Ollama'ya bağlan</h2>
+  <div class="row" style="gap:10px;flex-wrap:wrap">
+    <input type="text" id="host" value="http://127.0.0.1:11434" style="max-width:230px">
+    <button class="soft-btn" id="connect">Bağlan</button>
+    <select id="model" style="max-width:280px" hidden></select>
+  </div>
+  <p class="say" id="s1say">Ollama uygulaması açıkken Bağlan'a bas.</p>
+</div>
+
+<div class="step" id="s2">
+  <h2><span class="num">2</span> Önce 20 kelime dene</h2>
+  <p class="say">Alfabenin her yerinden 20 kelime yazar ve sonucu aşağıya döker.
+     Çıktıyı Claude'a gönder — Türkçesi zayıfsa saatlerce sürecek tam turdan önce
+     modeli değiştirmek çok daha ucuz.</p>
+  <div class="row" style="margin-top:10px"><button class="soft-btn" id="try20" disabled>20 kelime dene</button></div>
+</div>
+
+<div class="step" id="s3">
+  <h2><span class="num">3</span> Hepsini yaz</h2>
+  <p class="say">Durdurup devam edebilirsin: yazılanlar tarayıcıda saklanır, sayfayı
+     kapatsan bile kaybolmaz. Baştan başlamaz, kaldığı yerden sürer.</p>
+  <div class="row" style="margin-top:10px;gap:10px;flex-wrap:wrap">
+    <button class="primary-btn" id="runAll" disabled>Hepsini yaz</button>
+    <button class="ghost-btn" id="stop" hidden>Durdur</button>
+    <button class="soft-btn" id="save" disabled>Yazılanları indir</button>
+    <button class="ghost-btn tiny" id="forget">Kayıtlıları sil</button>
+  </div>
+  <div class="bar"><i id="fill"></i></div>
+  <div class="nums">
+    <span><b id="nDone">0</b> yazıldı</span>
+    <span><b id="nKept">0</b> kayıtlı</span>
+    <span><b id="nLeft">0</b> kaldı</span>
+    <span><b id="nFail">0</b> dışarıda</span>
+    <span><b id="nReq">0</b> istek</span>
+    <span id="eta"></span>
+  </div>
+  <pre class="out" id="out" hidden></pre>
+</div>
+
+<script src="../data.js"></script>
+<script src="../deck-b1.js"></script>
+<script src="../srs.js"></script>
+<script src="../ai.js"></script>
+<script src="../app.js"></script>
+<script src="card-rules.js"></script>
+<script>
+/* The page drives Ollama; the rules and the matcher come from the app itself,
+   so a card that passes here is a card the drills can build a gap in.
+
+   Everything here is kept inside its own scope: app.js is loaded whole, and
+   half these names are already taken at the top of it. */
+(function () {
+const $ = (id) => document.getElementById(id);
+const KEY = 'lexio.b1.drafts';
+const BATCH = 6, TRIES = 3;
+let words = [], drafts = {}, stop = false, host = '', model = '';
+
+const sig = (w) => w.term + '|' + w.pos + '|' + (w.sense || '');
+const load = () => { try { drafts = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) { drafts = {}; } };
+const keep = () => { try { localStorage.setItem(KEY, JSON.stringify(drafts)); } catch (e) {
+  say('s1say', 'Tarayıcı deposu doldu — yazılanları indirip "Kayıtlıları sil" de.', 'bad'); } };
+const say = (id, text, cls) => { const e = $(id); e.textContent = text; e.className = 'say ' + (cls || ''); };
+
+async function loadWords() {
+  /* fetch cannot read a file next to a page opened straight off the disk, so
+     this page has to be served — which is what sunucu-baslat is for. */
+  let all;
+  try { all = await (await fetch('words.json')).json(); }
+  catch (e) {
+    throw new Error('kelime listesi okunamadı. Bu sayfayı dosyaya çift tıklayarak değil, ' +
+      'klasördeki sunucu-baslat dosyasını çalıştırıp ' +
+      'http://localhost:8000/tools/uret.html adresinden aç.');
+  }
+  const have = {};
+  B1_DECK.cards.forEach(c => { have[c.term + '|' + c.pos + '|' + (c.sense || '')] = 1; });
+  words = all.filter(w => !w.byHand && !have[sig(w)]);
+}
+
+$('connect').onclick = async () => {
+  host = $('host').value.replace(/\/+$/, '');
+  say('s1say', 'bakılıyor…');
+  try {
+    const res = await fetch(host + '/api/tags');
+    if (!res.ok) throw new Error('Ollama ' + res.status + ' döndü');
+    const tags = (await res.json()).models || [];
+    if (!tags.length) throw new Error('Ollama açık ama hiç model yok. Önce bir model indir.');
+    const sel = $('model');
+    sel.innerHTML = tags.map(m => '<option>' + m.name + '</option>').join('');
+    sel.hidden = false;
+    await loadWords();
+    $('s1').classList.add('done');
+    $('try20').disabled = $('runAll').disabled = false;
+    say('s1say', tags.length + ' model bulundu. Yazılacak ' + words.length + ' kelime var.', 'good');
+    refresh();
+  } catch (e) {
+    say('s1say', 'Bağlanamadım: ' + e.message +
+      ' — Ollama açık mı? Açıksa tarayıcının bağlanmasına izin vermek için ' +
+      'OLLAMA_ORIGINS ayarını * yapman gerekebilir.', 'bad');
+  }
+};
+
+function ask(list, note) {
+  const lines = list.map(w => {
+    const bits = ['- ' + w.term + ' (' + w.pos + ')'];
+    if (w.shares) bits.push('  the word has other meanings; write only the ' + w.pos + ' one');
+    if (w.cambridge && w.cambridge.length)
+      bits.push('  Cambridge shows it used like this: ' + w.cambridge.join(' / '));
+    return bits.join('\n');
+  }).join('\n');
+  return fetch(host + '/api/chat', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: model, format: 'json', stream: false,
+      options: { temperature: 0.3, num_predict: 340 * list.length },
+      messages: [
+        { role: 'system', content: CardRules.PROMPT },
+        { role: 'user', content: 'Write a card for each of these ' + list.length +
+            ' words.\n\n' + lines + (note ? '\n\n' + note : '') }
+      ]
+    })
+  }).then(r => r.json()).then(out => {
+    const text = (out.message && out.message.content) || '';
+    let parsed;
+    try { parsed = JSON.parse(text); }
+    catch (e) {
+      const a = text.indexOf('{'), b = text.lastIndexOf('}');
+      if (a === -1 || b <= a) throw new Error('cevap JSON değildi');
+      parsed = JSON.parse(text.slice(a, b + 1));
+    }
+    const cards = parsed.cards || (Array.isArray(parsed) ? parsed : [parsed]);
+    return Array.isArray(cards) ? cards : [];
+  });
+}
+
+/* A model may drop a word, add one, or answer in a different order. */
+function lineUp(list, answers) {
+  const left = answers.slice();
+  return list.map(w => {
+    let i = left.findIndex(a => normalize(String(a.term || '')) === normalize(w.term));
+    if (i === -1) i = left.findIndex(a => a.term && AI.sameWord(String(a.term), w.term));
+    return i === -1 ? null : left.splice(i, 1)[0];
+  });
+}
+
+function show(card) {
+  const out = $('out'); out.hidden = false;
+  out.textContent += card.term + ' (' + card.pos + ')\n  ' + card.definition +
+    '\n  ' + card.example + '\n  ' + card.translation +
+    (card.collocations.length ? '\n  ' + card.collocations.join(' · ') : '') +
+    (card.related.length ? '\n  ' + card.related.map(r => r.kind + ': ' + r.text).join(' · ') : '') + '\n\n';
+  out.scrollTop = out.scrollHeight;
+}
+
+let stats = { done: 0, fail: 0, req: 0, total: 0, at: 0 };
+function refresh() {
+  $('nDone').textContent = stats.total ? stats.done : 0;
+  $('nKept').textContent = Object.keys(drafts).length;
+  $('nFail').textContent = stats.fail;
+  $('nReq').textContent = stats.req;
+  const left = Math.max(0, stats.total - stats.done);
+  $('nLeft').textContent = stats.total ? left : words.length;
+  $('fill').style.width = stats.total ? (stats.done / stats.total * 100) + '%' : '0';
+  $('save').disabled = !Object.keys(drafts).length;
+  if (stats.done && stats.at) {
+    const per = (Date.now() - stats.at) / 1000 / stats.done;
+    $('eta').textContent = 'yaklaşık ' + Math.round(per * left / 60) + ' dk kaldı';
+  }
+}
+
+async function run(list, remember) {
+  stop = false;
+  model = $('model').value;
+  $('stop').hidden = false; $('runAll').disabled = $('try20').disabled = true;
+  stats = { done: 0, fail: 0, req: 0, total: list.length, at: Date.now() };
+  const failed = [];
+  for (let i = 0; i < list.length && !stop; i += BATCH) {
+    let want = list.slice(i, i + BATCH), note = '';
+    for (let t = 1; t <= TRIES && want.length && !stop; t++) {
+      let answers = [];
+      try { answers = await ask(want, note); } catch (e) { say('s1say', 'istek başarısız: ' + e.message, 'bad'); }
+      stats.req++;
+      const lined = lineUp(want, answers), again = [], why = [];
+      want.forEach((w, n) => {
+        if (!lined[n]) { again.push(w); why.push(w.term + ': you did not write a card for it'); return; }
+        const card = CardRules.toCard(lined[n], w);
+        const problems = CardRules.checkCard(card, { findTerm, normalize, isInflectionOf, AI });
+        if (problems.length) { again.push(w); why.push(w.term + ': ' + problems[0]); return; }
+        if (remember) { drafts[sig(w)] = card; }
+        stats.done++; show(card);
+      });
+      want = again;
+      note = again.length ? 'Your last answer had these faults. Write these words again and fix them:\n' +
+        why.map(r => '- ' + r).join('\n') : '';
+    }
+    want.forEach(w => { failed.push(w.term); stats.fail++; });
+    if (remember) keep();
+    refresh();
+  }
+  $('stop').hidden = true; $('runAll').disabled = $('try20').disabled = false;
+  if (failed.length) $('out').textContent += '\ndışarıda kalanlar: ' + failed.join(', ') + '\n';
+  refresh();
+}
+
+$('try20').onclick = () => {
+  $('out').textContent = '';
+  const step = Math.max(1, Math.floor(words.length / 20));
+  const pick = [];
+  for (let i = 0; i < words.length && pick.length < 20; i += step) pick.push(words[i]);
+  run(pick, false);
+};
+$('runAll').onclick = () => { $('out').textContent = ''; run(words.filter(w => !drafts[sig(w)]), true); };
+$('stop').onclick = () => { stop = true; };
+$('save').onclick = () => {
+  const cards = Object.keys(drafts).map(k => drafts[k]);
+  const blob = new Blob([JSON.stringify(cards, null, 1)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = 'drafted-cards.json';
+  document.body.appendChild(a); a.click(); a.remove();
+};
+$('forget').onclick = () => {
+  if (!confirm('Tarayıcıda saklanan taslaklar silinsin mi? Önce indirdiğinden emin ol.')) return;
+  drafts = {}; localStorage.removeItem(KEY); refresh();
+};
+
+load(); refresh();
+})();
+</script>
+</body>
+</html>

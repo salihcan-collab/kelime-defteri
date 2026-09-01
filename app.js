@@ -4496,5 +4496,9 @@ function onKey(e) {
   if (jump) go(jump, {});
 }
 
-if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
-else boot();
+/* The tools under tools/ load this file for its matcher and nothing else, so
+   the app starts only where its own shell is on the page. */
+if (document.getElementById('app')) {
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
+}
