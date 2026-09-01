@@ -3,3 +3,7 @@ Thumbs.db
 *.log
 backups/
 .preview-*.png
+
+/* Drafts the generator writes on your own computer, not part of the app. */
+tools/drafts.json
+tools/drafted-cards.json

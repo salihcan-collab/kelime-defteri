@@ -1,9 +1,17 @@
 # Building the B1 Preliminary deck
 
-These three scripts turn Cambridge's *B1 Preliminary and Preliminary for
-Schools Vocabulary List* (August 2025) into the word list the deck is written
-from. They are here so the deck can be audited and rebuilt, not because the app
-needs them: Lexio itself is still three script tags and no build step.
+Three jobs live here: reading Cambridge's list out of its PDF, drafting the
+plain cards on your own computer with Ollama, and holding every card to the
+same rules whoever wrote it. None of it is needed to *run* Lexio — the app is
+still three script tags and no build step.
+
+## The word list
+
+`words.json` is the Cambridge *B1 Preliminary and Preliminary for Schools
+Vocabulary List* (August 2025) as 3,359 cards: the word, its part of speech,
+whichever bracket note Cambridge attached, and the examples it printed. It is
+already built, so you only need the Python scripts if you want to check the
+reading or rebuild it from a newer edition.
 
 The PDF is Cambridge's and is **not** in this repository. Point `PDF` in
 `extract.py` at your own copy.
@@ -12,7 +20,7 @@ The PDF is Cambridge's and is **not** in this repository. Point `PDF` in
     python3 verify.py     # checks that reading against a plain reading of the PDF
     python3 plan.py       # applies the deck's rules -> pv-cards.json
 
-## Why it is not a three-line script
+### Why reading it is not a three-line script
 
 The list is set in two columns, so a plain text dump interleaves them: a
 `camera` turns up in the D section, and half an example sentence is read as a
@@ -31,8 +39,48 @@ and whether what follows has the shape of a headword — a word or three with a
 label behind it, sitting where the alphabet says an entry belongs.
 
 `verify.py` is the check on all of it. It reads the same pages the ordinary way
-and reports anything the two readings disagree about: headwords the plain
-reading can see and this one cannot, entries out of alphabetical order that the
-PDF does not itself have out of order, records with no part of speech, empty
-headwords. All four should be zero — except the ordering, where Cambridge's own
-list has 27 pairs the other way round.
+and reports anything the two readings disagree about. All of it should be zero,
+except the ordering: Cambridge's own list has 27 pairs out of alphabetical
+order, and those are reported as its own.
+
+## Drafting the cards
+
+410 of the cards are marked `byHand` — the phrasal verbs, the phrases, the
+exclamations, the plural nouns, the words carrying a British/American note, and
+the words split into several senses whose examples have to be told apart.
+Those are written by hand. The other 2,949 are ordinary nouns, verbs,
+adjectives and adverbs, and `generate.js` drafts them against your own Ollama.
+
+    ollama pull qwen2.5:14b                     # or whatever your machine runs
+    node tools/generate.js --calibrate          # 20 words spread across the list
+    node tools/generate.js                      # the whole run, resumable
+    node tools/generate.js --merge              # the ones that passed
+
+Run `--calibrate` first and read what comes back. It is twenty words taken from
+across the alphabet rather than the first twenty, because the As are not the
+hard part. If the Turkish is thin or the examples are stiff, try a bigger model
+before spending hours on the full run.
+
+Nothing the model says is trusted. Every card goes through the same checks in
+`card-rules.js` that the deck itself is held to, and a card that fails is asked
+for again with the reason attached. A word that fails three times is left out
+and listed at the end. The run writes `drafts.json` after every batch, so it
+can be stopped with ctrl-C and picked up where it left off.
+
+`--merge` writes `drafted-cards.json`: the drafts that still pass, ready to be
+folded into `deck-b1.js`.
+
+## The rules
+
+`card-rules.js` holds them once — as the instructions a model is given, and as
+the checks its answer goes through. A rule asked for but not checked is a wish;
+a rule checked but never asked for is a trap.
+
+    node tools/check-b1.js
+
+runs them over the whole deck: the example contains the word (using the app's
+own matcher, so a card that passes is a card the drills can actually use), the
+definition is short and does not contain the word it defines, the translation
+is Turkish and not the English word again, collocations contain their word,
+family members are separate words rather than endings, and two senses of one
+word always say which is which.
