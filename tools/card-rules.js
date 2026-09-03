@@ -144,7 +144,9 @@ function toCard(raw, word) {
     term: word.term, pos: word.pos,
     definition: String(raw.definition || '').trim(),
     example: String(raw.example || '').trim(),
-    translation: String(raw.translation || '').trim(),
+    /* The Turkish is written by hand. A model that offers one anyway — they
+       do, however plainly they are told not to — is not taken up on it. */
+    translation: String(word.translation || '').trim(),
     collocations: list(raw.collocations).slice(0, 4),
     related: related
   };

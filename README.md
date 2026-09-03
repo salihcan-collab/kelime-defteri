@@ -497,6 +497,13 @@ gizli sekme). Çözüm: klasördeki **`sunucu-baslat.command`** (Mac) veya
 çalışır ve kaydetme sorunsuz olur. (Bu dosyalar bilgisayarında Python gerektirir;
 yoksa Chrome veya Firefox kullanmak da sorunu çözer.)
 
+**Yeni sürümü indirdim ama uygulama eski hâliyle açılıyor**
+Tarayıcı `app.js` gibi dosyaları önbelleğe almış olabilir. `sunucu-baslat` artık
+her dosyayı "bunu saklama" diyerek gönderdiği için bu olmamalı; yine de olursa
+sayfada **Ctrl+F5** (Mac'te **Cmd+Shift+R**) yap — bu, önbelleği yok sayarak
+yeniden indirir. Dosyaya çift tıklayarak açtığın sayfa ile `localhost` üzerinden
+açtığın sayfanın önbellekleri ayrıdır; biri güncelken diğeri eski kalabilir.
+
 **AI "Could not reach the AI provider" diyor**
 Aynı çözüm: yukarıdaki yerel sunucu dosyasını kullan. Tarayıcılar, dosyadan açılan
 sayfaların bazı sunuculara istek atmasını engelleyebiliyor; sayfa `http://localhost`

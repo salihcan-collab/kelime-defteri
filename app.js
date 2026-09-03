@@ -354,11 +354,15 @@ function deckPickLabel(chosen) {
   return chosen.length + ' decks';
 }
 
-/* Cambridge's topic lists, plus the empty one most words of a learner's own
-   will keep. */
-function topicOptions(selected) {
-  return '<option value="">—</option>' +
-    TOPICS.map(t => '<option' + (t === selected ? ' selected' : '') + '>' + esc(t) + '</option>').join('');
+/* Cambridge's headings are offered, not imposed: the box is one you can type
+   in, and a topic of your own — every subject Cambridge never thought of — is
+   as good as one of theirs. Topics already in use are offered too, so the
+   second word of a new subject is a click rather than a retype. */
+function topicOptions() {
+  const mine = Store.state.cards.map(c => c.topic).filter(Boolean);
+  const all = TOPICS.concat(mine).filter((t, i, a) => a.indexOf(t) === i).sort();
+  return '<datalist id="topicList">' +
+    all.map(t => '<option value="' + esc(t) + '">').join('') + '</datalist>';
 }
 
 function deckOptions(selected, allLabel) {
@@ -867,9 +871,17 @@ function quickCard(view, icon, title, desc) {
 function shippedDeckMissing() {
   if (typeof B1_DECK === 'undefined') return false;
   const key = (v) => String(v == null ? '' : v).trim().toLowerCase();
+  const deck = Store.state.decks.filter(d => key(d.name) === key(B1_DECK.name))[0];
   const have = {};
-  Store.state.cards.forEach(c => { have[key(c.term) + '|' + key(c.pos) + '|' + key(c.sense)] = 1; });
-  return B1_DECK.cards.some(c => !have[key(c.term) + '|' + key(c.pos) + '|' + key(c.sense)]);
+  (deck ? Store.cardsOf(deck.id) : []).forEach(c => {
+    have[key(c.term) + '|' + key(c.pos) + '|' + key(c.sense)] = c;
+  });
+  /* A word that is there but has not caught up with what the deck ships for it
+     counts as missing too, or a field added since would have no way in. */
+  return B1_DECK.cards.some(c => {
+    const mine = have[key(c.term) + '|' + key(c.pos) + '|' + key(c.sense)];
+    return !mine || (c.topic && !mine.topic);
+  });
 }
 
 function renderDecks(host) {
@@ -910,9 +922,11 @@ function renderDecks(host) {
     if (e.target.closest('[data-act="ai-deck"]')) return aiDeckDialog();
     if (e.target.closest('[data-act="ship-deck"]')) {
       const r = Store.installDeck(B1_DECK);
-      toast(r.added
-        ? r.added + ' word' + (r.added === 1 ? '' : 's') + ' added to ' + B1_DECK.name
-        : B1_DECK.name + ' was already complete', r.added ? 'ok' : 'info');
+      const said = [];
+      if (r.added) said.push(r.added + ' word' + (r.added === 1 ? '' : 's') + ' added');
+      if (r.filled) said.push(r.filled + ' filled in');
+      toast(said.length ? said.join(', ') + ' — ' + B1_DECK.name
+                        : B1_DECK.name + ' was already complete', said.length ? 'ok' : 'info');
       return go('decks', { deckId: r.deck.id });
     }
     const d = e.target.closest('[data-deck]');
@@ -1076,12 +1090,17 @@ function cardEditor(card, presetDeck) {
       /* The deck rides in beside the auto-fill button rather than below the
          translation, where the topic now goes. Two fields on one line either
          way, so the form is the same height it was. */
-      '<div class="row between ai-row">' +
-        (AI.available()
-          ? '<button class="ghost-btn tiny" id="aiFill">' + ICONS.spark + 'Auto-fill the rest with AI</button>'
-          : '<p class="help" style="margin:0">Tip: connect an AI assistant in Settings to fill these fields automatically.</p>') +
-        '<label class="inline-pick">Deck<select id="cDeck">' +
-          deckOptions(card ? card.deckId : (presetDeck || (Store.state.decks[0] || {}).id)) + '</select></label>' +
+      /* The deck rides in beside the auto-fill button rather than below the
+         translation, where the topic now goes — the same two-column shape as
+         the row above, so its box matches the part of speech beside it. */
+      '<div class="inline-fields ai-row">' +
+        '<div class="ai-cell">' +
+          (AI.available()
+            ? '<button class="ghost-btn tiny" id="aiFill">' + ICONS.spark + 'Auto-fill the rest with AI</button>'
+            : '<p class="help">Tip: connect an AI assistant in Settings to fill these fields automatically.</p>') +
+        '</div>' +
+        '<div class="field"><label>Deck</label><select id="cDeck">' +
+          deckOptions(card ? card.deckId : (presetDeck || (Store.state.decks[0] || {}).id)) + '</select></div>' +
       '</div>' +
       '<div class="field"><label>Meaning (English definition) <em class="req">required</em></label>' +
         '<textarea id="cDef" placeholder="A clear, short definition">' + esc(card ? card.definition : '') + '</textarea></div>' +
@@ -1091,8 +1110,10 @@ function cardEditor(card, presetDeck) {
       '<div class="inline-fields">' +
         '<div class="field"><label>Translation</label>' +
           '<input type="text" id="cTr" value="' + esc(card ? card.translation : '') + '" placeholder="Turkish meaning"></div>' +
-        '<div class="field"><label>Topic</label><select id="cTopic">' +
-          topicOptions(card ? card.topic : '') + '</select></div>' +
+        '<div class="field"><label>Topic</label>' +
+          '<input type="text" id="cTopic" list="topicList" autocomplete="off"' +
+            ' value="' + esc(card ? (card.topic || '') : '') + '" placeholder="e.g. Food and Drink">' +
+          topicOptions() + '</div>' +
       '</div>' +
       /* Everything a word can have but most words do not. Folded away so the
          form stays the five fields you actually fill in, and opened on its own
@@ -1146,7 +1167,7 @@ function cardEditor(card, presetDeck) {
         term: $('#cTerm').value.trim(), pos: $('#cPos').value, definition: $('#cDef').value.trim(),
         example: $('#cEx').value.trim(), translation: $('#cTr').value.trim(),
         deckId: $('#cDeck').value, notes: $('#cNote').value.trim(),
-        sense: $('#cSense').value.trim(), topic: $('#cTopic').value,
+        sense: $('#cSense').value.trim(), topic: $('#cTopic').value.trim(),
         collocations: splitLines($('#cColl').value),
         related: parseRelations($('#cSyn').value, $('#cAnt').value, $('#cFam').value)
       });

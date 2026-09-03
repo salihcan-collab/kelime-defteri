@@ -1766,6 +1766,34 @@ const head = (s) => console.log('\n— ' + s + ' —');
      'and installing it again adds nothing and makes no second deck');
   is(shipped.kept, 'a word the learner had rewritten keeps its wording, its schedule and its score');
   is(shipped.filled, 'every card it brings has a meaning, an example and a translation');
+
+  /* A word that is already there but has not caught up with what the deck now
+     ships for it — the topic, added after the deck was first installed. */
+  const caughtUp = await page.evaluate(async () => {
+    const key = (c) => (c.term + '|' + c.pos + '|' + (c.sense || '')).toLowerCase();
+    const shippedNow = {};
+    B1_DECK.cards.forEach(c => { shippedNow[key(c)] = c; });
+    const deck = Store.state.decks.filter(d => d.name === B1_DECK.name)[0];
+    const mine = Store.cardsOf(deck.id).filter(c => shippedNow[key(c)] && shippedNow[key(c)].topic);
+    const one = mine[0];
+    mine.forEach(c => { c.topic = ''; });               /* as an older install looked */
+    one.definition = 'my own words';
+    const offered = shippedDeckMissing();
+    const r = Store.installDeck(B1_DECK);
+    return {
+      hadNone: mine.length, offered: offered, filled: r.filled, added: r.added,
+      nowFiled: mine.filter(c => c.topic).length,
+      keptMine: Store.state.cards.filter(c => c.id === one.id)[0].definition === 'my own words',
+      stillOffered: shippedDeckMissing()
+    };
+  });
+  is(caughtUp.offered, 'a deck whose words lack a field the deck now ships is offered again');
+  is(caughtUp.added === 0 && caughtUp.filled === caughtUp.hadNone &&
+     caughtUp.nowFiled === caughtUp.hadNone,
+     `installing it again files all ${caughtUp.hadNone} of them without adding a word`);
+  is(caughtUp.keptMine, 'and a word the learner had rewritten keeps their wording');
+  is(!caughtUp.stillOffered, 'once caught up, the offer goes away');
+
   await page.evaluate(() => { Store.wipe(); Store.saveNow(); });   /* as it was found */
 
   /* A word belongs to a subject as well as to a deck. The deck is what you
@@ -1779,7 +1807,7 @@ const head = (s) => console.log('\n— ' + s + ' —');
     await new Promise(r => setTimeout(r, 300));
     const box = (id) => document.getElementById(id).getBoundingClientRect();
     const before = card.topic;
-    const options = document.querySelectorAll('#cTopic option').length;
+    const options = document.querySelectorAll('#topicList option').length;
     /* where the fields sit, measured while the form is still open */
     const sameRow = Math.abs(box('cTopic').top - box('cTr').top) < 4;
     const deckAbove = box('cDeck').top < box('cTopic').top && box('cDeck').top > box('cPos').top;
@@ -1797,7 +1825,7 @@ const head = (s) => console.log('\n— ' + s + ' —');
       total: Store.state.cards.length
     };
   });
-  is(topic.options === topic.known + 1, `the ${topic.known} topics are on offer, and no topic at all`);
+  is(topic.options >= topic.known, `the ${topic.known} topics are offered as suggestions`);
   is(topic.shipped === 'Clothes and Accessories',
      `a shipped word arrives filed under its subject (${topic.shipped})`);
   is(topic.onCard === 'Shopping' && topic.onDisk === 'Shopping',

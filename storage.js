@@ -283,16 +283,34 @@ const Store = {
     const sig = (c) => key(c.term) + '|' + key(c.pos) + '|' + key(c.sense);
     let deck = this.state.decks.filter(d => key(d.name) === key(src.name))[0];
     if (!deck) deck = this.addDeck({ name: src.name, emoji: src.emoji, description: src.description }, true);
+    /* Only this deck's own cards: a word the learner happens to have in another
+       deck must not keep the deck it belongs to from holding it. */
     const have = {};
-    this.cardsOf(deck.id).forEach(c => { have[sig(c)] = 1; });
-    let added = 0;
+    this.cardsOf(deck.id).forEach(c => { have[sig(c)] = c; });
+
+    /* A word the deck gained a field for since it was installed — the topic,
+       say — should not need the deck deleting and put back to get it. Only
+       what is empty is filled, so nothing written or cleared on purpose is
+       overwritten. */
+    const FILLABLE = ['topic', 'sense', 'definition', 'example', 'translation', 'notes'];
+    let added = 0, filled = 0;
     src.cards.forEach(c => {
-      if (have[sig(c)]) return;
-      this.addCard(Object.assign({ deckId: deck.id }, c), true);
-      added++;
+      const mine = have[sig(c)];
+      if (!mine) { this.addCard(Object.assign({ deckId: deck.id }, c), true); added++; return; }
+      let touched = false;
+      FILLABLE.forEach(f => {
+        if (!String(mine[f] || '').trim() && String(c[f] || '').trim()) { mine[f] = c[f]; touched = true; }
+      });
+      if (!(mine.collocations || []).length && (c.collocations || []).length) {
+        mine.collocations = c.collocations.slice(); touched = true;
+      }
+      if (!(mine.related || []).length && (c.related || []).length) {
+        mine.related = c.related.slice(); touched = true;
+      }
+      if (touched) { mine.updatedAt = Date.now(); filled++; }
     });
     this.saveNow();
-    return { deck: deck, added: added };
+    return { deck: deck, added: added, filled: filled };
   },
 
   /* ---------- decks ------------------------------------------------------ */

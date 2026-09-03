@@ -74,7 +74,9 @@ adjectives and adverbs, drafted against an Ollama running on your own machine.
 **`uret.html` is how** — a page like the app itself, needing nothing installed.
 Start the folder's own `sunucu-baslat` and open
 <http://localhost:8000/tools/uret.html>. (It has to be served: a page opened
-straight off the disk cannot read the word list beside it.)
+straight off the disk cannot read the word list beside it. That server sends
+everything with `Cache-Control: no-store`, so a page you have opened before
+still comes back the version you have now, not the one your browser kept.)
 
 Try twenty words first and read what comes back. They are taken from across the
 alphabet rather than off the front, because the As are not the hard part.

@@ -198,7 +198,7 @@ function intoBatches(list) {
 function show(card) {
   const out = $('out'); out.hidden = false;
   out.textContent += card.term + ' (' + card.pos + ')\n  ' + card.definition +
-    '\n  ' + card.example + '\n  ' + card.translation +
+    '\n  ' + card.example +
     (card.collocations.length ? '\n  ' + card.collocations.join(' · ') : '') +
     (card.related.length ? '\n  ' + card.related.map(r => r.kind + ': ' + r.text).join(' · ') : '') + '\n\n';
   out.scrollTop = out.scrollHeight;
