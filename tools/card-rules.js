@@ -12,6 +12,8 @@ const POS = ['noun', 'verb', 'adjective', 'adverb', 'phrasal verb', 'phrase',
    local model: short sentences, one rule per line, an example of the shape. */
 const PROMPT = `You write vocabulary cards for a Turkish speaker learning English at B1 level.
 
+Write in English only. The Turkish translation is added afterwards by hand.
+
 For each word you are given, return one card. Follow every rule.
 
 "definition": a plain English definition, at most 25 words.
@@ -24,11 +26,6 @@ For each word you are given, return one card. Follow every rule.
   Use the plain form of the word where you can. Avoid irregular past forms.
   Start with a capital, end with a full stop, question mark or exclamation mark.
 
-"translation": what the word means in Turkish.
-  Give 2 or 3 Turkish words separated by ", " — the renderings a Turk would
-  really use. One word only if Turkish truly offers only one.
-  Turkish only. No English, no brackets, no explanation.
-
 "collocations": fixed English phrases that CONTAIN the word.
   At most 3, and an empty list is normal. Most words have one or two.
   Every phrase must contain the word. Do not invent phrases to fill the list.
@@ -38,18 +35,32 @@ For each word you are given, return one card. Follow every rule.
 "family": other dictionary words built on the same root. At most 4, often none.
   NEVER an ending on the same word: for "achieve" write "achievement",
   never "achieved", "achieves" or "achieving".
+  NEVER a plural of a word already in the list: "grandmother", not both
+  "grandmother" and "grandmothers".
 
 Answer with JSON only, in this shape:
-{"cards":[{"term":"reliable","definition":"Able to be trusted to do what is expected.","example":"She is the most reliable person on the team.","translation":"güvenilir, sağlam","collocations":["a reliable source"],"synonyms":["dependable"],"antonyms":["unreliable"],"family":["reliability","rely"]}]}`;
+{"cards":[{"term":"reliable","definition":"Able to be trusted to do what is expected.","example":"She is the most reliable person on the team.","collocations":["a reliable source"],"synonyms":["dependable"],"antonyms":["unreliable"],"family":["reliability","rely"]}]}`;
 
 /* Turkish uses these; a "translation" made only of English letters is a
    suspicious but not impossible thing, so it is judged with other signals. */
 const TURKISH = /[çğıöşüÇĞİÖŞÜ]/;
 const ENGLISH_ONLY = /^[a-zA-Z ,'-]+$/;
 
+/* Is `a` simply `b` made plural? Nothing else counts: an -ing or an -ed can be
+   a word of its own, an -s never is. */
+function plural(a, b) {
+  const x = String(a || '').toLowerCase(), y = String(b || '').toLowerCase();
+  if (!x || !y || x === y) return false;
+  return x === y + 's' || x === y + 'es' ||
+         (/[^aeiou]y$/.test(y) && x === y.slice(0, -1) + 'ies');
+}
+
 /* `match` is the app's own findTerm: whether a word can be found in a
    sentence is a question only the drills' own code can answer. */
-function checkCard(card, ctx) {
+/* A card is checked twice in its life: as a draft, with the Turkish still to
+   come, and again once it is finished. Everything else is judged the same way
+   both times — a draft that would not pass as a card is not worth keeping. */
+function checkCard(card, ctx, draft) {
   const bad = [];
   const say = (s) => bad.push(s);
   const term = String(card.term || '').trim();
@@ -80,7 +91,7 @@ function checkCard(card, ctx) {
   }
 
   const tr = String(card.translation || '').trim();
-  if (!tr) say('no translation');
+  if (!tr) { if (!draft) say('no translation'); }
   else {
     if (/[a-z]\(/.test(tr)) say('translation needs a space before its bracket');
     if (tr.split(',').length > 4) say('translation offers more than four renderings');
@@ -95,12 +106,19 @@ function checkCard(card, ctx) {
   });
   if ((card.collocations || []).length > 4) say('more than four collocations');
 
+  const family = (card.related || []).filter(r => r.kind === 'family').map(r => r.text);
   (card.related || []).forEach(r => {
     if (['syn', 'ant', 'family'].indexOf(r.kind) === -1) say('related kind "' + r.kind + '"');
     if (!r.text) say('related entry with no word');
     else if (r.kind === 'family' && ctx.isInflectionOf(r.text, term))
       say('"' + r.text + '" is an ending on the word, not a family member');
     else if (ctx.normalize(r.text) === ctx.normalize(term)) say('listed as related to itself: ' + r.text);
+    /* A family that lists both "grandmother" and "grandmothers" has padded
+       itself with a plural. Only plurals: "annoying" beside "annoy" is a word
+       in its own right, and so is "clothing" beside "cloth". */
+    else if (r.kind === 'family' && family.some(f => f !== r.text && plural(r.text, f)))
+      say('"' + r.text + '" is the plural of "' +
+          family.filter(f => f !== r.text && plural(r.text, f))[0] + '", already in the family');
   });
   const of = (k) => (card.related || []).filter(r => r.kind === k).length;
   if (of('syn') > 4) say('more than four synonyms');

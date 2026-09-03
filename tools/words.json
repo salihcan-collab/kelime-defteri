@@ -111,7 +111,7 @@
 {
 "term": "accident",
 "pos": "noun",
-"shares": true,
+"shares": false,
 "notes": [],
 "cambridge": [],
 "byHand": false
@@ -144,14 +144,6 @@
 "term": "account",
 "pos": "noun",
 "shares": false,
-"notes": [],
-"cambridge": [],
-"byHand": false
-},
-{
-"term": "accident",
-"pos": "noun",
-"shares": true,
 "notes": [],
 "cambridge": [],
 "byHand": false
@@ -1666,20 +1658,10 @@
 {
 "term": "background",
 "pos": "noun",
-"shares": true,
+"shares": false,
 "notes": [],
 "cambridge": [],
 "byHand": false
-},
-{
-"term": "background",
-"pos": "noun",
-"shares": true,
-"notes": [
-"experience"
-],
-"cambridge": [],
-"byHand": true
 },
 {
 "term": "backpack",
@@ -10480,25 +10462,11 @@
 {
 "term": "get on",
 "pos": "phrasal verb",
-"shares": true,
+"shares": false,
 "notes": [],
 "cambridge": [
 "Get your coat on and then we can leave.",
 "How are you getting on now?"
-],
-"byHand": true
-},
-{
-"term": "get on",
-"pos": "phrasal verb",
-"shares": true,
-"notes": [
-"with"
-],
-"cambridge": [
-"She got on with her work.",
-"I’m getting on well with French.",
-"Do you get on well with Sam?"
 ],
 "byHand": true
 },
@@ -17194,26 +17162,14 @@
 {
 "term": "over",
 "pos": "adverb",
-"shares": true,
+"shares": false,
 "notes": [],
 "cambridge": [
 "I’m going over the road. (prep)",
 "over 40 people (more than) (adv)",
 "to be"
 ],
-"byHand": true
-},
-{
-"term": "over",
-"pos": "adverb",
-"shares": true,
-"notes": [
-"finished"
-],
-"cambridge": [
-"Several birds were flying over the roof of the school. (prep)"
-],
-"byHand": true
+"byHand": false
 },
 {
 "term": "overnight",
@@ -22750,18 +22706,6 @@
 "byHand": true
 },
 {
-"term": "single",
-"pos": "adjective",
-"shares": true,
-"notes": [
-"unmarried"
-],
-"cambridge": [
-"a single room (adj)"
-],
-"byHand": true
-},
-{
 "term": "sink",
 "pos": "noun",
 "shares": true,
@@ -25755,23 +25699,13 @@
 {
 "term": "tip",
 "pos": "noun",
-"shares": true,
+"shares": false,
 "notes": [],
 "cambridge": [
 "the tip of the pencil",
 "a tip for the waitress"
 ],
 "byHand": false
-},
-{
-"term": "tip",
-"pos": "noun",
-"shares": true,
-"notes": [
-"advice"
-],
-"cambridge": [],
-"byHand": true
 },
 {
 "term": "tired",

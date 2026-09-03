@@ -30,9 +30,11 @@
 <body>
 
 <h1>Lexio — kart üretici</h1>
-<p class="lead">Bilgisayarındaki Ollama ile B1 destesinin düz kartlarını yazar. Hiçbir şey
-internete gitmez ve hiçbir ücret doğmaz. Yazdığı her kart, destenin tabi olduğu
-denetimlerden geçer; geçemeyen kart sebebi söylenerek yeniden istenir.</p>
+<p class="lead">Bilgisayarındaki Ollama ile B1 destesinin düz kartlarını <b>İngilizce</b> yazar
+— tanım, örnek cümle, eş dizimler, kelime ailesi. <b>Türkçe çeviriler sonradan elle
+eklenir</b>; yerel bir model Türkçede güvenilir değil. Hiçbir şey internete gitmez ve
+hiçbir ücret doğmaz. Yazdığı her kart destenin denetimlerinden geçer; geçemeyen kart
+sebebi söylenerek yeniden istenir.</p>
 
 <div class="step" id="s1">
   <h2><span class="num">1</span> Ollama'ya bağlan</h2>
@@ -169,7 +171,10 @@ function ask(list, note) {
   });
 }
 
-/* A model may drop a word, add one, or answer in a different order. */
+/* A model may drop a word, add one, or answer in a different order. It is
+   matched back by its term — which is why no batch ever carries two senses of
+   one word: asked for "cook" twice, a model writes it once, and there would be
+   no telling which of the two the answer belonged to. */
 function lineUp(list, answers) {
   const left = answers.slice();
   return list.map(w => {
@@ -177,6 +182,17 @@ function lineUp(list, answers) {
     if (i === -1) i = left.findIndex(a => a.term && AI.sameWord(String(a.term), w.term));
     return i === -1 ? null : left.splice(i, 1)[0];
   });
+}
+
+/* Batches of one word each, senses of the same word never together. */
+function intoBatches(list) {
+  const out = [];
+  list.forEach(w => {
+    let b = out.find(x => x.length < BATCH && !x.some(y => y.term === w.term));
+    if (!b) { b = []; out.push(b); }
+    b.push(w);
+  });
+  return out;
 }
 
 function show(card) {
@@ -198,10 +214,13 @@ function refresh() {
   $('nLeft').textContent = stats.total ? left : words.length;
   $('fill').style.width = stats.total ? (stats.done / stats.total * 100) + '%' : '0';
   $('save').disabled = !Object.keys(drafts).length;
-  if (stats.done && stats.at) {
-    const per = (Date.now() - stats.at) / 1000 / stats.done;
-    $('eta').textContent = 'yaklaşık ' + Math.round(per * left / 60) + ' dk kaldı';
-  }
+  /* Timed off requests rather than cards: a batch stuck on its third retry
+     writes nothing, and an estimate that stops moving looks like a hang. */
+  if (stats.req && stats.at && left) {
+    const per = (Date.now() - stats.at) / 1000 / stats.req;
+    const rate = Math.max(0.5, stats.done / stats.req);
+    $('eta').textContent = 'yaklaşık ' + Math.max(1, Math.round(per * (left / rate) / 60)) + ' dk kaldı';
+  } else if (!left && stats.total) $('eta').textContent = 'bitti';
 }
 
 async function run(list, remember) {
@@ -210,8 +229,9 @@ async function run(list, remember) {
   $('stop').hidden = false; $('runAll').disabled = $('try20').disabled = true;
   stats = { done: 0, fail: 0, req: 0, total: list.length, at: Date.now() };
   const failed = [];
-  for (let i = 0; i < list.length && !stop; i += BATCH) {
-    let want = list.slice(i, i + BATCH), note = '';
+  const batches = intoBatches(list);
+  for (let b = 0; b < batches.length && !stop; b++) {
+    let want = batches[b], note = '';
     for (let t = 1; t <= TRIES && want.length && !stop; t++) {
       let answers = [];
       try { answers = await ask(want, note); } catch (e) { say('s1say', 'istek başarısız: ' + e.message, 'bad'); }
@@ -220,8 +240,10 @@ async function run(list, remember) {
       want.forEach((w, n) => {
         if (!lined[n]) { again.push(w); why.push(w.term + ': you did not write a card for it'); return; }
         const card = CardRules.toCard(lined[n], w);
-        const problems = CardRules.checkCard(card, { findTerm, normalize, isInflectionOf, AI });
-        if (problems.length) { again.push(w); why.push(w.term + ': ' + problems[0]); return; }
+        const problems = CardRules.checkCard(card, { findTerm, normalize, isInflectionOf, AI }, true);
+        /* Every fault, not the first: a card fixed one rule at a time takes
+           three rounds to come right, and it only gets three. */
+        if (problems.length) { again.push(w); why.push(w.term + ': ' + problems.join('; ')); return; }
         if (remember) { drafts[sig(w)] = card; }
         stats.done++; show(card);
       });

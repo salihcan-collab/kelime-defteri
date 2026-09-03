@@ -51,30 +51,38 @@ the words split into several senses whose examples have to be told apart.
 Those are written by hand. The other 2,949 are ordinary nouns, verbs,
 adjectives and adverbs, drafted against an Ollama running on your own machine.
 
-**`uret.html` is the way to do it** — a page like the app itself, needing
-nothing installed. Start the folder's own `sunucu-baslat` and open
+**`uret.html` is how** — a page like the app itself, needing nothing installed.
+Start the folder's own `sunucu-baslat` and open
 <http://localhost:8000/tools/uret.html>. (It has to be served: a page opened
 straight off the disk cannot read the word list beside it.)
 
-`generate.js` does the same job from a terminal, for anyone who would rather:
+Try twenty words first and read what comes back. They are taken from across the
+alphabet rather than off the front, because the As are not the hard part.
 
-    node tools/generate.js --calibrate          # 20 words spread across the list
-    node tools/generate.js                      # the whole run, resumable
-    node tools/generate.js --merge              # the ones that passed
+### Why the Turkish is not drafted
 
-Either way, try twenty words first and read what comes back. They are taken
-from across the alphabet rather than off the front, because the As are not the
-hard part. If the Turkish is thin or the examples are stiff, change the model
-before spending hours on the full run.
+It was, at first. Twenty calibration cards from qwen2.5:14b came back with
+English worth keeping — clean definitions, natural examples, real collocations
+— and Turkish that was wrong in seven of fifteen: `challenge` as *itiraf etmek*
+(to confess), `nowadays` as *şimdiki zaman* (the present tense), `roll` as
+*rol*, and `dağrita`, which is not a word in any language.
+
+None of that can be caught mechanically. They are plausible Turkish strings, and
+a learner meeting them on a card has no way of knowing. So the model is asked
+for English only — where it is good, and where the checks have teeth — and the
+translations, three words a card against sixty, are written by hand afterwards.
 
 Nothing the model says is trusted. Every card goes through the same checks in
 `card-rules.js` that the deck itself is held to, and a card that fails is asked
 for again with the reason attached. A word that fails three times is left out
-and listed at the end. Both keep what they have written after every batch — the page in the browser's
-own store, the script in `drafts.json` — so a run survives a closed laptop and
-picks up where it left off rather than starting again. Neither ever writes into
-`deck-b1.js`: they hand over `drafted-cards.json`, and folding that in is a
-separate, reviewed step.
+and listed at the end. The page keeps what it has written after every batch, in the browser's own
+store, so a run survives a closed laptop and picks up where it left off rather
+than starting again. It never writes into `deck-b1.js`: it hands over
+`drafted-cards.json`, and folding that in is a separate, reviewed step.
+
+No batch ever carries two senses of one word. Answers are matched back by their
+term, and a model asked for `cook` twice writes it once — leaving no way to tell
+which of the two the answer belonged to.
 
 ## The rules
 
