@@ -142,6 +142,9 @@ const Store = {
       if ('category' in c) delete c.category;
       if (!Array.isArray(c.collocations)) c.collocations = [];
       if (!Array.isArray(c.related)) c.related = [];
+      /* A word held one topic before it could hold several tags. */
+      if (!Array.isArray(c.tags)) c.tags = c.topic ? [c.topic] : [];
+      if ('topic' in c) delete c.topic;
       return c;
     });
     s.aiUsage = d.aiUsage || { day: '', count: 0 };
@@ -288,11 +291,12 @@ const Store = {
     const have = {};
     this.cardsOf(deck.id).forEach(c => { have[sig(c)] = c; });
 
-    /* A word the deck gained a field for since it was installed — the topic,
-       say — should not need the deck deleting and put back to get it. Only
+    /* A word the deck gained a field for since it was installed — its tags,
+       say — should not need the deck deleting and put back to get them. Only
        what is empty is filled, so nothing written or cleared on purpose is
        overwritten. */
-    const FILLABLE = ['topic', 'sense', 'definition', 'example', 'translation', 'notes'];
+    const FILLABLE = ['sense', 'definition', 'example', 'translation', 'notes'];
+    const LISTS = ['tags', 'collocations', 'related'];
     let added = 0, filled = 0;
     src.cards.forEach(c => {
       const mine = have[sig(c)];
@@ -301,12 +305,9 @@ const Store = {
       FILLABLE.forEach(f => {
         if (!String(mine[f] || '').trim() && String(c[f] || '').trim()) { mine[f] = c[f]; touched = true; }
       });
-      if (!(mine.collocations || []).length && (c.collocations || []).length) {
-        mine.collocations = c.collocations.slice(); touched = true;
-      }
-      if (!(mine.related || []).length && (c.related || []).length) {
-        mine.related = c.related.slice(); touched = true;
-      }
+      LISTS.forEach(f => {
+        if (!(mine[f] || []).length && (c[f] || []).length) { mine[f] = c[f].slice(); touched = true; }
+      });
       if (touched) { mine.updatedAt = Date.now(); filled++; }
     });
     this.saveNow();
@@ -359,10 +360,10 @@ const Store = {
       /* A short label that tells this sense apart from the word's other
          senses — "to protest" next to "a thing". Empty for most words. */
       sense: (data.sense || '').trim(),
-      /* What the word is about, from Cambridge's own topic lists. A deck is
-         what you chose to study; a topic is what the word is about, and one
-         word can be in a dozen decks but belongs to one subject. */
-      topic: (data.topic || '').trim(),
+      /* What the word is about. A deck is what you chose to study; a tag is
+         what the word is about, and a word can carry several — Cambridge's own
+         topic lists to begin with, and whatever else you find useful. */
+      tags: (data.tags || []).map(t => String(t).trim()).filter(Boolean),
       definition: (data.definition || '').trim(),
       example: (data.example || '').trim(),
       translation: (data.translation || '').trim(),

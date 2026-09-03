@@ -27,6 +27,8 @@ const ICONS = {
   trash: '<svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>',
   play: '<svg viewBox="0 0 24 24"><path d="M5 3l14 9-14 9V3z"/></svg>',
   sound: '<svg viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg>',
+  tag: '<svg viewBox="0 0 24 24"><path d="M20.6 13.4L12 4.8H4v8l8.6 8.6a2 2 0 0 0 2.8 0l5.2-5.2a2 2 0 0 0 0-2.8z"/>' +
+       '<circle cx="7.5" cy="7.5" r="1.2"/></svg>',
   spark: '<svg viewBox="0 0 24 24"><path d="M12 3l1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9z"/><path d="M18 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/></svg>',
   empty: '<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="15" rx="2"/><path d="M3 10h18M8 5V3M16 5V3"/></svg>',
   loader: '<svg viewBox="0 0 24 24" class="spin"><path d="M21 12a9 9 0 1 1-6.2-8.6"/></svg>',
@@ -67,6 +69,10 @@ function toast(msg, type) {
 let modalOnClose = null;
 function openModal(opts) {
   $('#modalTitle').textContent = opts.title || '';
+  /* The strip of head between the title and the close button. Empty on almost
+     every dialog; the card editor puts its auto-fill button there, above the
+     rule, where it belongs to the whole card rather than to a field. */
+  $('#modalHeadExtra').innerHTML = opts.head || '';
   $('#modalBody').innerHTML = opts.body || '';
   $('#modalFoot').innerHTML = opts.foot || '';
   $('.modal').classList.toggle('wide', !!opts.wide);
@@ -83,6 +89,7 @@ function closeModal() {
   document.body.classList.remove('modal-open');
   positionToasts();
   $('#modalBody').innerHTML = '';
+  $('#modalHeadExtra').innerHTML = '';
   if (modalOnClose) { const f = modalOnClose; modalOnClose = null; f(); }
 }
 function confirmDialog(title, message, confirmLabel, danger) {
@@ -354,15 +361,21 @@ function deckPickLabel(chosen) {
   return chosen.length + ' decks';
 }
 
-/* Cambridge's headings are offered, not imposed: the box is one you can type
-   in, and a topic of your own — every subject Cambridge never thought of — is
-   as good as one of theirs. Topics already in use are offered too, so the
-   second word of a new subject is a click rather than a retype. */
-function topicOptions() {
-  const mine = Store.state.cards.map(c => c.topic).filter(Boolean);
+/* Cambridge's headings are offered, not imposed: a tag of your own — every
+   subject they never thought of — is as good as one of theirs. Tags already in
+   use are offered too, so the second word of a new one is a click rather than
+   a retype. */
+function tagSuggestions() {
+  const mine = Store.state.cards.reduce((all, c) => all.concat(c.tags || []), []);
   const all = TOPICS.concat(mine).filter((t, i, a) => a.indexOf(t) === i).sort();
-  return '<datalist id="topicList">' +
+  return '<datalist id="tagList">' +
     all.map(t => '<option value="' + esc(t) + '">').join('') + '</datalist>';
+}
+
+/* What is typed, shown back as the tags it will be saved as. */
+function tagChips(text) {
+  const tags = splitList(text);
+  return tags.map(t => '<span class="tag-chip">' + ICONS.tag + esc(t) + '</span>').join('');
 }
 
 function deckOptions(selected, allLabel) {
@@ -880,7 +893,7 @@ function shippedDeckMissing() {
      counts as missing too, or a field added since would have no way in. */
   return B1_DECK.cards.some(c => {
     const mine = have[key(c.term) + '|' + key(c.pos) + '|' + key(c.sense)];
-    return !mine || (c.topic && !mine.topic);
+    return !mine || ((c.tags || []).length && !(mine.tags || []).length);
   });
 }
 
@@ -1062,7 +1075,7 @@ function extrasFilled(card) {
   /* Fields, not entries — three collocations still fill one box. */
   return ((card.collocations || []).length ? 1 : 0) +
          (has('syn') ? 1 : 0) + (has('ant') ? 1 : 0) + (has('family') ? 1 : 0) +
-         (card.notes ? 1 : 0);
+         ((card.tags || []).length ? 1 : 0) + (card.notes ? 1 : 0);
 }
 
 /* `card` without an id is a filled-in blank rather than a card being edited —
@@ -1072,6 +1085,11 @@ function cardEditor(card, presetDeck) {
   openModal({
     wide: true,
     title: isNew ? 'Add a word' : 'Edit word',
+    /* Above the rule, in the middle: filling the card in is a thing done to
+       the whole card, not to whichever field it happens to sit beside. */
+    head: AI.available()
+      ? '<button class="ghost-btn tiny" id="aiFill">' + ICONS.spark + 'Auto-fill the rest with AI</button>'
+      : '<p class="help">Connect an AI assistant in Settings to fill these in automatically.</p>',
     body:
       '<div class="inline-fields">' +
         '<div class="field"><label>Word or phrase <em class="req">required</em></label>' +
@@ -1087,21 +1105,6 @@ function cardEditor(card, presetDeck) {
       '<div class="field hidden" id="senseRow"><label>Sense label</label>' +
         '<input type="text" id="cSense" value="' + esc(card ? (card.sense || '') : '') + '" placeholder="e.g. to protest">' +
         '<span class="help" id="senseHelp"></span></div>' +
-      /* The deck rides in beside the auto-fill button rather than below the
-         translation, where the topic now goes. Two fields on one line either
-         way, so the form is the same height it was. */
-      /* The deck rides in beside the auto-fill button rather than below the
-         translation, where the topic now goes — the same two-column shape as
-         the row above, so its box matches the part of speech beside it. */
-      '<div class="inline-fields ai-row">' +
-        '<div class="ai-cell">' +
-          (AI.available()
-            ? '<button class="ghost-btn tiny" id="aiFill">' + ICONS.spark + 'Auto-fill the rest with AI</button>'
-            : '<p class="help">Tip: connect an AI assistant in Settings to fill these fields automatically.</p>') +
-        '</div>' +
-        '<div class="field"><label>Deck</label><select id="cDeck">' +
-          deckOptions(card ? card.deckId : (presetDeck || (Store.state.decks[0] || {}).id)) + '</select></div>' +
-      '</div>' +
       '<div class="field"><label>Meaning (English definition) <em class="req">required</em></label>' +
         '<textarea id="cDef" placeholder="A clear, short definition">' + esc(card ? card.definition : '') + '</textarea></div>' +
       '<div class="field"><label>Example sentence</label>' +
@@ -1110,10 +1113,8 @@ function cardEditor(card, presetDeck) {
       '<div class="inline-fields">' +
         '<div class="field"><label>Translation</label>' +
           '<input type="text" id="cTr" value="' + esc(card ? card.translation : '') + '" placeholder="Turkish meaning"></div>' +
-        '<div class="field"><label>Topic</label>' +
-          '<input type="text" id="cTopic" list="topicList" autocomplete="off"' +
-            ' value="' + esc(card ? (card.topic || '') : '') + '" placeholder="e.g. Food and Drink">' +
-          topicOptions() + '</div>' +
+        '<div class="field"><label>Deck</label><select id="cDeck">' +
+          deckOptions(card ? card.deckId : (presetDeck || (Store.state.decks[0] || {}).id)) + '</select></div>' +
       '</div>' +
       /* Everything a word can have but most words do not. Folded away so the
          form stays the five fields you actually fill in, and opened on its own
@@ -1135,10 +1136,17 @@ function cardEditor(card, presetDeck) {
               '<input type="text" id="cAnt" value="' + esc(card ? relText(card, 'ant') : '') + '" placeholder="unreliable"></div>' +
           '</div>' +
           '<div id="relLinks"></div>' +
-          '<div class="field"><label>Word family</label>' +
-            '<input type="text" id="cFam" value="' + esc(card ? relText(card, 'family') : '') + '" placeholder="analysis, analytical">' +
-            '<span class="help">Other forms of the same word. Naming one member is enough — ' +
-              'the whole family finds itself.</span></div>' +
+          '<div class="inline-fields">' +
+            '<div class="field"><label>Word family</label>' +
+              '<input type="text" id="cFam" value="' + esc(card ? relText(card, 'family') : '') + '" placeholder="analysis, analytical">' +
+              '<span class="help">Other forms of the same word. Naming one is enough — ' +
+                'the whole family finds itself.</span></div>' +
+            '<div class="field"><label>Tags</label>' +
+              '<input type="text" id="cTags" list="tagList" autocomplete="off"' +
+                ' value="' + esc(card ? (card.tags || []).join(', ') : '') + '" placeholder="Food and Drink, exam">' +
+              tagSuggestions() +
+              '<div class="tag-chips" id="tagChips"></div></div>' +
+          '</div>' +
           '<div class="field"><label>Personal note</label>' +
             '<input type="text" id="cNote" value="' + esc(card ? card.notes : '') + '" placeholder="A memory hook, a false friend…"></div>' +
         '</div>' +
@@ -1167,7 +1175,7 @@ function cardEditor(card, presetDeck) {
         term: $('#cTerm').value.trim(), pos: $('#cPos').value, definition: $('#cDef').value.trim(),
         example: $('#cEx').value.trim(), translation: $('#cTr').value.trim(),
         deckId: $('#cDeck').value, notes: $('#cNote').value.trim(),
-        sense: $('#cSense').value.trim(), topic: $('#cTopic').value.trim(),
+        sense: $('#cSense').value.trim(), tags: splitList($('#cTags').value),
         collocations: splitLines($('#cColl').value),
         related: parseRelations($('#cSyn').value, $('#cAnt').value, $('#cFam').value)
       });
@@ -1246,6 +1254,13 @@ function cardEditor(card, presetDeck) {
         if (isNew) Store.addCard(data); else Store.updateCard(card.id, data);
         return true;
       };
+      /* The chips follow what is typed, so a tag is seen as a tag before it is
+         saved as one. */
+      const tagBox = $('#cTags');
+      const paintTags = () => { $('#tagChips').innerHTML = tagChips(tagBox.value); };
+      tagBox.oninput = paintTags;
+      paintTags();
+
       f.querySelector('[data-act="cancel"]').onclick = closeModal;
       f.querySelector('[data-act="save"]').onclick = () => {
         if (!persist()) return;

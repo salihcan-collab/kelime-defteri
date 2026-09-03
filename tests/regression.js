@@ -1774,15 +1774,15 @@ const head = (s) => console.log('\n— ' + s + ' —');
     const shippedNow = {};
     B1_DECK.cards.forEach(c => { shippedNow[key(c)] = c; });
     const deck = Store.state.decks.filter(d => d.name === B1_DECK.name)[0];
-    const mine = Store.cardsOf(deck.id).filter(c => shippedNow[key(c)] && shippedNow[key(c)].topic);
+    const mine = Store.cardsOf(deck.id).filter(c => shippedNow[key(c)] && (shippedNow[key(c)].tags || []).length);
     const one = mine[0];
-    mine.forEach(c => { c.topic = ''; });               /* as an older install looked */
+    mine.forEach(c => { c.tags = []; });               /* as an older install looked */
     one.definition = 'my own words';
     const offered = shippedDeckMissing();
     const r = Store.installDeck(B1_DECK);
     return {
       hadNone: mine.length, offered: offered, filled: r.filled, added: r.added,
-      nowFiled: mine.filter(c => c.topic).length,
+      nowFiled: mine.filter(c => (c.tags || []).length).length,
       keptMine: Store.state.cards.filter(c => c.id === one.id)[0].definition === 'my own words',
       stillOffered: shippedDeckMissing()
     };
@@ -1799,41 +1799,49 @@ const head = (s) => console.log('\n— ' + s + ' —');
   /* A word belongs to a subject as well as to a deck. The deck is what you
      chose to study; the topic is what the word is about, and it comes from
      Cambridge's own lists. */
-  head('topics');
+  head('tags');
   const topic = await page.evaluate(async () => {
     Store.wipe(); Store.installDeck(B1_DECK); Store.saveNow();
     const card = Store.state.cards.filter(c => c.term === 'clothes')[0];
     cardEditor(card);
     await new Promise(r => setTimeout(r, 300));
     const box = (id) => document.getElementById(id).getBoundingClientRect();
-    const before = card.topic;
-    const options = document.querySelectorAll('#topicList option').length;
+    const before = (card.tags || []).join(', ');
+    const options = document.querySelectorAll('#tagList option').length;
     /* where the fields sit, measured while the form is still open */
-    const sameRow = Math.abs(box('cTopic').top - box('cTr').top) < 4;
-    const deckAbove = box('cDeck').top < box('cTopic').top && box('cDeck').top > box('cPos').top;
-    document.getElementById('cTopic').value = 'Shopping';
+    const deckBesideTranslation = Math.abs(box('cDeck').top - box('cTr').top) < 4;
+    const tagsBelowAntonyms = box('cTags').top > box('cAnt').top &&
+      Math.abs(box('cTags').top - box('cFam').top) < 4;
+    const buttonInHead = !!document.querySelector('.modal-head #aiFill, .modal-head-extra .help');
+    const tags = document.getElementById('cTags');
+    tags.value = 'Shopping, exam';
+    tags.dispatchEvent(new Event('input'));
+    const chips = document.querySelectorAll('#tagChips .tag-chip').length;
     document.querySelector('[data-act="save"]').click();
     await new Promise(r => setTimeout(r, 300));
     const after = Store.state.cards.filter(c => c.id === card.id)[0];
     const stored = JSON.parse(localStorage.getItem('lexio.v1'))
       .cards.filter(c => c.id === card.id)[0];
     return {
-      shipped: before, options: options, known: TOPICS.length,
-      onCard: after.topic, onDisk: stored.topic,
-      sameRowAsTranslation: sameRow, deckAbove: deckAbove,
-      withTopics: Store.state.cards.filter(c => c.topic).length,
+      shipped: before, options: options, known: TOPICS.length, chips: chips,
+      onCard: (after.tags || []).join(', '), onDisk: (stored.tags || []).join(', '),
+      deckBesideTranslation: deckBesideTranslation, tagsBelowAntonyms: tagsBelowAntonyms,
+      buttonInHead: buttonInHead,
+      withTags: Store.state.cards.filter(c => (c.tags || []).length).length,
       total: Store.state.cards.length
     };
   });
-  is(topic.options >= topic.known, `the ${topic.known} topics are offered as suggestions`);
+  is(topic.options >= topic.known, `Cambridge's ${topic.known} topics are offered as tags`);
   is(topic.shipped === 'Clothes and Accessories',
-     `a shipped word arrives filed under its subject (${topic.shipped})`);
-  is(topic.onCard === 'Shopping' && topic.onDisk === 'Shopping',
-     'changing it is kept, on the card and on disk');
-  is(topic.sameRowAsTranslation && topic.deckAbove,
-     'the topic sits beside the translation and the deck beside the auto-fill button');
-  is(topic.withTopics > 0 && topic.withTopics < topic.total,
-     `${topic.withTopics} of the ${topic.total} shipped words are in Cambridge's topic lists`);
+     `a shipped word arrives tagged with its subject (${topic.shipped})`);
+  is(topic.onCard === 'Shopping, exam' && topic.onDisk === 'Shopping, exam',
+     'a word can carry several tags, and they are kept on the card and on disk');
+  is(topic.chips === 2, 'what is typed is shown back as tags before it is saved');
+  is(topic.deckBesideTranslation && topic.tagsBelowAntonyms && topic.buttonInHead,
+     'the deck sits beside the translation, the tags beside the word family, ' +
+     'and the auto-fill button above the rule');
+  is(topic.withTags > 0 && topic.withTags < topic.total,
+     `${topic.withTags} of the ${topic.total} shipped words carry a tag`);
 
   /* ------------------------------------------------------------------ *
      10. Appearance.

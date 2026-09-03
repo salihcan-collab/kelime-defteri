@@ -18,7 +18,7 @@ const B1_DECK = {
   description: 'The Cambridge B1 Preliminary vocabulary list (August 2025) — every word, with a definition, an example, a translation and its word family.',
   cards: [
 
-    { term:'able', pos:'adjective', topic:'Language', definition:'Having the skill, strength or opportunity to do something.',
+    { term:'able', pos:'adjective', tags:['Language'], definition:'Having the skill, strength or opportunity to do something.',
       example:'She was able to answer every question without looking at her notes.',
       translation:'muktedir, yapabilen', collocations:['be able to'],
       related:[{kind:'ant',text:'unable'},{kind:'family',text:'ability'},{kind:'family',text:'disabled'}] },
@@ -33,12 +33,12 @@ const B1_DECK = {
       translation:'aksan, şive', collocations:['a strong accent','a foreign accent'],
       related:[{kind:'family',text:'accentuate'}] },
 
-    { term:'access', pos:'noun', topic:'Communications and Technology', definition:'The right or the means to enter a place or use something.',
+    { term:'access', pos:'noun', tags:['Communications and Technology'], definition:'The right or the means to enter a place or use something.',
       example:'The flat has easy access to the city centre.',
       translation:'erişim, giriş', collocations:['internet access','disabled access','access to'],
       related:[{kind:'family',text:'accessible'},{kind:'family',text:'accessory'}] },
 
-    { term:'accident', pos:'noun', topic:'Health, Medicine and Exercise', definition:'Something bad that happens without anyone planning it, often hurting someone.',
+    { term:'accident', pos:'noun', tags:['Health, Medicine and Exercise'], definition:'Something bad that happens without anyone planning it, often hurting someone.',
       example:'He broke his arm in a cycling accident.',
       translation:'kaza', collocations:['a car accident','by accident','have an accident'],
       related:[{kind:'family',text:'accidental'},{kind:'family',text:'accidentally'}] },
@@ -86,18 +86,18 @@ const B1_DECK = {
       translation:'duyurmak, ilan etmek', collocations:['announce a decision'],
       related:[{kind:'family',text:'announcement'},{kind:'family',text:'announcer'}] },
 
-    { term:'annoyed', pos:'adjective', topic:'Language', definition:'A little angry about something.',
+    { term:'annoyed', pos:'adjective', tags:['Language'], definition:'A little angry about something.',
       example:'She was annoyed that nobody had told her about the change.',
       translation:'kızgın, sinirlenmiş, canı sıkkın', collocations:['annoyed with someone','annoyed about something'],
       related:[{kind:'syn',text:'irritated'},{kind:'family',text:'annoy'},{kind:'family',text:'annoying'}],
       notes:'Annoyed is how you feel; annoying is what causes it.' },
 
-    { term:'answer', pos:'noun', topic:'Language', sense:'a reply', definition:'What you say or write when someone asks you something.',
+    { term:'answer', pos:'noun', tags:['Language'], sense:'a reply', definition:'What you say or write when someone asks you something.',
       example:'I wrote to them last month but I am still waiting for an answer.',
       translation:'cevap, yanıt, karşılık', collocations:['the right answer','give an answer'],
       related:[{kind:'syn',text:'reply'},{kind:'syn',text:'response'},{kind:'ant',text:'question'}] },
 
-    { term:'answer', pos:'verb', topic:'Language', sense:'to reply', definition:'To say or write something back to someone who has asked you.',
+    { term:'answer', pos:'verb', tags:['Language'], sense:'to reply', definition:'To say or write something back to someone who has asked you.',
       example:'Please answer the question in your own words.',
       translation:'cevaplamak, yanıtlamak', collocations:['answer a question','answer the phone','answer the door'],
       related:[{kind:'syn',text:'reply'},{kind:'family',text:'answerphone'}] },
@@ -108,13 +108,13 @@ const B1_DECK = {
       related:[{kind:'family',text:'apology'}],
       notes:'British spelling. American English writes apologize.' },
 
-    { term:'appointment', pos:'noun', topic:'Time', definition:'An arrangement to meet someone at a particular time.',
+    { term:'appointment', pos:'noun', tags:['Time'], definition:'An arrangement to meet someone at a particular time.',
       example:'I have a dental appointment at four o’clock.',
       translation:'randevu', collocations:['make an appointment','a doctor’s appointment'],
       related:[{kind:'family',text:'appoint'}],
       notes:'For meeting a doctor or a client. A meeting with a friend is a date or arrangement, not an appointment.' },
 
-    { term:'argue', pos:'verb', topic:'Language', definition:'To disagree with someone, often angrily.',
+    { term:'argue', pos:'verb', tags:['Language'], definition:'To disagree with someone, often angrily.',
       example:'They argue about money almost every week.',
       translation:'tartışmak, kavga etmek', collocations:['argue with someone','argue about something'],
       related:[{kind:'family',text:'argument'}] },
@@ -135,7 +135,7 @@ const B1_DECK = {
       related:[{kind:'family',text:'attendance'}],
       notes:'More formal than go to. You attend a meeting — no preposition after it.' },
 
-    { term:'autumn', pos:'noun', topic:'Time', definition:'The season between summer and winter, when leaves fall.',
+    { term:'autumn', pos:'noun', tags:['Time'], definition:'The season between summer and winter, when leaves fall.',
       example:'The forest is beautiful in autumn.',
       translation:'sonbahar, güz', collocations:['in autumn','last autumn'],
       related:[{kind:'family',text:'season'}],
@@ -157,7 +157,7 @@ const B1_DECK = {
       translation:'geçmiş, özgeçmiş, altyapı', collocations:['a background in something','family background'],
       related:[{kind:'syn',text:'experience'}] },
 
-    { term:'bargain', pos:'noun', topic:'Shopping', definition:'Something bought for much less than it is worth.',
+    { term:'bargain', pos:'noun', tags:['Shopping'], definition:'Something bought for much less than it is worth.',
       example:'At that price the bike was a real bargain.',
       translation:'kelepir, ucuzluk', collocations:['a real bargain','a bargain price'],
       related:[{kind:'syn',text:'a good deal'}] },
@@ -188,12 +188,12 @@ const B1_DECK = {
       translation:'yetiştirmek, büyütmek', collocations:[],
       related:[{kind:'syn',text:'raise'},{kind:'family',text:'upbringing'}] },
 
-    { term:'careful', pos:'adjective', topic:'Language', definition:'Giving attention to what you are doing so that nothing goes wrong.',
+    { term:'careful', pos:'adjective', tags:['Language'], definition:'Giving attention to what you are doing so that nothing goes wrong.',
       example:'Be careful with that knife.',
       translation:'dikkatli, özenli', collocations:['be careful','careful with something'],
       related:[{kind:'ant',text:'careless'},{kind:'family',text:'care'},{kind:'family',text:'carefully'}] },
 
-    { term:'cheap', pos:'adjective', topic:'Shopping', definition:'Costing little money.',
+    { term:'cheap', pos:'adjective', tags:['Shopping'], definition:'Costing little money.',
       example:'We found a cheap hotel near the station.',
       translation:'ucuz, hesaplı', collocations:['a cheap flight','dirt cheap'],
       related:[{kind:'ant',text:'expensive'},{kind:'family',text:'cheaply'}] },
@@ -204,18 +204,18 @@ const B1_DECK = {
       related:[{kind:'family',text:'cheerful'}],
       notes:'Informal. In Britain it also means thanks or bye.' },
 
-    { term:'clothes', pos:'plural noun', topic:'Clothes and Accessories', definition:'The things people wear, such as shirts, trousers and coats.',
+    { term:'clothes', pos:'plural noun', tags:['Clothes and Accessories'], definition:'The things people wear, such as shirts, trousers and coats.',
       example:'I need to buy some warm clothes for the winter.',
       translation:'giysiler, kıyafetler, elbiseler', collocations:['put on clothes','take off clothes'],
       related:[{kind:'family',text:'clothing'},{kind:'family',text:'cloth'}],
       notes:'Always plural: "clothes are", never "a clothes". One item is "a piece of clothing".' },
 
-    { term:'complain', pos:'verb', topic:'Shopping', definition:'To say that you are not happy about something.',
+    { term:'complain', pos:'verb', tags:['Shopping'], definition:'To say that you are not happy about something.',
       example:'She complained to the manager about the noise.',
       translation:'şikayet etmek, yakınmak', collocations:['complain about something','complain to someone'],
       related:[{kind:'family',text:'complaint'}] },
 
-    { term:'confident', pos:'adjective', topic:'Language', definition:'Sure that you can do something well, or sure that something is true.',
+    { term:'confident', pos:'adjective', tags:['Language'], definition:'Sure that you can do something well, or sure that something is true.',
       example:'He is confident that he will pass the exam.',
       translation:'kendine güvenen, emin', collocations:['confident about something','feel confident'],
       related:[{kind:'family',text:'confidence'},{kind:'ant',text:'nervous'}] },
@@ -230,12 +230,12 @@ const B1_DECK = {
       translation:'ilgilenmek, halletmek, uğraşmak', collocations:['deal with a problem'],
       related:[{kind:'syn',text:'handle'}] },
 
-    { term:'delay', pos:'noun', topic:'Travel and Transport', definition:'A time when something happens later than it should.',
+    { term:'delay', pos:'noun', tags:['Travel and Transport'], definition:'A time when something happens later than it should.',
       example:'There was a long delay at the airport.',
       translation:'gecikme, rötar', collocations:['a long delay','without delay'],
       related:[{kind:'syn',text:'hold-up'},{kind:'ant',text:'punctuality'}] },
 
-    { term:'deliver', pos:'verb', topic:'Travel and Transport', definition:'To take goods or letters to the place where they have been sent.',
+    { term:'deliver', pos:'verb', tags:['Travel and Transport'], definition:'To take goods or letters to the place where they have been sent.',
       example:'They deliver the newspaper before seven every morning.',
       translation:'teslim etmek, dağıtmak', collocations:['deliver a parcel','deliver a message'],
       related:[{kind:'family',text:'delivery'}] },
@@ -245,7 +245,7 @@ const B1_DECK = {
       translation:'tarif etmek, betimlemek, anlatmak', collocations:['describe something to someone'],
       related:[{kind:'family',text:'description'}] },
 
-    { term:'disappointed', pos:'adjective', topic:'Language', definition:'Unhappy because something was not as good as you hoped.',
+    { term:'disappointed', pos:'adjective', tags:['Language'], definition:'Unhappy because something was not as good as you hoped.',
       example:'We were disappointed with the hotel.',
       translation:'hayal kırıklığına uğramış', collocations:['disappointed with something','disappointed that'],
       related:[{kind:'family',text:'disappoint'},{kind:'family',text:'disappointing'},{kind:'family',text:'disappointment'}],
@@ -256,13 +256,13 @@ const B1_DECK = {
       translation:'keşfetmek, bulmak', collocations:['discover that'],
       related:[{kind:'family',text:'discovery'}] },
 
-    { term:'earn', pos:'verb', topic:'Work and Jobs', definition:'To get money by working, or to get something by deserving it.',
+    { term:'earn', pos:'verb', tags:['Work and Jobs'], definition:'To get money by working, or to get something by deserving it.',
       example:'She earns more than her brother.',
       translation:'kazanmak', collocations:['earn money','earn a living'],
       related:[{kind:'family',text:'earnings'}],
       notes:'Earn is for work; win is for competitions and prizes.' },
 
-    { term:'embarrassed', pos:'adjective', topic:'Language', definition:'Feeling uncomfortable and shy because of something you have done.',
+    { term:'embarrassed', pos:'adjective', tags:['Language'], definition:'Feeling uncomfortable and shy because of something you have done.',
       example:'I felt embarrassed when I forgot her name.',
       translation:'utanmış, mahcup', collocations:['embarrassed about something'],
       related:[{kind:'family',text:'embarrass'},{kind:'family',text:'embarrassing'},{kind:'family',text:'embarrassment'}] },
@@ -272,7 +272,7 @@ const B1_DECK = {
       translation:'teşvik etmek, cesaretlendirmek', collocations:['encourage someone to do something'],
       related:[{kind:'ant',text:'discourage'},{kind:'family',text:'encouragement'}] },
 
-    { term:'environment', pos:'noun', topic:'The Natural World', definition:'The air, water and land around us, or the conditions someone lives and works in.',
+    { term:'environment', pos:'noun', tags:['The Natural World'], definition:'The air, water and land around us, or the conditions someone lives and works in.',
       example:'Plastic waste is doing real harm to the environment.',
       translation:'çevre, ortam', collocations:['protect the environment','a working environment'],
       related:[{kind:'family',text:'environmental'},{kind:'syn',text:'surroundings'}] },

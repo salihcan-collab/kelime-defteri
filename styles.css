@@ -350,12 +350,19 @@ select{ cursor:pointer; appearance:none;
   background-position:calc(100% - 17px) 52%, calc(100% - 12px) 52%;
   background-size:5px 5px,5px 5px; background-repeat:no-repeat; padding-right:34px; }
 .inline-fields{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
-/* The auto-fill button and the deck share a line. The button sits at the foot
-   of its half so it lines up with the box beside it rather than with the box's
-   label. */
-.ai-row{ align-items:end; margin:-4px 0 14px; }
-.ai-cell{ display:flex; align-items:flex-end; height:100%; padding-bottom:9px; }
-.ai-cell .help{ margin:0; }
+/* The card's own button lives in the head, above the rule, centred between the
+   title and the way out. */
+.modal-head-extra{ flex:1; display:flex; justify-content:center; min-width:0; }
+.modal-head-extra .help{ margin:0; text-align:center; }
+
+/* Tags, shown back as tags while they are still being typed. */
+.tag-chips{ display:flex; flex-wrap:wrap; gap:6px; margin-top:7px; min-height:4px; }
+.tag-chip{
+  display:inline-flex; align-items:center; gap:5px; padding:3px 9px 3px 7px;
+  border-radius:99px; font-size:.72rem; font-weight:600;
+  background:var(--accent-soft); color:var(--accent);
+}
+.tag-chip svg{ width:12px; height:12px; fill:none; stroke:currentColor; stroke-width:1.9; }
 
 .field > label em.req{
   font-style:normal; font-size:.66rem; text-transform:uppercase; letter-spacing:.07em;
