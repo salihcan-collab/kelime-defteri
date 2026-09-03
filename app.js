@@ -372,11 +372,6 @@ function tagSuggestions() {
     all.map(t => '<option value="' + esc(t) + '">').join('') + '</datalist>';
 }
 
-/* What is typed, shown back as the tags it will be saved as. */
-function tagChips(text) {
-  const tags = splitList(text);
-  return tags.map(t => '<span class="tag-chip">' + ICONS.tag + esc(t) + '</span>').join('');
-}
 
 function deckOptions(selected, allLabel) {
   return (allLabel ? '<option value="">' + esc(allLabel) + '</option>' : '') +
@@ -1139,13 +1134,12 @@ function cardEditor(card, presetDeck) {
           '<div class="inline-fields">' +
             '<div class="field"><label>Word family</label>' +
               '<input type="text" id="cFam" value="' + esc(card ? relText(card, 'family') : '') + '" placeholder="analysis, analytical">' +
-              '<span class="help">Other forms of the same word. Naming one is enough — ' +
-                'the whole family finds itself.</span></div>' +
+              '<span class="help">One member is enough — the rest find themselves.</span></div>' +
             '<div class="field"><label>Tags</label>' +
-              '<input type="text" id="cTags" list="tagList" autocomplete="off"' +
-                ' value="' + esc(card ? (card.tags || []).join(', ') : '') + '" placeholder="Food and Drink, exam">' +
-              tagSuggestions() +
-              '<div class="tag-chips" id="tagChips"></div></div>' +
+              '<div class="tag-box" id="cTags">' +
+                '<input type="text" id="cTagInput" list="tagList" autocomplete="off"' +
+                  ' placeholder="Food and Drink">' +
+              '</div>' + tagSuggestions() + '</div>' +
           '</div>' +
           '<div class="field"><label>Personal note</label>' +
             '<input type="text" id="cNote" value="' + esc(card ? card.notes : '') + '" placeholder="A memory hook, a false friend…"></div>' +
@@ -1175,7 +1169,7 @@ function cardEditor(card, presetDeck) {
         term: $('#cTerm').value.trim(), pos: $('#cPos').value, definition: $('#cDef').value.trim(),
         example: $('#cEx').value.trim(), translation: $('#cTr').value.trim(),
         deckId: $('#cDeck').value, notes: $('#cNote').value.trim(),
-        sense: $('#cSense').value.trim(), tags: splitList($('#cTags').value),
+        sense: $('#cSense').value.trim(), tags: readTags(),
         collocations: splitLines($('#cColl').value),
         related: parseRelations($('#cSyn').value, $('#cAnt').value, $('#cFam').value)
       });
@@ -1254,11 +1248,39 @@ function cardEditor(card, presetDeck) {
         if (isNew) Store.addCard(data); else Store.updateCard(card.id, data);
         return true;
       };
-      /* The chips follow what is typed, so a tag is seen as a tag before it is
-         saved as one. */
-      const tagBox = $('#cTags');
-      const paintTags = () => { $('#tagChips').innerHTML = tagChips(tagBox.value); };
-      tagBox.oninput = paintTags;
+      /* Tags are made as they are typed: Enter or a comma turns what is in the
+         box into a tag, and backspace on an empty box takes the last one back.
+         Saving takes whatever is half-typed too, so a tag written and then
+         saved without pressing Enter is not quietly dropped. */
+      let tags = card ? (card.tags || []).slice() : [];
+      const tagBox = $('#cTags'), tagInput = $('#cTagInput');
+      const paintTags = () => {
+        tagBox.querySelectorAll('.tag-chip').forEach(c => c.remove());
+        tags.forEach((t, i) => {
+          const chip = document.createElement('span');
+          chip.className = 'tag-chip';
+          chip.innerHTML = ICONS.tag + '<b></b><button type="button" aria-label="Remove">×</button>';
+          chip.querySelector('b').textContent = t;
+          chip.querySelector('button').onclick = () => { tags.splice(i, 1); paintTags(); };
+          tagBox.insertBefore(chip, tagInput);
+        });
+        tagInput.placeholder = tags.length ? '' : 'Food and Drink';
+      };
+      const addTag = () => {
+        const raw = tagInput.value.trim().replace(/,+$/, '').trim();
+        tagInput.value = '';
+        if (!raw || tags.some(t => t.toLowerCase() === raw.toLowerCase())) return paintTags();
+        tags.push(raw); paintTags();
+      };
+      const readTags = () => { addTag(); return tags.slice(); };
+      tagInput.onkeydown = (ev) => {
+        if (ev.key === 'Enter' || ev.key === ',') { ev.preventDefault(); return addTag(); }
+        if (ev.key === 'Backspace' && !tagInput.value && tags.length) { tags.pop(); paintTags(); }
+      };
+      /* Picking a suggestion fires input, not a key, so it is caught here. */
+      tagInput.oninput = () => { if (/,/.test(tagInput.value)) addTag(); };
+      tagInput.onblur = addTag;
+      tagBox.onclick = (ev) => { if (ev.target === tagBox) tagInput.focus(); };
       paintTags();
 
       f.querySelector('[data-act="cancel"]').onclick = closeModal;
@@ -1618,7 +1640,7 @@ function drawStudyCard(host) {
           '<span>End session</span></button>' +
         '<button class="soft-btn tiny toggle-btn' + (s.showExtras === false ? '' : ' on') + '" data-act="extras" ' +
           'title="Collocations, related words, word family and your notes on the back of the card (E)">' +
-          '<span class="dot"></span>Extras<kbd>E</kbd></button>' +
+          '<span class="dot"></span>Extras</button>' +
         '<div class="bar" style="flex:1"><i style="width:' + progress + '%"></i></div>' +
         '<div class="counts"><span class="c-due">' + remaining + ' left</span>' +
           (session.ahead ? '<span class="c-new">ahead of schedule</span>' : '') + '</div>' +

@@ -1813,35 +1813,71 @@ const head = (s) => console.log('\n— ' + s + ' —');
     const tagsBelowAntonyms = box('cTags').top > box('cAnt').top &&
       Math.abs(box('cTags').top - box('cFam').top) < 4;
     const buttonInHead = !!document.querySelector('.modal-head #aiFill, .modal-head-extra .help');
-    const tags = document.getElementById('cTags');
-    tags.value = 'Shopping, exam';
-    tags.dispatchEvent(new Event('input'));
-    const chips = document.querySelectorAll('#tagChips .tag-chip').length;
+    /* typed into the box a tag at a time, the way a person would */
+    const typed = document.getElementById('cTagInput');
+    const type = (text, key) => {
+      typed.value = text;
+      typed.dispatchEvent(new Event('input'));
+      typed.dispatchEvent(new KeyboardEvent('keydown', { key: key, bubbles: true, cancelable: true }));
+    };
+    const startedWith = document.querySelectorAll('#cTags .tag-chip').length;
+    type('Shopping', 'Enter');
+    type('exam', 'Enter');
+    const chips = document.querySelectorAll('#cTags .tag-chip').length;
+    /* the same tag twice makes one chip, and backspace on an empty box takes
+       the last one back */
+    type('exam', 'Enter');
+    const noDouble = document.querySelectorAll('#cTags .tag-chip').length === chips;
+    type('', 'Backspace');
+    const afterBackspace = document.querySelectorAll('#cTags .tag-chip').length;
+    type('exam', 'Enter');
+    /* and a tag left half-typed is taken up by Save rather than lost */
+    typed.value = 'half-typed';
     document.querySelector('[data-act="save"]').click();
     await new Promise(r => setTimeout(r, 300));
     const after = Store.state.cards.filter(c => c.id === card.id)[0];
     const stored = JSON.parse(localStorage.getItem('lexio.v1'))
       .cards.filter(c => c.id === card.id)[0];
     return {
-      shipped: before, options: options, known: TOPICS.length, chips: chips,
+      shipped: before, options: options, known: TOPICS.length,
+      startedWith: startedWith, chips: chips, noDouble: noDouble,
+      afterBackspace: afterBackspace, wentBack: chips - 1,
       onCard: (after.tags || []).join(', '), onDisk: (stored.tags || []).join(', '),
       deckBesideTranslation: deckBesideTranslation, tagsBelowAntonyms: tagsBelowAntonyms,
       buttonInHead: buttonInHead,
       withTags: Store.state.cards.filter(c => (c.tags || []).length).length,
-      total: Store.state.cards.length
+      total: Store.state.cards.length,
+      fits: Math.round(document.querySelector('.modal').getBoundingClientRect().height) <= window.innerHeight
     };
   });
   is(topic.options >= topic.known, `Cambridge's ${topic.known} topics are offered as tags`);
   is(topic.shipped === 'Clothes and Accessories',
      `a shipped word arrives tagged with its subject (${topic.shipped})`);
-  is(topic.onCard === 'Shopping, exam' && topic.onDisk === 'Shopping, exam',
-     'a word can carry several tags, and they are kept on the card and on disk');
-  is(topic.chips === 2, 'what is typed is shown back as tags before it is saved');
+  is(topic.onCard === 'Clothes and Accessories, Shopping, exam, half-typed' &&
+     topic.onDisk === topic.onCard,
+     'a word carries as many tags as it is given, kept on the card and on disk');
+  is(topic.startedWith === 1 && topic.chips === 3,
+     'Enter turns what is typed into a tag, inside the box');
+  is(topic.noDouble, 'the same tag twice is still one tag');
+  is(topic.afterBackspace === topic.wentBack, 'backspace on an empty box takes the last one back');
   is(topic.deckBesideTranslation && topic.tagsBelowAntonyms && topic.buttonInHead,
      'the deck sits beside the translation, the tags beside the word family, ' +
      'and the auto-fill button above the rule');
   is(topic.withTags > 0 && topic.withTags < topic.total,
      `${topic.withTags} of the ${topic.total} shipped words carry a tag`);
+  is(topic.fits, 'and the form still fits the window');
+
+  /* A word of the learner's own starts with none. */
+  const untagged = await page.evaluate(async () => {
+    closeModal();
+    await new Promise(r => setTimeout(r, 150));
+    cardEditor(null);
+    await new Promise(r => setTimeout(r, 300));
+    const n = document.querySelectorAll('#cTags .tag-chip').length;
+    closeModal();
+    return n;
+  });
+  is(untagged === 0, 'a word of your own starts with no tags at all');
 
   /* ------------------------------------------------------------------ *
      10. Appearance.

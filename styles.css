@@ -355,14 +355,31 @@ select{ cursor:pointer; appearance:none;
 .modal-head-extra{ flex:1; display:flex; justify-content:center; min-width:0; }
 .modal-head-extra .help{ margin:0; text-align:center; }
 
-/* Tags, shown back as tags while they are still being typed. */
-.tag-chips{ display:flex; flex-wrap:wrap; gap:6px; margin-top:7px; min-height:4px; }
-.tag-chip{
-  display:inline-flex; align-items:center; gap:5px; padding:3px 9px 3px 7px;
-  border-radius:99px; font-size:.72rem; font-weight:600;
-  background:var(--accent-soft); color:var(--accent);
+/* Tags are made inside their own box: the chips and the place you type sit in
+   one field, so a tag looks like a tag the moment it exists. */
+.tag-box{
+  display:flex; flex-wrap:wrap; align-items:center; gap:6px; cursor:text;
+  width:100%; min-height:44px; padding:6px 9px; border-radius:10px;
+  background:var(--surface-2); border:1px solid var(--border-soft); transition:.15s;
 }
-.tag-chip svg{ width:12px; height:12px; fill:none; stroke:currentColor; stroke-width:1.9; }
+.tag-box:focus-within{ border-color:var(--accent); background:var(--surface); box-shadow:0 0 0 3px var(--accent-soft); }
+.tag-box input{
+  flex:1; min-width:90px; width:auto; padding:2px 0; font-size:.9rem;
+  background:none; border:0; box-shadow:none;
+}
+.tag-box input:focus{ background:none; border:0; box-shadow:none; }
+.tag-chip{
+  display:inline-flex; align-items:center; gap:5px; padding:3px 5px 3px 7px;
+  border-radius:99px; font-size:.72rem; font-weight:600;
+  background:var(--accent-soft); color:var(--accent); max-width:100%;
+}
+.tag-chip b{ font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.tag-chip svg{ width:12px; height:12px; flex:none; fill:none; stroke:currentColor; stroke-width:1.9; }
+.tag-chip button{
+  border:0; background:none; cursor:pointer; color:inherit; opacity:.6;
+  font-size:.9rem; line-height:1; padding:0 2px;
+}
+.tag-chip button:hover{ opacity:1; }
 
 .field > label em.req{
   font-style:normal; font-size:.66rem; text-transform:uppercase; letter-spacing:.07em;
