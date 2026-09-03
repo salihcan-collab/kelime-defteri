@@ -240,7 +240,7 @@ async function run(list, remember) {
       want.forEach((w, n) => {
         if (!lined[n]) { again.push(w); why.push(w.term + ': you did not write a card for it'); return; }
         const card = CardRules.toCard(lined[n], w);
-        const problems = CardRules.checkCard(card, { findTerm, normalize, isInflectionOf, AI }, true);
+        const problems = CardRules.checkCard(card, { findTerm, normalize, isInflectionOf, AI, PARTS_OF_SPEECH }, true);
         /* Every fault, not the first: a card fixed one rule at a time takes
            three rounds to come right, and it only gets three. */
         if (problems.length) { again.push(w); why.push(w.term + ': ' + problems.join('; ')); return; }

@@ -19,6 +19,26 @@ The PDF is Cambridge's and is **not** in this repository. Point `PDF` in
     python3 extract.py    # the list -> pv-records.json   (headwords + examples)
     python3 verify.py     # checks that reading against a plain reading of the PDF
     python3 plan.py       # applies the deck's rules -> pv-cards.json
+    python3 topics.py     # Appendix 2's topic lists, matched to those words
+
+### The topics
+
+Appendix 2 files about half the vocabulary under 22 headings — Food and Drink,
+Travel and Transport, Work and Jobs. Those become each card's `topic`, which is
+a different thing from its deck: a deck is what you chose to study, a topic is
+what the word is about.
+
+Those pages are set four columns wide, with each topic occupying a band of rows
+across all four and its columns moving from page to page. None of it has to be
+parsed exactly, though, because the vocabulary is already known from the
+alphabetical list — the lines are read loosely and matched against it, allowing
+for the two lists disagreeing with each other (`chat room` against `chatroom`,
+`socks` against `sock`, `doctor / Dr` against plain `doctor`).
+
+297 words are filed under more than one heading, and a card holds one. The
+narrowest list wins, which is what keeps small ones like Services and Colours
+from being emptied by larger ones — but it is a judgement the data cannot
+settle, and any card's topic can be changed in the editor.
 
 ### Why reading it is not a three-line script
 

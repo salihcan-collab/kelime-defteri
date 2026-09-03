@@ -1768,6 +1768,45 @@ const head = (s) => console.log('\n— ' + s + ' —');
   is(shipped.filled, 'every card it brings has a meaning, an example and a translation');
   await page.evaluate(() => { Store.wipe(); Store.saveNow(); });   /* as it was found */
 
+  /* A word belongs to a subject as well as to a deck. The deck is what you
+     chose to study; the topic is what the word is about, and it comes from
+     Cambridge's own lists. */
+  head('topics');
+  const topic = await page.evaluate(async () => {
+    Store.wipe(); Store.installDeck(B1_DECK); Store.saveNow();
+    const card = Store.state.cards.filter(c => c.term === 'clothes')[0];
+    cardEditor(card);
+    await new Promise(r => setTimeout(r, 300));
+    const box = (id) => document.getElementById(id).getBoundingClientRect();
+    const before = card.topic;
+    const options = document.querySelectorAll('#cTopic option').length;
+    /* where the fields sit, measured while the form is still open */
+    const sameRow = Math.abs(box('cTopic').top - box('cTr').top) < 4;
+    const deckAbove = box('cDeck').top < box('cTopic').top && box('cDeck').top > box('cPos').top;
+    document.getElementById('cTopic').value = 'Shopping';
+    document.querySelector('[data-act="save"]').click();
+    await new Promise(r => setTimeout(r, 300));
+    const after = Store.state.cards.filter(c => c.id === card.id)[0];
+    const stored = JSON.parse(localStorage.getItem('lexio.v1'))
+      .cards.filter(c => c.id === card.id)[0];
+    return {
+      shipped: before, options: options, known: TOPICS.length,
+      onCard: after.topic, onDisk: stored.topic,
+      sameRowAsTranslation: sameRow, deckAbove: deckAbove,
+      withTopics: Store.state.cards.filter(c => c.topic).length,
+      total: Store.state.cards.length
+    };
+  });
+  is(topic.options === topic.known + 1, `the ${topic.known} topics are on offer, and no topic at all`);
+  is(topic.shipped === 'Clothes and Accessories',
+     `a shipped word arrives filed under its subject (${topic.shipped})`);
+  is(topic.onCard === 'Shopping' && topic.onDisk === 'Shopping',
+     'changing it is kept, on the card and on disk');
+  is(topic.sameRowAsTranslation && topic.deckAbove,
+     'the topic sits beside the translation and the deck beside the auto-fill button');
+  is(topic.withTopics > 0 && topic.withTopics < topic.total,
+     `${topic.withTopics} of the ${topic.total} shipped words are in Cambridge's topic lists`);
+
   /* ------------------------------------------------------------------ *
      10. Appearance.
 

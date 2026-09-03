@@ -350,6 +350,16 @@ select{ cursor:pointer; appearance:none;
   background-position:calc(100% - 17px) 52%, calc(100% - 12px) 52%;
   background-size:5px 5px,5px 5px; background-repeat:no-repeat; padding-right:34px; }
 .inline-fields{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+/* The auto-fill button and the deck share a line, so the form keeps the height
+   it had when the deck sat lower down. The label goes beside the box rather
+   than above it, or the row grows by the height of a line of text. */
+.ai-row{ align-items:center; gap:14px; margin:-4px 0 14px; }
+.ai-row .help{ margin:0; }
+.inline-pick{
+  display:flex; align-items:center; gap:8px; flex:none; white-space:nowrap;
+  font-size:.79rem; font-weight:600; color:var(--text-dim);
+}
+.inline-pick select{ width:auto; min-width:172px; padding:6px 30px 6px 11px; font-size:.84rem; }
 
 .field > label em.req{
   font-style:normal; font-size:.66rem; text-transform:uppercase; letter-spacing:.07em;

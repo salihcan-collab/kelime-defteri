@@ -3,8 +3,21 @@
    ========================================================================== */
 
 const PARTS_OF_SPEECH = [
-  'noun','verb','adjective','adverb','phrasal verb','idiom','preposition',
-  'conjunction','pronoun','determiner','interjection','phrase'
+  'noun','plural noun','verb','adjective','adverb','phrasal verb','idiom',
+  'preposition','conjunction','pronoun','determiner','exclamation','phrase'
+];
+
+/* Cambridge groups its B1 vocabulary under these headings, and a word can be
+   filed under one of them as well as sitting in a deck: a deck is what you
+   chose to study, a topic is what the word is about. */
+const TOPICS = [
+  'Clothes and Accessories', 'Colours', 'Communications and Technology',
+  'Education', 'Entertainment and Media', 'Environment', 'Food and Drink',
+  'Health, Medicine and Exercise', 'Hobbies and Leisure', 'House and Home',
+  'Language', 'Places: Buildings', 'Places: Countryside',
+  'Places: Town and City', 'Services', 'Shopping', 'Sport',
+  'The Natural World', 'Time', 'Travel and Transport', 'Weather',
+  'Work and Jobs'
 ];
 
 const THEMES = [

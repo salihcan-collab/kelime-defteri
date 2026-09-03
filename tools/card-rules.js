@@ -5,9 +5,6 @@
    for but not checked is a wish, and a rule that is checked but never asked
    for is a trap.                                                            */
 
-const POS = ['noun', 'verb', 'adjective', 'adverb', 'phrasal verb', 'phrase',
-             'exclamation', 'plural noun'];
-
 /* The instructions a model writing these cards is given. Written for a small
    local model: short sentences, one rule per line, an example of the shape. */
 const PROMPT = `You write vocabulary cards for a Turkish speaker learning English at B1 level.
@@ -61,13 +58,21 @@ function plural(a, b) {
    come, and again once it is finished. Everything else is judged the same way
    both times — a draft that would not pass as a card is not worth keeping. */
 function checkCard(card, ctx, draft) {
+  /* The context is the app itself, handed in rather than reached for, so this
+     file runs in a page and in Node alike. Missing a piece of it is a mistake
+     in the caller, and should say so rather than fail somewhere further down. */
+  ['findTerm', 'normalize', 'isInflectionOf', 'AI', 'PARTS_OF_SPEECH']
+    .forEach(k => { if (!ctx || !ctx[k]) throw new Error('checkCard needs ' + k + ' from the app'); });
   const bad = [];
   const say = (s) => bad.push(s);
   const term = String(card.term || '').trim();
   const match = ctx.findTerm;
 
   if (!term) return ['no term'];
-  if (POS.indexOf(card.pos) === -1) say('part of speech "' + card.pos + '" is not one the app knows');
+  /* The app's own list, not a copy of it: a checker that keeps its own drifts,
+     and a card can end up with a label no editor will offer back. */
+  if (ctx.PARTS_OF_SPEECH.indexOf(card.pos) === -1)
+    say('part of speech "' + card.pos + '" is not one the app knows');
 
   const def = String(card.definition || '').trim();
   if (!def) say('no definition');
@@ -150,5 +155,5 @@ function toCard(raw, word) {
 
 /* Read from a page as well as from Node: the checks belong to the deck, not to
    whichever of the two happens to be running them. */
-const CardRules = { POS, PROMPT, checkCard, toCard };
+const CardRules = { PROMPT, checkCard, toCard };
 if (typeof module !== 'undefined' && module.exports) module.exports = CardRules;

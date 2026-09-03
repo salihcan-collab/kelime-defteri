@@ -16,8 +16,8 @@ const STUB = 'const document={readyState:"loading",addEventListener(){},' +
   'const localStorage={getItem(){return null},setItem(){},removeItem(){}};' +
   'const navigator={language:"en"};const speechSynthesis=null;';
 
-const app = new Function(STUB + read('ai.js') + read('app.js') +
-  '; return { findTerm, normalize, isInflectionOf, AI };')();
+const app = new Function(STUB + read('data.js') + read('ai.js') + read('app.js') +
+  '; return { findTerm, normalize, isInflectionOf, AI, PARTS_OF_SPEECH };')();
 
 module.exports = {
   app: app,

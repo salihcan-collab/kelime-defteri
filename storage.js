@@ -341,6 +341,10 @@ const Store = {
       /* A short label that tells this sense apart from the word's other
          senses — "to protest" next to "a thing". Empty for most words. */
       sense: (data.sense || '').trim(),
+      /* What the word is about, from Cambridge's own topic lists. A deck is
+         what you chose to study; a topic is what the word is about, and one
+         word can be in a dozen decks but belongs to one subject. */
+      topic: (data.topic || '').trim(),
       definition: (data.definition || '').trim(),
       example: (data.example || '').trim(),
       translation: (data.translation || '').trim(),

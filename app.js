@@ -354,6 +354,13 @@ function deckPickLabel(chosen) {
   return chosen.length + ' decks';
 }
 
+/* Cambridge's topic lists, plus the empty one most words of a learner's own
+   will keep. */
+function topicOptions(selected) {
+  return '<option value="">—</option>' +
+    TOPICS.map(t => '<option' + (t === selected ? ' selected' : '') + '>' + esc(t) + '</option>').join('');
+}
+
 function deckOptions(selected, allLabel) {
   return (allLabel ? '<option value="">' + esc(allLabel) + '</option>' : '') +
     Store.state.decks.map(d => '<option value="' + d.id + '"' + (d.id === selected ? ' selected' : '') + '>' +
@@ -1066,9 +1073,16 @@ function cardEditor(card, presetDeck) {
       '<div class="field hidden" id="senseRow"><label>Sense label</label>' +
         '<input type="text" id="cSense" value="' + esc(card ? (card.sense || '') : '') + '" placeholder="e.g. to protest">' +
         '<span class="help" id="senseHelp"></span></div>' +
-      (AI.available()
-        ? '<button class="ghost-btn tiny" id="aiFill" style="margin:-4px 0 14px">' + ICONS.spark + 'Auto-fill the rest with AI</button>'
-        : '<p class="help" style="margin:-8px 0 14px">Tip: connect an AI assistant in Settings to fill these fields automatically.</p>') +
+      /* The deck rides in beside the auto-fill button rather than below the
+         translation, where the topic now goes. Two fields on one line either
+         way, so the form is the same height it was. */
+      '<div class="row between ai-row">' +
+        (AI.available()
+          ? '<button class="ghost-btn tiny" id="aiFill">' + ICONS.spark + 'Auto-fill the rest with AI</button>'
+          : '<p class="help" style="margin:0">Tip: connect an AI assistant in Settings to fill these fields automatically.</p>') +
+        '<label class="inline-pick">Deck<select id="cDeck">' +
+          deckOptions(card ? card.deckId : (presetDeck || (Store.state.decks[0] || {}).id)) + '</select></label>' +
+      '</div>' +
       '<div class="field"><label>Meaning (English definition) <em class="req">required</em></label>' +
         '<textarea id="cDef" placeholder="A clear, short definition">' + esc(card ? card.definition : '') + '</textarea></div>' +
       '<div class="field"><label>Example sentence</label>' +
@@ -1077,8 +1091,8 @@ function cardEditor(card, presetDeck) {
       '<div class="inline-fields">' +
         '<div class="field"><label>Translation</label>' +
           '<input type="text" id="cTr" value="' + esc(card ? card.translation : '') + '" placeholder="Turkish meaning"></div>' +
-        '<div class="field"><label>Deck</label><select id="cDeck">' +
-          deckOptions(card ? card.deckId : (presetDeck || (Store.state.decks[0] || {}).id)) + '</select></div>' +
+        '<div class="field"><label>Topic</label><select id="cTopic">' +
+          topicOptions(card ? card.topic : '') + '</select></div>' +
       '</div>' +
       /* Everything a word can have but most words do not. Folded away so the
          form stays the five fields you actually fill in, and opened on its own
@@ -1132,7 +1146,7 @@ function cardEditor(card, presetDeck) {
         term: $('#cTerm').value.trim(), pos: $('#cPos').value, definition: $('#cDef').value.trim(),
         example: $('#cEx').value.trim(), translation: $('#cTr').value.trim(),
         deckId: $('#cDeck').value, notes: $('#cNote').value.trim(),
-        sense: $('#cSense').value.trim(),
+        sense: $('#cSense').value.trim(), topic: $('#cTopic').value,
         collocations: splitLines($('#cColl').value),
         related: parseRelations($('#cSyn').value, $('#cAnt').value, $('#cFam').value)
       });
