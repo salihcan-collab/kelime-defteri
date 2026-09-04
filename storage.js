@@ -258,14 +258,34 @@ const Store = {
     this._t = setTimeout(() => this.saveNow(), 250);
   },
 
+  /* Set by the app, so a save that starts failing is something the learner is
+     told about rather than something they find out by losing an evening. The
+     browser's own limit is the reason it would: a large collection and a few
+     snapshots can reach it, and the first sign is silence. */
+  onTrouble: null,
+
   saveNow() {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(this.state));
+      /* Only worth saying when it changes: every save otherwise. */
+      const wasStuck = this.memoryOnly;
       this.memoryOnly = false;
+      if (wasStuck && this.onTrouble) this.onTrouble(null);
     } catch (e) {
+      const wasFine = !this.memoryOnly;
       this.memoryOnly = true;
       console.warn('Saving failed — running in memory only.', e);
+      if (wasFine && this.onTrouble) this.onTrouble(e);
     }
+  },
+
+  /* Roughly what this collection costs the browser, so a limit that is being
+     approached can be seen rather than hit. */
+  weight() {
+    let own = 0, snaps = 0;
+    try { own = JSON.stringify(this.state).length; } catch (e) {}
+    try { snaps = (localStorage.getItem(SNAPSHOT_KEY) || '').length; } catch (e) {}
+    return { state: own, snapshots: snaps, total: own + snaps };
   },
 
   /* ---------- seeding ---------------------------------------------------- */

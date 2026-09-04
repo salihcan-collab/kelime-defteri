@@ -4117,6 +4117,11 @@ function renderSettings(host) {
           'progress will disappear when you close the tab. Export a backup, and see the README for how to fix it.</div>'
         : '<p class="muted" style="margin-bottom:14px">Everything is saved automatically in this browser. ' +
           'Nothing is uploaded anywhere. Export a backup file now and then, especially before clearing your browser data.</p>') +
+      /* A browser gives a page a few megabytes and says nothing until they run
+         out, so what has been used is worth showing while it still fits. */
+      '<p class="muted" style="margin-bottom:14px">' + Store.state.cards.length +
+        ' words take about ' + Math.round(Store.weight().total / 1024) +
+        ' KB, backup copies included. Browsers usually allow about 5,000 KB.</p>' +
       '<div class="row">' +
         '<button class="primary-btn" data-act="backup">Download backup (.json)</button>' +
         '<button class="ghost-btn" data-act="restore">Restore from backup</button>' +
@@ -4495,6 +4500,16 @@ function boot() {
   if (Store.memoryOnly) {
     toast('This browser is blocking local storage — your progress will not be saved. See the README.', 'err');
   }
+  /* Storage can also fill up in the middle of an evening, and until now the
+     only sign was a line in a console nobody has open. */
+  Store.onTrouble = (problem) => {
+    if (problem) {
+      toast('Saving stopped working — the browser is out of room. Export a backup now, ' +
+            'then remove old snapshots or decks.', 'err');
+    } else {
+      toast('Saving works again.', 'ok');
+    }
+  };
   /* A gentle nudge to keep a backup once there is something worth losing. */
   const age = Store.state.lastBackup ? Date.now() - Store.state.lastBackup : Infinity;
   if (Store.state.log.length > 60 && age > 21 * 86400000) {

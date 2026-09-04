@@ -289,6 +289,37 @@ const head = (s) => console.log('\n— ' + s + ' —');
   });
   is(perDeck.inside && perDeck.outside, 'resetting one deck leaves the other decks untouched');
 
+  /* A collection large enough to fill the browser's allowance is the one
+     failure that costs an evening: saving stops, and until now the only sign
+     was a line in a console nobody has open. */
+  head('running out of room');
+  const room = await page.evaluate(async () => {
+    const real = localStorage.setItem.bind(localStorage);
+    localStorage.setItem = (k, v) => {
+      if (k === 'lexio.v1') { const e = new Error('quota'); e.name = 'QuotaExceededError'; throw e; }
+      return real(k, v);
+    };
+    Store.saveNow();
+    await new Promise(r => setTimeout(r, 150));
+    const told = document.body.textContent;
+    Store.saveNow();                                   /* still full */
+    await new Promise(r => setTimeout(r, 150));
+    /* only these, since an earlier step's notice may still be on screen */
+    const notices = [...document.querySelectorAll('#toastWrap > .toast')]
+      .filter(t => /out of room|Saving stopped/.test(t.textContent)).length;
+    localStorage.setItem = real;
+    Store.saveNow();                                   /* room again */
+    await new Promise(r => setTimeout(r, 150));
+    return { warned: /out of room|Saving stopped/.test(told), notices,
+             back: /Saving works again/.test(document.body.textContent),
+             stuck: Store.memoryOnly,
+             weighs: Store.weight().total > 0 };
+  });
+  is(room.warned, 'a save that starts failing says so at once');
+  is(room.notices <= 1, 'and says it once rather than on every save (' + room.notices + ')');
+  is(room.back && !room.stuck, 'and says so again when there is room');
+  is(room.weighs, 'the collection can say what it weighs');
+
   /* ------------------------------------------------------------------ *
      7. Example sentences.
 
