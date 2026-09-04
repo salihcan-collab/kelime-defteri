@@ -94,6 +94,11 @@ a learner meeting them on a card has no way of knowing. So the model is asked
 for English only — where it is good, and where the checks have teeth — and the
 translations, three words a card against sixty, are written by hand afterwards.
 
+The model is never asked about tags and never told them. They were read out of
+Cambridge's appendix long before any of this, sit in `words.json` beside each
+word, and are put on the card as it is built — the model writes the English and
+nothing else.
+
 Nothing the model says is trusted. Every card goes through the same checks in
 `card-rules.js` that the deck itself is held to, and a card that fails is asked
 for again with the reason attached. A word that fails three times is left out

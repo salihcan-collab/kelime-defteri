@@ -95,6 +95,14 @@ function checkCard(card, ctx, draft) {
     if (n > 20) say('example runs to ' + n + ' words');
   }
 
+  /* Fields the app stores as text, so a list arriving in one is caught here
+     rather than turning into "[object Object]" on a card. */
+  ['definition', 'example', 'translation', 'notes', 'sense', 'term', 'pos'].forEach(f => {
+    if (card[f] != null && typeof card[f] !== 'string') say(f + ' is not text: ' + JSON.stringify(card[f]));
+  });
+  if (card.tags && !Array.isArray(card.tags)) say('tags is not a list: ' + JSON.stringify(card.tags));
+  (card.tags || []).forEach(t => { if (!String(t || '').trim()) say('an empty tag'); });
+
   const tr = String(card.translation || '').trim();
   if (!tr) { if (!draft) say('no translation'); }
   else {
@@ -151,7 +159,13 @@ function toCard(raw, word) {
     related: related
   };
   if (word.sense) card.sense = word.sense;
-  if (word.notes) card.notes = word.notes;
+  /* The tags come from Cambridge's own topic lists, read out of the appendix
+     long before any of this — the model is never asked about them and never
+     told them. They only have to survive the trip. */
+  if ((word.tags || []).length) card.tags = word.tags.slice();
+  /* The bracket notes Cambridge hangs on a word — (Br Eng), (Am Eng: fall),
+     (experience) — are not notes a learner wants as they stand, so the cards
+     carrying them are written by hand and the note written with them. */
   return card;
 }
 
