@@ -56,12 +56,15 @@ eski bir kopyayı gösteriyorsa burada eski tarih yazar. Öyleyse Ctrl+Shift+R y
     <select id="model" style="max-width:340px" hidden></select>
     <button class="soft-btn" id="tryModels" hidden>Modelleri sına</button>
     <button class="ghost-btn tiny" id="forgetTried" hidden>Sınamayı unut</button>
+    <button class="ghost-btn tiny" id="showList" hidden>Listeyi göster</button>
   </div>
   <p class="say" id="s1say">Ollama uygulaması açıkken Bağlan'a bas.</p>
   <p class="say" id="modelsay" hidden></p>
   <p class="say">Sağlayıcı, hesabının çalıştıramadığı modelleri de listeler ve adından
-     hangisinin işe yarayacağı anlaşılmaz. <b>Modelleri sına</b> her birinden üç kart
-     ister ve hangisinin gerçekten kart yazabildiğini ölçer.</p>
+     hangisinin işe yarayacağı anlaşılmaz. <b>Modelleri sına</b> büyükten küçüğe
+     gider, her birinden üç kart ister ve <b>üç tanesi kart yazınca durur</b> —
+     amaç katalog çıkarmak değil, kullanılacak modeli bulmak. Devam etmek istersen
+     düğmeye tekrar bas; kaldığı yerden sürer.</p>
 </div>
 
 <div class="step" id="s2">
@@ -117,7 +120,7 @@ const $ = (id) => document.getElementById(id);
 const KEY = 'lexio.b1.drafts';
 /* Shown on the page so "am I running the version we just fixed?" is a
    question you can answer by looking, not by guessing at the cache. */
-const BUILD = '4 Eylül — sınama';
+const BUILD = '4 Eylül — üçte dur';
 /* Bumped whenever the way a model is asked or judged changes, which throws
    away every verdict reached the old way. */
 const TRIAL_RULES = 3;
@@ -169,7 +172,7 @@ $('provider').onchange = () => {
   $('host').value = p.host;
   $('key').hidden = !p.key;
   $('model').hidden = true;
-  $('tryModels').hidden = $('forgetTried').hidden = true;
+  $('tryModels').hidden = $('forgetTried').hidden = $('showList').hidden = true;
   $('modelsay').hidden = true;
   $('try20').disabled = $('runAll').disabled = true;
   $('s1').classList.remove('done');
@@ -303,41 +306,75 @@ async function tryModel(name) {
 }
 
 let trying = false;
+/* The point of the trial is to find a model to use, not to survey a
+   catalogue. The list is walked largest-first, so once a few have written a
+   card the rest are worse candidates being paid for. It stops there; pressing
+   again carries on from where it left off. */
+const ENOUGH = 3;
+const allModels = () => [...$('model').options].map(o => o.value);
+const untried = () => allModels().filter(n => !doesOtherWork(n) && !tried[n]);
+
+function trialLabel() {
+  const left = untried().length;
+  $('tryModels').textContent = !left ? 'Hepsi sınandı'
+    : Object.keys(tried).length ? 'Sınamaya devam et' : 'Modelleri sına';
+  $('tryModels').disabled = !left;
+}
+
 $('tryModels').onclick = async () => {
   if (trying) { trying = false; return; }
-  const names = [...$('model').options].map(o => o.value);
-  trying = true;
-  $('tryModels').textContent = 'Durdur';
-  const worth = names.filter(n => !doesOtherWork(n));
+  const names = allModels();
   names.forEach(n => {
     /* Passed over rather than judged: it was never asked, and if you disagree,
        picking it from the list asks it. */
     if (doesOtherWork(n) && !tried[n]) tried[n] = { verdict: 'skip', note: 'başka iş yapıyor' };
   });
-  for (let i = 0; i < worth.length && trying; i++) {
-    say('modelsay', (i + 1) + '/' + worth.length + ' — ' + worth[i] + ' sınanıyor… (' +
-        (names.length - worth.length) + ' model bu iş için değil, atlandı)');
+  const queue = untried().sort(worthTryingFirst);
+  const passing = () => names.filter(n => tried[n] && tried[n].verdict === 'ok');
+  const already = passing().length;
+  trying = true;
+  $('tryModels').textContent = 'Durdur';
+  $('tryModels').disabled = false;
+  let done = 0;
+  for (let i = 0; i < queue.length && trying; i++) {
+    if (passing().length - already >= ENOUGH) break;
+    say('modelsay', (i + 1) + '/' + queue.length + ' — ' + queue[i] + ' sınanıyor… (' +
+        (names.length - names.filter(n => !doesOtherWork(n)).length) +
+        ' model bu iş için değil, sorulmadı)');
     $('modelsay').hidden = false;
-    tried[worth[i]] = await tryModel(worth[i]);
+    tried[queue[i]] = await tryModel(queue[i]);
+    done++;
     keepTried();
     const keepChoice = chosenModel();
     $('model').innerHTML = grouped(names);
     $('model').value = keepChoice;
   }
   trying = false;
-  $('tryModels').textContent = 'Modelleri sına';
-  const won = worth.filter(n => tried[n] && tried[n].verdict === 'ok');
+  const won = passing();
   $('model').innerHTML = grouped(names);
+  trialLabel();
   if (won.length) {
     $('model').value = won.sort(worthTryingFirst)[0];
-    say('modelsay', worth.length + ' modelden ' + won.length +
-        ' tanesi kart yazabildi (' + (names.length - worth.length) +
-        ' model bu iş için değildi, sınanmadı). En büyüğü seçildi: ' + chosenModel(), 'good');
+    const left = untried().length;
+    say('modelsay', done + ' model soruldu, ' + won.length + ' tanesi kart yazabildi. ' +
+        'En büyüğü seçildi: ' + chosenModel() +
+        (left ? ' — ' + left + ' model daha var, istersen "Sınamaya devam et".' : ''), 'good');
     $('try20').disabled = $('runAll').disabled = false;
   } else {
-    say('modelsay', 'Sınananların hiçbiri kart yazamadı.', 'bad');
+    say('modelsay', done + ' model soruldu, hiçbiri kart yazamadı.' +
+        (untried().length ? ' Devam etmek için tekrar bas.' : ''), 'bad');
     $('try20').disabled = $('runAll').disabled = true;
   }
+};
+
+/* The whole list, plainly, so it can be read or sent to someone. */
+$('showList').onclick = () => {
+  const names = allModels();
+  $('out').hidden = false;
+  $('out').textContent = names.length + ' model\n\n' + names.map(n =>
+    (doesOtherWork(n) ? '  atlandı  ' : tried[n] ? '  ' + (tried[n].note + '        ').slice(0, 10) : '  ?         ') +
+    n).join('\n') + '\n';
+  $('out').scrollTop = 0;
 };
 
 /* NVIDIA lists its whole catalogue, not the part of it this account may run:
@@ -389,7 +426,8 @@ $('connect').onclick = async () => {
     const sel = $('model');
     sel.innerHTML = grouped(names);
     sel.hidden = false;
-    $('tryModels').hidden = $('forgetTried').hidden = false;
+    $('tryModels').hidden = $('forgetTried').hidden = $('showList').hidden = false;
+    trialLabel();
     await loadWords();
     $('s1').classList.add('done');
     remember();
@@ -677,6 +715,7 @@ $('forgetTried').onclick = () => {
   $('model').innerHTML = grouped(names);
   say('modelsay', 'Sınama sonuçları silindi. "Modelleri sına" ile yeniden ölç.');
   $('modelsay').hidden = false;
+  trialLabel();
 };
 
 $('build').textContent = BUILD;
