@@ -37,6 +37,8 @@ Yazdığı her kart destenin denetimlerinden geçer; geçemeyen kart sebebi söy
 yeniden istenir. <b>Türkçe karşılık isteğe bağlıdır</b>: küçük bir model onda
 güvenilir değil, büyük bir model olabilir — kararı 20 kelimelik denemeye bakarak
 ver.</p>
+<p class="lead" style="margin-top:-14px"><small>Sürüm: <b id="build">—</b> — tarayıcı
+eski bir kopyayı gösteriyorsa burada eski tarih yazar. Öyleyse Ctrl+Shift+R yap.</small></p>
 
 <div class="step" id="s1">
   <h2><span class="num">1</span> Bir modele bağlan</h2>
@@ -53,6 +55,7 @@ ver.</p>
     <button class="soft-btn" id="connect">Bağlan</button>
     <select id="model" style="max-width:340px" hidden></select>
     <button class="soft-btn" id="tryModels" hidden>Modelleri sına</button>
+    <button class="ghost-btn tiny" id="forgetTried" hidden>Sınamayı unut</button>
   </div>
   <p class="say" id="s1say">Ollama uygulaması açıkken Bağlan'a bas.</p>
   <p class="say" id="modelsay" hidden></p>
@@ -112,6 +115,12 @@ ver.</p>
 (function () {
 const $ = (id) => document.getElementById(id);
 const KEY = 'lexio.b1.drafts';
+/* Shown on the page so "am I running the version we just fixed?" is a
+   question you can answer by looking, not by guessing at the cache. */
+const BUILD = '4 Eylül — sınama';
+/* Bumped whenever the way a model is asked or judged changes, which throws
+   away every verdict reached the old way. */
+const TRIAL_RULES = 3;
 const BATCH = 6, TRIES = 3, FIRST_WAIT = 4;
 let backoff = FIRST_WAIT;
 let words = [], drafts = {}, stop = false, host = '', model = '', how = 'ollama', key = '';
@@ -160,7 +169,7 @@ $('provider').onchange = () => {
   $('host').value = p.host;
   $('key').hidden = !p.key;
   $('model').hidden = true;
-  $('tryModels').hidden = true;
+  $('tryModels').hidden = $('forgetTried').hidden = true;
   $('modelsay').hidden = true;
   $('try20').disabled = $('runAll').disabled = true;
   $('s1').classList.remove('done');
@@ -218,9 +227,12 @@ const worthTryingFirst = (a, b) =>
 /* What the trial found, kept between visits so it is not paid for twice. */
 const TRIED = 'lexio.b1.tried';
 let tried = {};
-/* Which models answer is true of one account at one address, not of the page,
-   so a trial's findings are dropped when either changes. */
-const whose = () => how + '|' + host;
+/* Which models answer is true of one account at one address, so a trial's
+   findings are dropped when either changes — and of how they were asked and
+   judged, so they are dropped when that changes too. A verdict reached under
+   rules that have since been corrected is worse than no verdict: it looks
+   like an answer and it makes a fixed page look unchanged. */
+const whose = () => how + '|' + host + '|' + TRIAL_RULES;
 const loadTried = () => {
   try {
     const kept = JSON.parse(localStorage.getItem(TRIED) || '{}');
@@ -230,6 +242,10 @@ const loadTried = () => {
 const keepTried = () => {
   try { localStorage.setItem(TRIED, JSON.stringify({ whose: whose(), models: tried })); }
   catch (e) {}
+};
+const forgetTried = () => {
+  tried = {};
+  try { localStorage.removeItem(TRIED); } catch (e) {}
 };
 
 const VERDICTS = [
@@ -373,7 +389,7 @@ $('connect').onclick = async () => {
     const sel = $('model');
     sel.innerHTML = grouped(names);
     sel.hidden = false;
-    $('tryModels').hidden = false;
+    $('tryModels').hidden = $('forgetTried').hidden = false;
     await loadWords();
     $('s1').classList.add('done');
     remember();
@@ -655,6 +671,15 @@ const remember = () => {
 };
 $('withTr').onchange = remember;
 
+$('forgetTried').onclick = () => {
+  forgetTried();
+  const names = [...$('model').options].map(o => o.value);
+  $('model').innerHTML = grouped(names);
+  say('modelsay', 'Sınama sonuçları silindi. "Modelleri sına" ile yeniden ölç.');
+  $('modelsay').hidden = false;
+};
+
+$('build').textContent = BUILD;
 load(); refresh();
 })();
 </script>
