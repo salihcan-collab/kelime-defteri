@@ -30,11 +30,13 @@
 <body>
 
 <h1>Lexio — kart üretici</h1>
-<p class="lead">Bilgisayarındaki Ollama ile B1 destesinin düz kartlarını <b>İngilizce</b> yazar
-— tanım, örnek cümle, eş dizimler, kelime ailesi. <b>Türkçe çeviriler sonradan elle
-eklenir</b>; yerel bir model Türkçede güvenilir değil. Hiçbir şey internete gitmez ve
-hiçbir ücret doğmaz. Yazdığı her kart destenin denetimlerinden geçer; geçemeyen kart
-sebebi söylenerek yeniden istenir.</p>
+<p class="lead">B1 destesinin düz kartlarını bir yapay zekâ modeline yazdırır — tanım,
+örnek cümle, eş dizimler, kelime ailesi. Model ya bu bilgisayardaki <b>Ollama</b>'dır
+(hiçbir şey internete gitmez) ya da <b>build.nvidia.com</b>'daki ücretsiz bir modeldir.
+Yazdığı her kart destenin denetimlerinden geçer; geçemeyen kart sebebi söylenerek
+yeniden istenir. <b>Türkçe karşılık isteğe bağlıdır</b>: küçük bir model onda
+güvenilir değil, büyük bir model olabilir — kararı 20 kelimelik denemeye bakarak
+ver.</p>
 
 <div class="step" id="s1">
   <h2><span class="num">1</span> Bir modele bağlan</h2>
@@ -50,16 +52,20 @@ sebebi söylenerek yeniden istenir.</p>
   <div class="row" style="gap:10px;flex-wrap:wrap">
     <button class="soft-btn" id="connect">Bağlan</button>
     <select id="model" style="max-width:340px" hidden></select>
+    <button class="soft-btn" id="tryModels" hidden>Modelleri sına</button>
   </div>
   <p class="say" id="s1say">Ollama uygulaması açıkken Bağlan'a bas.</p>
   <p class="say" id="modelsay" hidden></p>
+  <p class="say">Sağlayıcı, hesabının çalıştıramadığı modelleri de listeler ve adından
+     hangisinin işe yarayacağı anlaşılmaz. <b>Modelleri sına</b> her birinden üç kart
+     ister ve hangisinin gerçekten kart yazabildiğini ölçer.</p>
 </div>
 
 <div class="step" id="s2">
   <h2><span class="num">2</span> Önce 20 kelime dene</h2>
   <p class="say">Alfabenin her yerinden 20 kelime yazar ve sonucu aşağıya döker.
-     Çıktıyı Claude'a gönder — Türkçesi zayıfsa saatlerce sürecek tam turdan önce
-     modeli değiştirmek çok daha ucuz.</p>
+     Hiçbir şey kaydetmez. Çıktıyı okumadan tam tura başlama: saatlerce sürecek bir
+     turdan sonra modeli değiştirmek çok daha pahalı.</p>
   <div class="row" style="margin-top:10px;gap:14px;flex-wrap:wrap;align-items:center">
     <button class="soft-btn" id="try20" disabled>20 kelime dene</button>
     <label style="display:flex;align-items:center;gap:7px;cursor:pointer">
@@ -97,8 +103,9 @@ sebebi söylenerek yeniden istenir.</p>
 <script src="../app.js"></script>
 <script src="card-rules.js"></script>
 <script>
-/* The page drives Ollama; the rules and the matcher come from the app itself,
-   so a card that passes here is a card the drills can build a gap in.
+/* The page drives whichever model it was pointed at; the rules and the matcher
+   come from the app itself, so a card that passes here is a card the drills can
+   build a gap in.
 
    Everything here is kept inside its own scope: app.js is loaded whole, and
    half these names are already taken at the top of it. */
@@ -153,6 +160,7 @@ $('provider').onchange = () => {
   $('host').value = p.host;
   $('key').hidden = !p.key;
   $('model').hidden = true;
+  $('tryModels').hidden = true;
   $('modelsay').hidden = true;
   $('try20').disabled = $('runAll').disabled = true;
   $('s1').classList.remove('done');
@@ -164,56 +172,150 @@ $('provider').onchange = () => {
    Nothing is hidden — the list is what the key really reaches — but the ones
    that write English prose are put first, largest first, so the choice is a
    glance rather than a scroll. */
-const NOT_FOR_THIS = /embed|rerank|retriev|guard|vision|vlm|ocr|image|video|speech|asr|tts|riva|clip|diffusion|flux|sana|depth|fold|molmim|genmol|esm|nvclip|paraphrase|parakeet/i;
+/* Reading a model's name tells you less than it looks like it does. A first
+   try at this promoted everything with "instruct" in its id — which on a real
+   account meant two translation models and two picture-readers, and buried the
+   large general ones whose names say nothing at all. So no claim is made from
+   a name any more. The name is used only to guess a sensible ORDER for the
+   trial; what a model can do is decided by asking it to write a card. */
+const CLEARLY_NOT = new RegExp([
+  'embed', 'rerank', 'retriev', 'guard', 'safety', 'moderation',
+  'vision', 'vlm', 'ocr', 'clip', 'paligemma', 'image',
+  'video', 'cosmos', 'detector', 'detection', 'speaker',
+  'speech', 'asr', 'tts', 'voice', 'audio', 'denois', 'noise', 'magpie', 'studio',
+  'riva', 'translate', 'stable-diffusion', 'flux', 'sana',
+  'depth', 'fold', 'molmim', 'genmol', 'esm', 'parakeet',
+  'petr', 'bevformer', 'sparsedrive', 'drive', 'calibration'
+].join('|'), 'i');
+
 function billions(name) {
   const m = /(\d+(?:\.\d+)?)\s*b(?![a-z])/i.exec(name);
   return m ? parseFloat(m[1]) : 0;
 }
+/* Likeliest first, largest first — a guess about which order to spend the
+   trial's requests in, and nothing more. */
+const worthTryingFirst = (a, b) =>
+  (CLEARLY_NOT.test(a) ? 1 : 0) - (CLEARLY_NOT.test(b) ? 1 : 0) ||
+  billions(b) - billions(a) || a.localeCompare(b);
+
+/* What the trial found, kept between visits so it is not paid for twice. */
+const TRIED = 'lexio.b1.tried';
+let tried = {};
+/* Which models answer is true of one account at one address, not of the page,
+   so a trial's findings are dropped when either changes. */
+const whose = () => how + '|' + host;
+const loadTried = () => {
+  try {
+    const kept = JSON.parse(localStorage.getItem(TRIED) || '{}');
+    tried = kept.whose === whose() ? (kept.models || {}) : {};
+  } catch (e) { tried = {}; }
+};
+const keepTried = () => {
+  try { localStorage.setItem(TRIED, JSON.stringify({ whose: whose(), models: tried })); }
+  catch (e) {}
+};
+
+const VERDICTS = [
+  ['ok',    'Kart yazabildi'],
+  ['rules', 'Cevap verdi ama kart yazamadı'],
+  ['dead',  'Bu hesapta çalışmıyor'],
+  ['',      'Henüz sınanmadı']
+];
+/* The id is what the provider is asked for; what the trial found is only
+   written beside it. They are kept apart — a browser collapses the spaces in
+   an option's text, so text is no place to keep an identifier. */
 function grouped(names) {
-  const good = [], rest = [];
-  names.forEach(n => {
-    (!NOT_FOR_THIS.test(n) && /instruct|chat/i.test(n) ? good : rest).push(n);
-  });
-  good.sort((a, b) => billions(b) - billions(a) || a.localeCompare(b));
-  const opts = list => list.map(n => '<option>' + n + '</option>').join('');
-  return (good.length ? '<optgroup label="Kart yazmaya uygun — büyükten küçüğe">' +
-            opts(good) + '</optgroup>' : '') +
-         (rest.length ? '<optgroup label="Bu iş için değil">' + opts(rest) + '</optgroup>' : '');
+  const sorted = names.slice().sort(worthTryingFirst);
+  const opts = list => list.map(n => '<option value="' + esc(n) + '">' +
+    esc(n + (tried[n] && tried[n].note ? ' — ' + tried[n].note : '')) + '</option>').join('');
+  return VERDICTS.map(([verdict, label]) => {
+    const mine = sorted.filter(n => (tried[n] ? tried[n].verdict : '') === verdict);
+    return mine.length ? '<optgroup label="' + label + '">' + opts(mine) + '</optgroup>' : '';
+  }).join('');
 }
+const chosenModel = () => $('model').value;
+
+/* One real card, asked of one model. Nothing about a name is trusted: a model
+   that cannot be reached says so, and one that answers with something that is
+   not a card says that instead. */
+const TRIAL = 3;
+async function tryModel(name) {
+  /* Three words, not one. Every model gets a card wrong now and then — the run
+     itself asks again when that happens — so one bad card proves nothing. What
+     is being asked here is whether this model can write a card at all. */
+  const some = words.slice(0, TRIAL);
+  while (some.length < TRIAL) some.push({ term: 'reliable', pos: 'adjective' });
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const answers = await ask(some, '', name);
+      const lined = lineUp(some, answers);
+      const ctx = { findTerm, normalize, isInflectionOf, AI, PARTS_OF_SPEECH };
+      const sound = some.filter((w, i) => lined[i] && !CardRules.checkCard(
+        CardRules.toCard(lined[i], w, wantsTurkish()), ctx, !wantsTurkish()).length).length;
+      return sound
+        ? { verdict: 'ok', note: sound + '/' + some.length + ' kart yazdı' }
+        : { verdict: 'rules', note: 'kart yazamadı' };
+    } catch (e) {
+      if (/rate-limit/.test(e.message)) continue;      /* it waited; ask again */
+      if (/^404:/.test(e.message)) return { verdict: 'dead', note: 'hesapta açık değil' };
+      if (/^40[13]:/.test(e.message)) return { verdict: 'dead', note: 'anahtar yetmiyor' };
+      if (/JSON/.test(e.message)) return { verdict: 'rules', note: 'JSON döndürmedi' };
+      return { verdict: 'dead', note: e.message.slice(0, 40) };
+    }
+  }
+  return { verdict: 'dead', note: 'sürekli beklet dedi' };
+}
+
+let trying = false;
+$('tryModels').onclick = async () => {
+  if (trying) { trying = false; return; }
+  const names = [...$('model').options].map(o => o.value);
+  trying = true;
+  $('tryModels').textContent = 'Durdur';
+  for (let i = 0; i < names.length && trying; i++) {
+    say('modelsay', (i + 1) + '/' + names.length + ' — ' + names[i] + ' sınanıyor…');
+    $('modelsay').hidden = false;
+    tried[names[i]] = await tryModel(names[i]);
+    keepTried();
+    const keepChoice = chosenModel();
+    $('model').innerHTML = grouped(names);
+    $('model').value = keepChoice;
+  }
+  trying = false;
+  $('tryModels').textContent = 'Modelleri sına';
+  const won = names.filter(n => tried[n] && tried[n].verdict === 'ok');
+  $('model').innerHTML = grouped(names);
+  if (won.length) {
+    $('model').value = won.sort(worthTryingFirst)[0];
+    say('modelsay', won.length + ' model kart yazabildi. En büyüğü seçildi: ' +
+        chosenModel(), 'good');
+    $('try20').disabled = $('runAll').disabled = false;
+  } else {
+    say('modelsay', 'Sınananların hiçbiri kart yazamadı.', 'bad');
+    $('try20').disabled = $('runAll').disabled = true;
+  }
+};
 
 /* NVIDIA lists its whole catalogue, not the part of it this account may run:
    picking one it may not answers 404 on the first card and nowhere earlier.
    One tiny request settles it before a run of three thousand words does. */
 async function probe() {
-  const chosen = $('model').value;
+  const chosen = chosenModel();
   if (!chosen) return false;
-  say('modelsay', 'model deneniyor…');
+  say('modelsay', chosen + ' sınanıyor…');
   $('modelsay').hidden = false;
-  const body = how === 'ollama'
-    ? { model: chosen, stream: false, options: { num_predict: 1 },
-        messages: [{ role: 'user', content: 'ok' }] }
-    : { model: chosen, stream: false, max_tokens: 1,
-        messages: [{ role: 'user', content: 'ok' }] };
-  try {
-    const r = await fetch(host + PROVIDERS[how].chat,
-      { method: 'POST', headers: headers(), body: JSON.stringify(body) });
-    /* Being told to wait is the model saying it exists. */
-    if (r.ok || r.status === 429 || r.status === 503) {
-      say('modelsay', 'bu model çalışıyor.', 'good');
-      $('try20').disabled = $('runAll').disabled = false;
-      return true;
-    }
-    const why = r.status === 404
-      ? 'bu model hesabında açık değil — listeden başka birini seç'
-      : r.status === 401 || r.status === 403
-      ? 'anahtar bu modeli çalıştırmaya yetmiyor — listeden başka birini seç'
-      : r.status + ' döndü — listeden başka birini seç';
-    say('modelsay', chosen + ': ' + why, 'bad');
-  } catch (e) {
-    say('modelsay', chosen + ': denenemedi — ' + e.message, 'bad');
-  }
-  $('try20').disabled = $('runAll').disabled = true;
-  return false;
+  const got = await tryModel(chosen);
+  tried[chosen] = got;
+  keepTried();
+  const worked = got.verdict === 'ok';
+  say('modelsay', chosen + ': ' + (worked ? 'kart yazabildi.'
+      : got.verdict === 'dead' ? got.note + ' — listeden başka birini seç'
+      : got.note + ' — yine de deneyebilirsin, ama başka bir model daha iyi olabilir'),
+      worked ? 'good' : 'bad');
+  /* A model that answers but breaks a rule is not refused outright: the run
+     asks again when a card comes back wrong, and some models come right. */
+  $('try20').disabled = $('runAll').disabled = got.verdict === 'dead';
+  return worked;
 }
 $('model').onchange = probe;
 
@@ -239,11 +341,11 @@ $('connect').onclick = async () => {
     const names = (body.models || body.data || [])
       .map(m => m.name || m.id).filter(Boolean).sort();
     if (!names.length) throw new Error('bağlandı ama hiç model listelemedi');
+    loadTried();
     const sel = $('model');
-    sel.innerHTML = how === 'ollama'
-      ? names.map(n => '<option>' + n + '</option>').join('')
-      : grouped(names);
+    sel.innerHTML = grouped(names);
     sel.hidden = false;
+    $('tryModels').hidden = false;
     await loadWords();
     $('s1').classList.add('done');
     remember();
@@ -259,7 +361,7 @@ $('connect').onclick = async () => {
   }
 };
 
-function ask(list, note) {
+function ask(list, note, useModel) {
   const lines = list.map(w => {
     const bits = ['- ' + w.term + ' (' + w.pos + ')'];
     if (w.shares) bits.push('  the word has other meanings; write only the ' + w.pos + ' one');
@@ -272,10 +374,11 @@ function ask(list, note) {
     { role: 'user', content: 'Write a card for each of these ' + list.length +
         ' words.\n\n' + lines + (note ? '\n\n' + note : '') }
   ];
+  const which = useModel || model;
   const body = how === 'ollama'
-    ? { model: model, format: 'json', stream: false,
+    ? { model: which, format: 'json', stream: false,
         options: { temperature: 0.3, num_predict: 340 * list.length }, messages: messages }
-    : { model: model, stream: false, temperature: 0.3,
+    : { model: which, stream: false, temperature: 0.3,
         max_tokens: 340 * list.length,
         response_format: { type: 'json_object' }, messages: messages };
 
@@ -371,7 +474,7 @@ function refresh() {
 
 async function run(list, remember) {
   stop = false;
-  model = $('model').value;
+  model = chosenModel();
   $('stop').hidden = false; $('runAll').disabled = $('try20').disabled = true;
   stats = { done: 0, fail: 0, req: 0, total: list.length, at: Date.now() };
   const failed = [];
@@ -391,7 +494,9 @@ async function run(list, remember) {
           say('s1say', e.message.slice(0, 3) === '404'
             ? 'Bu model hesabında açık değil. Yukarıdaki listeden başka bir model seç.'
             : 'Anahtar bu modeli çalıştırmaya yetmiyor. Listeden başka bir model seç.', 'bad');
-          say('modelsay', $('model').value + ' çalışmıyor.', 'bad');
+          tried[chosenModel()] = { verdict: 'dead', note: 'hesapta açık değil' };
+          keepTried();
+          say('modelsay', chosenModel() + ' çalışmıyor.', 'bad');
           break;
         }
         say('s1say', 'istek başarısız: ' + e.message, 'bad');
