@@ -6,6 +6,10 @@
 <title>Lexio — kart üretici</title>
 <link rel="stylesheet" href="../styles.css">
 <style>
+  /* styles.css turns the page's own scrolling off — the app is a fixed shell
+     with a scrolling panel inside it. This page is not; it needs the browser's
+     scrollbar back. */
+  html, body{ overflow:auto; height:auto; }
   body{ padding:26px; max-width:900px; margin:0 auto; background:var(--bg); color:var(--text); }
   h1{ font-size:1.35rem; margin:0 0 4px; }
   .lead{ color:var(--text-dim); font-size:.9rem; line-height:1.6; margin:0 0 22px; }
@@ -22,7 +26,7 @@
   .nums{ display:flex; gap:18px; font-size:.82rem; color:var(--text-dim); flex-wrap:wrap; }
   .nums b{ color:var(--text); }
   pre.out{ background:var(--surface-2); border:1px solid var(--border-soft); border-radius:10px;
-       padding:12px 14px; font-size:.78rem; line-height:1.6; max-height:340px; overflow:auto;
+       padding:12px 14px; font-size:.78rem; line-height:1.6; max-height:70vh; overflow:auto;
        white-space:pre-wrap; margin:12px 0 0; }
   code{ background:var(--surface-2); padding:2px 6px; border-radius:5px; font-size:.82rem; }
 </style>
@@ -70,8 +74,10 @@ eski bir kopyayı gösteriyorsa burada eski tarih yazar. Öyleyse Ctrl+Shift+R y
 <div class="step" id="s2">
   <h2><span class="num">2</span> Önce 20 kelime dene</h2>
   <p class="say">Alfabenin her yerinden 20 kelime yazar ve sonucu aşağıya döker.
-     Hiçbir şey kaydetmez. Çıktıyı okumadan tam tura başlama: saatlerce sürecek bir
-     turdan sonra modeli değiştirmek çok daha pahalı.</p>
+     <b>Hiçbir şey kaydetmez</b> — bu yüzden deneme sonrası "Yazılanları indir"
+     kapalı kalır; çıktıyı almak için altındaki <b>Çıktıyı kopyala</b>'yı kullan.
+     Çıktıyı okumadan tam tura başlama: saatlerce sürecek bir turdan sonra modeli
+     değiştirmek çok daha pahalı.</p>
   <div class="row" style="margin-top:10px;gap:14px;flex-wrap:wrap;align-items:center">
     <button class="soft-btn" id="try20" disabled>20 kelime dene</button>
     <label style="display:flex;align-items:center;gap:7px;cursor:pointer">
@@ -99,6 +105,10 @@ eski bir kopyayı gösteriyorsa burada eski tarih yazar. Öyleyse Ctrl+Shift+R y
     <span><b id="nReq">0</b> istek</span>
     <span id="eta"></span>
   </div>
+  <div class="row" style="margin-top:10px;gap:10px" id="outTools" hidden>
+    <button class="ghost-btn tiny" id="copyOut">Çıktıyı kopyala</button>
+    <span class="say" id="copysay"></span>
+  </div>
   <pre class="out" id="out" hidden></pre>
 </div>
 
@@ -120,7 +130,7 @@ const $ = (id) => document.getElementById(id);
 const KEY = 'lexio.b1.drafts';
 /* Shown on the page so "am I running the version we just fixed?" is a
    question you can answer by looking, not by guessing at the cache. */
-const BUILD = '4 Eylül — bölme';
+const BUILD = '4 Eylül — kaydırma';
 /* Bumped whenever the way a model is asked or judged changes, which throws
    away every verdict reached the old way. */
 const TRIAL_RULES = 3;
@@ -370,7 +380,7 @@ $('tryModels').onclick = async () => {
 /* The whole list, plainly, so it can be read or sent to someone. */
 $('showList').onclick = () => {
   const names = allModels();
-  $('out').hidden = false;
+  $('out').hidden = $('outTools').hidden = false;
   $('out').textContent = names.length + ' model\n\n' + names.map(n =>
     (doesOtherWork(n) ? '  atlandı  ' : tried[n] ? '  ' + (tried[n].note + '        ').slice(0, 10) : '  ?         ') +
     n).join('\n') + '\n';
@@ -617,7 +627,7 @@ function intoBatches(list, size) {
 }
 
 function show(card) {
-  const out = $('out'); out.hidden = false;
+  const out = $('out'); out.hidden = $('outTools').hidden = false;
   /* The Turkish goes first after the word: it is the thing being judged when
      the switch is on, and a card printed without it looks like a switch that
      did nothing. */
@@ -654,12 +664,12 @@ async function run(list, remember) {
   model = chosenModel();
   $('stop').hidden = false; $('runAll').disabled = $('try20').disabled = true;
   stats = { done: 0, fail: 0, req: 0, total: list.length, at: Date.now() };
-  const failed = [];
+  const failed = [], reasons = [];
   /* How many words this model's answers have been shown to hold. */
   let fits = BATCH;
   const batches = intoBatches(list, fits);
   for (let b = 0; b < batches.length && !stop; b++) {
-    let want = batches[b], note = '';
+    let want = batches[b], note = '', why = [];
     for (let t = 1; t <= TRIES && want.length && !stop; t++) {
       let answers = [];
       try { answers = await ask(want, note); }
@@ -700,7 +710,8 @@ async function run(list, remember) {
           : 'istek başarısız: ' + e.message, 'bad');
       }
       stats.req++;
-      const lined = lineUp(want, answers), again = [], why = [];
+      const lined = lineUp(want, answers), again = [];
+      why = [];
       want.forEach((w, n) => {
         if (!lined[n]) { again.push(w); why.push(w.term + ': you did not write a card for it'); return; }
         const tr = wantsTurkish();
@@ -728,13 +739,20 @@ async function run(list, remember) {
     }
     /* Stopping is not failing: a batch that was never asked for is left where
        it was, to be picked up next time. */
-    if (!stop) want.forEach(w => { failed.push(w.term); stats.fail++; });
+    /* A word left out after three tries was left out for a reason, and the
+       reason is the only thing that says whether the model is wrong, the rule
+       is wrong, or the word is a hard one. Losing it leaves nothing to act on. */
+    if (!stop) {
+      want.forEach(w => { failed.push(w.term); stats.fail++; });
+      if (want.length) why.forEach(r => reasons.push(r));
+    }
     if (remember) keep();
     refresh();
   }
   running = false;
   $('stop').hidden = true; $('runAll').disabled = $('try20').disabled = false;
-  if (failed.length) $('out').textContent += '\ndışarıda kalanlar: ' + failed.join(', ') + '\n';
+  if (failed.length) $('out').textContent += '\ndışarıda kalanlar: ' + failed.join(', ') + '\n' +
+    reasons.map(r => '  ' + r + '\n').join('');
   /* Whatever was on the line last was said in the middle of the work. A run
      that has stopped must say so, or a finished page reads as a stuck one. */
   say('s1say', (stop ? 'Durduruldu. ' : 'Bitti. ') + stats.done + ' kart yazıldı' +
@@ -789,6 +807,22 @@ $('forgetTried').onclick = () => {
   say('modelsay', 'Sınama sonuçları silindi. "Modelleri sına" ile yeniden ölç.');
   $('modelsay').hidden = false;
   trialLabel();
+};
+
+$('copyOut').onclick = async () => {
+  const text = $('out').textContent;
+  try {
+    await navigator.clipboard.writeText(text);
+    say('copysay', text.split('\n').length + ' satır kopyalandı.', 'good');
+  } catch (e) {
+    /* No clipboard here — selecting it is the next best thing, and Ctrl+C
+       finishes the job. */
+    const r = document.createRange();
+    r.selectNodeContents($('out'));
+    const sel = window.getSelection();
+    sel.removeAllRanges(); sel.addRange(r);
+    say('copysay', 'seçtim — Ctrl+C ile kopyala.', 'bad');
+  }
 };
 
 $('build').textContent = BUILD;
