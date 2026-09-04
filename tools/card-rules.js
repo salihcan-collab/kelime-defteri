@@ -17,6 +17,11 @@ For each word you are given, return one card. Follow every rule.
   Start with a capital, end with a full stop.
   NEVER use the word itself, or any form of it, inside the definition.
   No abbreviations: write "something", not "sth".
+  A verb begins with "To ": "To succeed in doing something after working for it."
+  Nothing else does: a noun is "A thing that...", never "To do something".
+  Some words are given to you twice, once as a noun and once as a verb. Write
+  each one for the part of speech asked for, and write two different cards:
+  "guess" the noun is an attempt at an answer, "guess" the verb is making one.
 
 "example": ONE natural English sentence, 5 to 14 words.
   It MUST contain the word itself. This is the most important rule.
@@ -83,6 +88,11 @@ function checkCard(card, ctx, draft) {
     if (!/[.!?]$/.test(def)) say('definition does not end with a full stop');
     if (/\b(sth|sb|etc|e\.g|i\.e)\b/i.test(def)) say('definition uses an abbreviation');
     if (match(def, term, 0)) say('definition contains the word it defines');
+    /* A verb is defined as a verb. It reads better, and it is what keeps the
+       noun and the verb of one word from coming back as the same card. */
+    const doing = card.pos === 'verb' || card.pos === 'phrasal verb';
+    if (doing && !/^To /.test(def)) say('a verb\'s meaning begins with "To "');
+    if (!doing && /^To /.test(def)) say('only a verb\'s meaning begins with "To "');
   }
 
   const ex = String(card.example || '').trim();
@@ -141,6 +151,22 @@ function checkCard(card, ctx, draft) {
   return bad;
 }
 
+/* Two cards of one word have to be two cards. The app keeps them apart by
+   their part of speech and their sense label, but a learner is kept apart by
+   what they say — meeting "guess" twice with the same meaning under it teaches
+   nothing and cannot be answered. */
+function clashes(card, sibling, ctx) {
+  const same = (a, b) => ctx.normalize(String(a || '')) === ctx.normalize(String(b || ''));
+  if (!same(card.term, sibling.term)) return null;
+  if (same(card.pos, sibling.pos) && same(card.sense, sibling.sense))
+    return 'is the same card as another already written for "' + sibling.term + '"';
+  if (same(card.definition, sibling.definition))
+    return 'means the same as the ' + sibling.pos + ' card for "' + sibling.term + '"';
+  if (same(card.example, sibling.example))
+    return 'uses the same example as the ' + sibling.pos + ' card for "' + sibling.term + '"';
+  return null;
+}
+
 /* The shape a model answers in, turned into the shape a card is stored in. */
 function toCard(raw, word) {
   const list = (v) => (Array.isArray(v) ? v : []).map(x => String(x || '').trim()).filter(Boolean);
@@ -171,5 +197,5 @@ function toCard(raw, word) {
 
 /* Read from a page as well as from Node: the checks belong to the deck, not to
    whichever of the two happens to be running them. */
-const CardRules = { PROMPT, checkCard, toCard };
+const CardRules = { PROMPT, checkCard, clashes, toCard };
 if (typeof module !== 'undefined' && module.exports) module.exports = CardRules;

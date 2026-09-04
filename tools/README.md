@@ -109,7 +109,11 @@ than starting again. It never writes into `deck-b1.js`: it hands over
 
 No batch ever carries two senses of one word. Answers are matched back by their
 term, and a model asked for `cook` twice writes it once — leaving no way to tell
-which of the two the answer belonged to.
+which of the two the answer belonged to. They meet later instead: a card is
+checked against every draft already written, and a noun that says the same
+thing as its own verb is sent back to be written again. What keeps them apart
+in the first place is that a verb's meaning begins with "To " and nothing
+else's does, which is asked for and checked.
 
 ## The rules
 

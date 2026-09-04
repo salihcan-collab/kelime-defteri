@@ -9,21 +9,17 @@ cards.forEach(c => {
 });
 
 /* Senses of one word have to be told apart, or the learner meets the same
-   front twice and cannot know which answer is wanted. */
+   front twice and cannot know which answer is wanted — by their labels, and by
+   what they actually say. */
 const byTerm = {};
 cards.forEach(c => { (byTerm[c.term.toLowerCase()] = byTerm[c.term.toLowerCase()] || []).push(c); });
 Object.keys(byTerm).forEach(t => {
   const group = byTerm[t];
   if (group.length < 2) return;
-  const labels = group.map(c => (c.pos + '/' + (c.sense || '')).toLowerCase());
-  if (new Set(labels).size !== labels.length)
-    bad.push(t + ' — ' + group.length + ' cards that do not say which sense is which');
-});
-
-const seen = {};
-cards.forEach(c => {
-  const key = (c.term + '|' + c.pos + '|' + (c.sense || '')).toLowerCase();
-  if (seen[key]) bad.push(c.term + ' (' + c.pos + ') — appears twice'); else seen[key] = 1;
+  group.forEach((c, i) => group.slice(i + 1).forEach(other => {
+    const clash = rules.clashes(c, other, app);
+    if (clash) bad.push(c.term + ' (' + c.pos + ') — ' + clash);
+  }));
 });
 
 console.log('B1 deck: ' + cards.length + ' cards');
