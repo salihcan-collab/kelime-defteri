@@ -37,11 +37,18 @@ hiçbir ücret doğmaz. Yazdığı her kart destenin denetimlerinden geçer; ge�
 sebebi söylenerek yeniden istenir.</p>
 
 <div class="step" id="s1">
-  <h2><span class="num">1</span> Ollama'ya bağlan</h2>
+  <h2><span class="num">1</span> Bir modele bağlan</h2>
+  <div class="row" style="gap:10px;flex-wrap:wrap;margin-bottom:10px">
+    <select id="provider" style="max-width:200px">
+      <option value="ollama">Ollama (bu bilgisayarda)</option>
+      <option value="openai">NVIDIA / OpenAI uyumlu</option>
+    </select>
+    <input type="text" id="host" value="http://127.0.0.1:11434" style="max-width:280px">
+    <input type="password" id="key" placeholder="API anahtarı" style="max-width:230px" hidden>
+  </div>
   <div class="row" style="gap:10px;flex-wrap:wrap">
-    <input type="text" id="host" value="http://127.0.0.1:11434" style="max-width:230px">
     <button class="soft-btn" id="connect">Bağlan</button>
-    <select id="model" style="max-width:280px" hidden></select>
+    <select id="model" style="max-width:340px" hidden></select>
   </div>
   <p class="say" id="s1say">Ollama uygulaması açıkken Bağlan'a bas.</p>
 </div>
@@ -91,8 +98,20 @@ sebebi söylenerek yeniden istenir.</p>
 (function () {
 const $ = (id) => document.getElementById(id);
 const KEY = 'lexio.b1.drafts';
-const BATCH = 6, TRIES = 3;
-let words = [], drafts = {}, stop = false, host = '', model = '';
+const BATCH = 6, TRIES = 3, FIRST_WAIT = 4;
+let backoff = FIRST_WAIT;
+let words = [], drafts = {}, stop = false, host = '', model = '', how = 'ollama', key = '';
+
+/* Two shapes of the same conversation. Ollama answers on its own machine and
+   wants no key; everything else worth using speaks the OpenAI shape, which is
+   what build.nvidia.com serves. Only the envelope differs — the prompt, the
+   checks and the retries are the same either way. */
+const PROVIDERS = {
+  ollama: { host: 'http://127.0.0.1:11434', models: '/api/tags', chat: '/api/chat', key: false,
+            say: 'Ollama uygulaması açıkken Bağlan\'a bas.' },
+  openai: { host: 'https://integrate.api.nvidia.com/v1', models: '/models', chat: '/chat/completions',
+            key: true, say: 'build.nvidia.com anahtarını yapıştır ve Bağlan\'a bas.' }
+};
 
 const sig = (w) => w.term + '|' + w.pos + '|' + (w.sense || '');
 const load = () => { try { drafts = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) { drafts = {}; } };
@@ -115,26 +134,76 @@ async function loadWords() {
   words = all.filter(w => !w.byHand && !have[sig(w)]);
 }
 
+$('provider').onchange = () => {
+  how = $('provider').value;
+  const p = PROVIDERS[how];
+  $('host').value = p.host;
+  $('key').hidden = !p.key;
+  $('model').hidden = true;
+  $('try20').disabled = $('runAll').disabled = true;
+  $('s1').classList.remove('done');
+  say('s1say', p.say);
+};
+
+/* A hosted catalogue is a hundred models long and most of them cannot do this
+   job at all: they draw pictures, read speech, score documents or judge safety.
+   Nothing is hidden — the list is what the key really reaches — but the ones
+   that write English prose are put first, largest first, so the choice is a
+   glance rather than a scroll. */
+const NOT_FOR_THIS = /embed|rerank|retriev|guard|vision|vlm|ocr|image|video|speech|asr|tts|riva|clip|diffusion|flux|sana|depth|fold|molmim|genmol|esm|nvclip|paraphrase|parakeet/i;
+function billions(name) {
+  const m = /(\d+(?:\.\d+)?)\s*b(?![a-z])/i.exec(name);
+  return m ? parseFloat(m[1]) : 0;
+}
+function grouped(names) {
+  const good = [], rest = [];
+  names.forEach(n => {
+    (!NOT_FOR_THIS.test(n) && /instruct|chat/i.test(n) ? good : rest).push(n);
+  });
+  good.sort((a, b) => billions(b) - billions(a) || a.localeCompare(b));
+  const opts = list => list.map(n => '<option>' + n + '</option>').join('');
+  return (good.length ? '<optgroup label="Kart yazmaya uygun — büyükten küçüğe">' +
+            opts(good) + '</optgroup>' : '') +
+         (rest.length ? '<optgroup label="Bu iş için değil">' + opts(rest) + '</optgroup>' : '');
+}
+
+function headers() {
+  const h = { 'Content-Type': 'application/json' };
+  if (PROVIDERS[how].key && key) h.Authorization = 'Bearer ' + key;
+  return h;
+}
+
 $('connect').onclick = async () => {
+  how = $('provider').value;
   host = $('host').value.replace(/\/+$/, '');
+  key = $('key').value.trim();
+  const p = PROVIDERS[how];
+  if (p.key && !key) return say('s1say', 'Önce API anahtarını yapıştır.', 'bad');
   say('s1say', 'bakılıyor…');
   try {
-    const res = await fetch(host + '/api/tags');
-    if (!res.ok) throw new Error('Ollama ' + res.status + ' döndü');
-    const tags = (await res.json()).models || [];
-    if (!tags.length) throw new Error('Ollama açık ama hiç model yok. Önce bir model indir.');
+    const res = await fetch(host + p.models, { headers: headers() });
+    if (!res.ok) throw new Error(res.status + ' döndü' + (res.status === 401 ? ' — anahtar kabul edilmedi' : ''));
+    const body = await res.json();
+    /* Ollama lists under `models` with a `name`; the OpenAI shape under `data`
+       with an `id`. */
+    const names = (body.models || body.data || [])
+      .map(m => m.name || m.id).filter(Boolean).sort();
+    if (!names.length) throw new Error('bağlandı ama hiç model listelemedi');
     const sel = $('model');
-    sel.innerHTML = tags.map(m => '<option>' + m.name + '</option>').join('');
+    sel.innerHTML = how === 'ollama'
+      ? names.map(n => '<option>' + n + '</option>').join('')
+      : grouped(names);
     sel.hidden = false;
     await loadWords();
     $('s1').classList.add('done');
     $('try20').disabled = $('runAll').disabled = false;
-    say('s1say', tags.length + ' model bulundu. Yazılacak ' + words.length + ' kelime var.', 'good');
+    remember();
+    say('s1say', names.length + ' model bulundu. Yazılacak ' + words.length + ' kelime var.', 'good');
     refresh();
   } catch (e) {
-    say('s1say', 'Bağlanamadım: ' + e.message +
-      ' — Ollama açık mı? Açıksa tarayıcının bağlanmasına izin vermek için ' +
-      'OLLAMA_ORIGINS ayarını * yapman gerekebilir.', 'bad');
+    say('s1say', 'Bağlanamadım: ' + e.message + (how === 'ollama'
+      ? ' — Ollama açık mı? Açıksa tarayıcının bağlanmasına izin vermek için OLLAMA_ORIGINS ayarını * yapman gerekebilir.'
+      : ' — adres ve anahtar doğru mu?'), 'bad');
   }
 };
 
@@ -146,19 +215,44 @@ function ask(list, note) {
       bits.push('  Cambridge shows it used like this: ' + w.cambridge.join(' / '));
     return bits.join('\n');
   }).join('\n');
-  return fetch(host + '/api/chat', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: model, format: 'json', stream: false,
-      options: { temperature: 0.3, num_predict: 340 * list.length },
-      messages: [
-        { role: 'system', content: CardRules.PROMPT },
-        { role: 'user', content: 'Write a card for each of these ' + list.length +
-            ' words.\n\n' + lines + (note ? '\n\n' + note : '') }
-      ]
-    })
-  }).then(r => r.json()).then(out => {
-    const text = (out.message && out.message.content) || '';
+  const messages = [
+    { role: 'system', content: CardRules.PROMPT },
+    { role: 'user', content: 'Write a card for each of these ' + list.length +
+        ' words.\n\n' + lines + (note ? '\n\n' + note : '') }
+  ];
+  const body = how === 'ollama'
+    ? { model: model, format: 'json', stream: false,
+        options: { temperature: 0.3, num_predict: 340 * list.length }, messages: messages }
+    : { model: model, stream: false, temperature: 0.3,
+        max_tokens: 340 * list.length,
+        response_format: { type: 'json_object' }, messages: messages };
+
+  return fetch(host + PROVIDERS[how].chat, {
+    method: 'POST', headers: headers(), body: JSON.stringify(body)
+  }).then(async r => {
+    /* Asked to slow down rather than refused: waiting is the right answer, and
+       counting it against a card's three tries is not. */
+    if (r.status === 429 || r.status === 503) {
+      /* Retry-After is not a header a browser is allowed to read across
+         origins unless the provider says it may, so most of the time there is
+         no number to obey. Guessing one number for every case is wrong in both
+         directions: too short and the provider stays cross, too long and a
+         three-thousand-word run crawls. So the wait doubles while the
+         provider keeps saying no, and drops back the moment it says yes. */
+      const told = parseInt(r.headers.get('retry-after') || '0', 10);
+      const wait = Math.min(60, told > 0 ? told : backoff);
+      if (!(told > 0)) backoff = Math.min(60, backoff * 2);
+      say('s1say', 'sağlayıcı beklememi istedi, ' + wait + ' saniye…', 'bad');
+      await new Promise(res => setTimeout(res, wait * 1000));
+      throw new Error('rate-limit');
+    }
+    backoff = FIRST_WAIT;
+    if (!r.ok) throw new Error(r.status + ': ' + (await r.text()).slice(0, 160));
+    return r.json();
+  }).then(out => {
+    const text = (out.message && out.message.content) ||
+      (out.choices && out.choices[0] && out.choices[0].message &&
+       out.choices[0].message.content) || '';
     let parsed;
     try { parsed = JSON.parse(text); }
     catch (e) {
@@ -234,7 +328,11 @@ async function run(list, remember) {
     let want = batches[b], note = '';
     for (let t = 1; t <= TRIES && want.length && !stop; t++) {
       let answers = [];
-      try { answers = await ask(want, note); } catch (e) { say('s1say', 'istek başarısız: ' + e.message, 'bad'); }
+      try { answers = await ask(want, note); }
+      catch (e) {
+        if (/rate-limit/.test(e.message)) { t--; continue; }   /* waited, not failed */
+        say('s1say', 'istek başarısız: ' + e.message, 'bad');
+      }
       stats.req++;
       const lined = lineUp(want, answers), again = [], why = [];
       want.forEach((w, n) => {
@@ -288,6 +386,20 @@ $('save').onclick = () => {
 $('forget').onclick = () => {
   if (!confirm('Tarayıcıda saklanan taslaklar silinsin mi? Önce indirdiğinden emin ol.')) return;
   drafts = {}; localStorage.removeItem(KEY); refresh();
+};
+
+/* The provider, the address and the key are remembered on this computer so a
+   reload is not a fresh start. The key never leaves the browser. */
+const SETUP = 'lexio.b1.setup';
+try {
+  const kept = JSON.parse(localStorage.getItem(SETUP) || '{}');
+  if (kept.how) { $('provider').value = kept.how; $('provider').onchange(); }
+  if (kept.host) $('host').value = kept.host;
+  if (kept.key) $('key').value = kept.key;
+} catch (e) {}
+const remember = () => {
+  try { localStorage.setItem(SETUP, JSON.stringify({ how: how, host: host, key: key })); }
+  catch (e) {}
 };
 
 load(); refresh();
