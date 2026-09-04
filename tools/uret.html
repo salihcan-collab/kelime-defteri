@@ -178,15 +178,32 @@ $('provider').onchange = () => {
    large general ones whose names say nothing at all. So no claim is made from
    a name any more. The name is used only to guess a sensible ORDER for the
    trial; what a model can do is decided by asking it to write a card. */
-const CLEARLY_NOT = new RegExp([
-  'embed', 'rerank', 'retriev', 'guard', 'safety', 'moderation',
-  'vision', 'vlm', 'ocr', 'clip', 'paligemma', 'image',
-  'video', 'cosmos', 'detector', 'detection', 'speaker',
-  'speech', 'asr', 'tts', 'voice', 'audio', 'denois', 'noise', 'magpie', 'studio',
-  'riva', 'translate', 'stable-diffusion', 'flux', 'sana',
-  'depth', 'fold', 'molmim', 'genmol', 'esm', 'parakeet',
-  'petr', 'bevformer', 'sparsedrive', 'drive', 'calibration'
-].join('|'), 'i');
+/* A catalogue is mostly not language models at all: it draws pictures, reads
+   speech, drives cars, scores documents for safety. Asking those for a card
+   wastes a request each and answers nothing.
+
+   This is the opposite test from the one that went wrong before. That one
+   asked "does the name promise it is good?" — a promise a name cannot make.
+   This asks "does the name say outright that it does some other job?", which
+   is the one thing a name is reliable about. Anything it cannot place is
+   tried, not skipped: silence means unknown, and unknown gets measured.
+
+   Matched against the parts of an id, whole, so that diffusiongemma — a text
+   model — is not caught by the "diffusion" that catches stable-diffusion. */
+const OTHER_WORK = ('guard safety moderation ' +
+  'vision vlm ocr clip nvclip paligemma image images ' +
+  'video detector detection speaker petr streampetr bevformer sparsedrive ' +
+  'speech asr tts voice voicechat audio noise removal magpie studio parakeet ' +
+  'riva diffusion flux sana depth fold molmim genmol esm ' +
+  'calibration rerank reranking retriever retrieval').split(' ');
+/* The few that are only ever a prefix of a longer word. */
+const OTHER_WORK_STARTS = ['embed', 'translat', 'denois', 'cosmos'];
+
+function doesOtherWork(id) {
+  return String(id).toLowerCase().split(/[^a-z0-9]+/).some(part =>
+    OTHER_WORK.indexOf(part) !== -1 ||
+    OTHER_WORK_STARTS.some(pre => part.indexOf(pre) === 0));
+}
 
 function billions(name) {
   const m = /(\d+(?:\.\d+)?)\s*b(?![a-z])/i.exec(name);
@@ -195,7 +212,7 @@ function billions(name) {
 /* Likeliest first, largest first — a guess about which order to spend the
    trial's requests in, and nothing more. */
 const worthTryingFirst = (a, b) =>
-  (CLEARLY_NOT.test(a) ? 1 : 0) - (CLEARLY_NOT.test(b) ? 1 : 0) ||
+  (doesOtherWork(a) ? 1 : 0) - (doesOtherWork(b) ? 1 : 0) ||
   billions(b) - billions(a) || a.localeCompare(b);
 
 /* What the trial found, kept between visits so it is not paid for twice. */
@@ -218,8 +235,9 @@ const keepTried = () => {
 const VERDICTS = [
   ['ok',    'Kart yazabildi'],
   ['rules', 'Cevap verdi ama kart yazamadı'],
-  ['dead',  'Bu hesapta çalışmıyor'],
-  ['',      'Henüz sınanmadı']
+  ['',      'Henüz sınanmadı'],
+  ['skip',  'Başka iş yapıyor — sınanmadı'],
+  ['dead',  'Bu hesapta çalışmıyor']
 ];
 /* The id is what the provider is asked for; what the trial found is only
    written beside it. They are kept apart — a browser collapses the spaces in
@@ -274,10 +292,17 @@ $('tryModels').onclick = async () => {
   const names = [...$('model').options].map(o => o.value);
   trying = true;
   $('tryModels').textContent = 'Durdur';
-  for (let i = 0; i < names.length && trying; i++) {
-    say('modelsay', (i + 1) + '/' + names.length + ' — ' + names[i] + ' sınanıyor…');
+  const worth = names.filter(n => !doesOtherWork(n));
+  names.forEach(n => {
+    /* Passed over rather than judged: it was never asked, and if you disagree,
+       picking it from the list asks it. */
+    if (doesOtherWork(n) && !tried[n]) tried[n] = { verdict: 'skip', note: 'başka iş yapıyor' };
+  });
+  for (let i = 0; i < worth.length && trying; i++) {
+    say('modelsay', (i + 1) + '/' + worth.length + ' — ' + worth[i] + ' sınanıyor… (' +
+        (names.length - worth.length) + ' model bu iş için değil, atlandı)');
     $('modelsay').hidden = false;
-    tried[names[i]] = await tryModel(names[i]);
+    tried[worth[i]] = await tryModel(worth[i]);
     keepTried();
     const keepChoice = chosenModel();
     $('model').innerHTML = grouped(names);
@@ -285,12 +310,13 @@ $('tryModels').onclick = async () => {
   }
   trying = false;
   $('tryModels').textContent = 'Modelleri sına';
-  const won = names.filter(n => tried[n] && tried[n].verdict === 'ok');
+  const won = worth.filter(n => tried[n] && tried[n].verdict === 'ok');
   $('model').innerHTML = grouped(names);
   if (won.length) {
     $('model').value = won.sort(worthTryingFirst)[0];
-    say('modelsay', won.length + ' model kart yazabildi. En büyüğü seçildi: ' +
-        chosenModel(), 'good');
+    say('modelsay', worth.length + ' modelden ' + won.length +
+        ' tanesi kart yazabildi (' + (names.length - worth.length) +
+        ' model bu iş için değildi, sınanmadı). En büyüğü seçildi: ' + chosenModel(), 'good');
     $('try20').disabled = $('runAll').disabled = false;
   } else {
     say('modelsay', 'Sınananların hiçbiri kart yazamadı.', 'bad');
