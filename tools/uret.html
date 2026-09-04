@@ -120,7 +120,7 @@ const $ = (id) => document.getElementById(id);
 const KEY = 'lexio.b1.drafts';
 /* Shown on the page so "am I running the version we just fixed?" is a
    question you can answer by looking, not by guessing at the cache. */
-const BUILD = '4 Eylül — kurtarma';
+const BUILD = '4 Eylül — bölme';
 /* Bumped whenever the way a model is asked or judged changes, which throws
    away every verdict reached the old way. */
 const TRIAL_RULES = 3;
@@ -505,12 +505,17 @@ function salvage(text) {
 const ROOMS = [1, 3, 6];
 async function ask(list, note, useModel) {
   let last;
-  for (let i = 0; i < ROOMS.length; i++) {
+  /* More room is the only lever left when one word will not fit. When several
+     were asked for, asking for fewer is the better one — so the escalation
+     stops early and the caller splits the batch instead of paying for a third
+     answer that will also be too long. */
+  const tries = list.length > 1 ? 2 : ROOMS.length;
+  for (let i = 0; i < tries; i++) {
     try { return await askOnce(list, note, useModel, ROOMS[i]); }
     catch (e) {
       if (!/^kesildi/.test(e.message)) throw e;
       last = e;
-      if (i + 1 < ROOMS.length)
+      if (i + 1 < tries)
         say('s1say', 'cevap yarıda kesildi — daha çok yer verip yeniden soruyorum…');
     }
   }
@@ -600,10 +605,11 @@ function lineUp(list, answers) {
 }
 
 /* Batches of one word each, senses of the same word never together. */
-function intoBatches(list) {
+function intoBatches(list, size) {
   const out = [];
+  const room = size || BATCH;
   list.forEach(w => {
-    let b = out.find(x => x.length < BATCH && !x.some(y => y.term === w.term));
+    let b = out.find(x => x.length < room && !x.some(y => y.term === w.term));
     if (!b) { b = []; out.push(b); }
     b.push(w);
   });
@@ -624,6 +630,7 @@ function show(card) {
 }
 
 let stats = { done: 0, fail: 0, req: 0, total: 0, at: 0 };
+let running = false;
 function refresh() {
   $('nDone').textContent = stats.total ? stats.done : 0;
   $('nKept').textContent = Object.keys(drafts).length;
@@ -639,16 +646,18 @@ function refresh() {
     const per = (Date.now() - stats.at) / 1000 / stats.req;
     const rate = Math.max(0.5, stats.done / stats.req);
     $('eta').textContent = 'yaklaşık ' + Math.max(1, Math.round(per * (left / rate) / 60)) + ' dk kaldı';
-  } else if (!left && stats.total) $('eta').textContent = 'bitti';
+  } else if (!running && stats.total) $('eta').textContent = 'bitti';
 }
 
 async function run(list, remember) {
-  stop = false;
+  stop = false; running = true;
   model = chosenModel();
   $('stop').hidden = false; $('runAll').disabled = $('try20').disabled = true;
   stats = { done: 0, fail: 0, req: 0, total: list.length, at: Date.now() };
   const failed = [];
-  const batches = intoBatches(list);
+  /* How many words this model's answers have been shown to hold. */
+  let fits = BATCH;
+  const batches = intoBatches(list, fits);
   for (let b = 0; b < batches.length && !stop; b++) {
     let want = batches[b], note = '';
     for (let t = 1; t <= TRIES && want.length && !stop; t++) {
@@ -669,8 +678,25 @@ async function run(list, remember) {
           say('modelsay', chosenModel() + ' çalışmıyor.', 'bad');
           break;
         }
+        /* The answer would not fit however much room it was given. Fewer
+           words in the question is the other way to make it fit, and it
+           costs the batch nothing: the halves go back in the queue. */
+        if (/^kesildi/.test(e.message) && want.length > 1) {
+          /* Learned once, not per batch: a model whose answer will not hold
+             six cards will not hold six for the next six words either, and
+             finding that out again each time is what makes a run crawl. */
+          fits = Math.max(1, Math.ceil(want.length / 2));
+          const rest = want.concat.apply(want, batches.slice(b + 1));
+          batches.length = b + 1;
+          intoBatches(rest, fits).forEach(one => batches.push(one));
+          say('s1say', want.length + ' kelime bir cevaba sığmadı — bundan sonra ' +
+              fits + '\'erli soruyorum');
+          stats.req++;
+          want = [];
+          break;
+        }
         say('s1say', /^kesildi/.test(e.message)
-          ? 'model cevabını üç kez yarıda bıraktı — başka bir model dene'
+          ? 'model bu kelimeyi üç kez yarıda bıraktı — başka bir model gerekebilir'
           : 'istek başarısız: ' + e.message, 'bad');
       }
       stats.req++;
@@ -706,8 +732,15 @@ async function run(list, remember) {
     if (remember) keep();
     refresh();
   }
+  running = false;
   $('stop').hidden = true; $('runAll').disabled = $('try20').disabled = false;
   if (failed.length) $('out').textContent += '\ndışarıda kalanlar: ' + failed.join(', ') + '\n';
+  /* Whatever was on the line last was said in the middle of the work. A run
+     that has stopped must say so, or a finished page reads as a stuck one. */
+  say('s1say', (stop ? 'Durduruldu. ' : 'Bitti. ') + stats.done + ' kart yazıldı' +
+      (failed.length ? ', ' + failed.length + ' kelime dışarıda kaldı: ' +
+        failed.slice(0, 8).join(', ') + (failed.length > 8 ? '…' : '') : '') + '.',
+      failed.length ? 'bad' : 'good');
   refresh();
 }
 
