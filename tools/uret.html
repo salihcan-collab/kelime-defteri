@@ -52,6 +52,7 @@ sebebi söylenerek yeniden istenir.</p>
     <select id="model" style="max-width:340px" hidden></select>
   </div>
   <p class="say" id="s1say">Ollama uygulaması açıkken Bağlan'a bas.</p>
+  <p class="say" id="modelsay" hidden></p>
 </div>
 
 <div class="step" id="s2">
@@ -59,7 +60,12 @@ sebebi söylenerek yeniden istenir.</p>
   <p class="say">Alfabenin her yerinden 20 kelime yazar ve sonucu aşağıya döker.
      Çıktıyı Claude'a gönder — Türkçesi zayıfsa saatlerce sürecek tam turdan önce
      modeli değiştirmek çok daha ucuz.</p>
-  <div class="row" style="margin-top:10px"><button class="soft-btn" id="try20" disabled>20 kelime dene</button></div>
+  <div class="row" style="margin-top:10px;gap:14px;flex-wrap:wrap;align-items:center">
+    <button class="soft-btn" id="try20" disabled>20 kelime dene</button>
+    <label style="display:flex;align-items:center;gap:7px;cursor:pointer">
+      <input type="checkbox" id="withTr"> Türkçe karşılığını da yazsın
+    </label>
+  </div>
 </div>
 
 <div class="step" id="s3">
@@ -120,6 +126,7 @@ const PROVIDERS = {
 };
 
 const sig = (w) => w.term + '|' + w.pos + '|' + (w.sense || '');
+const wantsTurkish = () => $('withTr').checked;
 const load = () => { try { drafts = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) { drafts = {}; } };
 const keep = () => { try { localStorage.setItem(KEY, JSON.stringify(drafts)); } catch (e) {
   say('s1say', 'Tarayıcı deposu doldu — yazılanları indirip "Kayıtlıları sil" de.', 'bad'); } };
@@ -146,6 +153,7 @@ $('provider').onchange = () => {
   $('host').value = p.host;
   $('key').hidden = !p.key;
   $('model').hidden = true;
+  $('modelsay').hidden = true;
   $('try20').disabled = $('runAll').disabled = true;
   $('s1').classList.remove('done');
   say('s1say', p.say);
@@ -172,6 +180,42 @@ function grouped(names) {
             opts(good) + '</optgroup>' : '') +
          (rest.length ? '<optgroup label="Bu iş için değil">' + opts(rest) + '</optgroup>' : '');
 }
+
+/* NVIDIA lists its whole catalogue, not the part of it this account may run:
+   picking one it may not answers 404 on the first card and nowhere earlier.
+   One tiny request settles it before a run of three thousand words does. */
+async function probe() {
+  const chosen = $('model').value;
+  if (!chosen) return false;
+  say('modelsay', 'model deneniyor…');
+  $('modelsay').hidden = false;
+  const body = how === 'ollama'
+    ? { model: chosen, stream: false, options: { num_predict: 1 },
+        messages: [{ role: 'user', content: 'ok' }] }
+    : { model: chosen, stream: false, max_tokens: 1,
+        messages: [{ role: 'user', content: 'ok' }] };
+  try {
+    const r = await fetch(host + PROVIDERS[how].chat,
+      { method: 'POST', headers: headers(), body: JSON.stringify(body) });
+    /* Being told to wait is the model saying it exists. */
+    if (r.ok || r.status === 429 || r.status === 503) {
+      say('modelsay', 'bu model çalışıyor.', 'good');
+      $('try20').disabled = $('runAll').disabled = false;
+      return true;
+    }
+    const why = r.status === 404
+      ? 'bu model hesabında açık değil — listeden başka birini seç'
+      : r.status === 401 || r.status === 403
+      ? 'anahtar bu modeli çalıştırmaya yetmiyor — listeden başka birini seç'
+      : r.status + ' döndü — listeden başka birini seç';
+    say('modelsay', chosen + ': ' + why, 'bad');
+  } catch (e) {
+    say('modelsay', chosen + ': denenemedi — ' + e.message, 'bad');
+  }
+  $('try20').disabled = $('runAll').disabled = true;
+  return false;
+}
+$('model').onchange = probe;
 
 function headers() {
   const h = { 'Content-Type': 'application/json' };
@@ -202,10 +246,10 @@ $('connect').onclick = async () => {
     sel.hidden = false;
     await loadWords();
     $('s1').classList.add('done');
-    $('try20').disabled = $('runAll').disabled = false;
     remember();
     say('s1say', names.length + ' model bulundu. Yazılacak ' + words.length + ' kelime var.', 'good');
     refresh();
+    await probe();
   } catch (e) {
     say('s1say', 'Bağlanamadım: ' + e.message + (how === 'ollama'
       ? ' — Ollama açık mı? Açıksa tarayıcının bağlanmasına izin vermek için OLLAMA_ORIGINS ayarını * yapman gerekebilir.'
@@ -224,7 +268,7 @@ function ask(list, note) {
     return bits.join('\n');
   }).join('\n');
   const messages = [
-    { role: 'system', content: CardRules.PROMPT },
+    { role: 'system', content: CardRules.promptFor(wantsTurkish()) },
     { role: 'user', content: 'Write a card for each of these ' + list.length +
         ' words.\n\n' + lines + (note ? '\n\n' + note : '') }
   ];
@@ -339,15 +383,30 @@ async function run(list, remember) {
       try { answers = await ask(want, note); }
       catch (e) {
         if (/rate-limit/.test(e.message)) { t--; continue; }   /* waited, not failed */
+        /* Not this batch's fault and not the next one's either: the model is
+           wrong or the key does not reach it. Repeating that five hundred
+           times helps nobody. */
+        if (/^(404|401|403):/.test(e.message)) {
+          stop = true;
+          say('s1say', e.message.slice(0, 3) === '404'
+            ? 'Bu model hesabında açık değil. Yukarıdaki listeden başka bir model seç.'
+            : 'Anahtar bu modeli çalıştırmaya yetmiyor. Listeden başka bir model seç.', 'bad');
+          say('modelsay', $('model').value + ' çalışmıyor.', 'bad');
+          break;
+        }
         say('s1say', 'istek başarısız: ' + e.message, 'bad');
       }
       stats.req++;
       const lined = lineUp(want, answers), again = [], why = [];
       want.forEach((w, n) => {
         if (!lined[n]) { again.push(w); why.push(w.term + ': you did not write a card for it'); return; }
-        const card = CardRules.toCard(lined[n], w);
+        const tr = wantsTurkish();
+        const card = CardRules.toCard(lined[n], w, tr);
         const ctx = { findTerm, normalize, isInflectionOf, AI, PARTS_OF_SPEECH };
-        const problems = CardRules.checkCard(card, ctx, true);
+        /* A card is a draft until its Turkish is there. When the model is the
+           one writing it, the card is not a draft any more and the Turkish is
+           held to the same rules as everything else. */
+        const problems = CardRules.checkCard(card, ctx, !tr);
         /* The other sense of the same word, written in another batch — the two
            are never asked for together, so this is where they meet. */
         Object.keys(drafts).forEach(k => {
@@ -404,11 +463,14 @@ try {
   if (kept.how) { $('provider').value = kept.how; $('provider').onchange(); }
   if (kept.host) $('host').value = kept.host;
   if (kept.key) $('key').value = kept.key;
+  if (kept.tr) $('withTr').checked = true;
 } catch (e) {}
 const remember = () => {
-  try { localStorage.setItem(SETUP, JSON.stringify({ how: how, host: host, key: key })); }
+  try { localStorage.setItem(SETUP, JSON.stringify(
+    { how: how, host: host, key: key, tr: wantsTurkish() })); }
   catch (e) {}
 };
+$('withTr').onchange = remember;
 
 load(); refresh();
 })();
