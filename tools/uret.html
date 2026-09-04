@@ -120,7 +120,7 @@ const $ = (id) => document.getElementById(id);
 const KEY = 'lexio.b1.drafts';
 /* Shown on the page so "am I running the version we just fixed?" is a
    question you can answer by looking, not by guessing at the cache. */
-const BUILD = '4 Eylül — üçte dur';
+const BUILD = '4 Eylül — kurtarma';
 /* Bumped whenever the way a model is asked or judged changes, which throws
    away every verdict reached the old way. */
 const TRIAL_RULES = 3;
@@ -380,14 +380,20 @@ $('showList').onclick = () => {
 /* NVIDIA lists its whole catalogue, not the part of it this account may run:
    picking one it may not answers 404 on the first card and nowhere earlier.
    One tiny request settles it before a run of three thousand words does. */
+/* Switch models while one is being tried and two answers are in the air at
+   once. The one that comes back last is not the one that was asked about, so
+   only the newest may speak. */
+let probing = 0;
 async function probe() {
   const chosen = chosenModel();
   if (!chosen) return false;
+  const mine = ++probing;
   say('modelsay', chosen + ' sınanıyor…');
   $('modelsay').hidden = false;
   const got = await tryModel(chosen);
   tried[chosen] = got;
   keepTried();
+  if (mine !== probing) return got.verdict === 'ok';
   const worked = got.verdict === 'ok';
   say('modelsay', chosen + ': ' + (worked ? 'kart yazabildi.'
       : got.verdict === 'dead' ? got.note + ' — listeden başka birini seç'
@@ -462,6 +468,35 @@ function readable(text) {
     .trim();
 }
 
+/* Every complete {...} in a broken answer, read one at a time. Whatever went
+   wrong — the list cut off, a stray comma, prose wrapped around it — the cards
+   that were finished before it are still there and still whole. An object that
+   will not parse is stepped over rather than given up on, so the unfinished
+   outer wrapper does not take the finished cards inside it down with it. */
+function salvage(text) {
+  const out = [];
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] !== '{') continue;
+    let depth = 0, inString = false, escaped = false, j = i;
+    for (; j < text.length; j++) {
+      const c = text[j];
+      if (escaped) { escaped = false; continue; }
+      if (c === '\\') { escaped = true; continue; }
+      if (c === '"') { inString = !inString; continue; }
+      if (inString) continue;
+      if (c === '{') depth++;
+      else if (c === '}' && --depth === 0) break;
+    }
+    if (depth !== 0 || j >= text.length) continue;   /* never closed */
+    try {
+      const one = JSON.parse(text.slice(i, j + 1));
+      /* A card is the thing with a word on it. The wrapper is not one. */
+      if (one && typeof one.term === 'string' && one.term.trim()) { out.push(one); i = j; }
+    } catch (e) {}
+  }
+  return out;
+}
+
 /* How much room the answer is given, in multiples of what a card needs. A
    model that reasons before it writes spends the first budget on reasoning and
    is cut off mid-thought; that is not a model that cannot write cards, it is a
@@ -496,7 +531,7 @@ function askOnce(list, note, useModel, room) {
         ' words.\n\n' + lines + (note ? '\n\n' + note : '') }
   ];
   const which = useModel || model;
-  const budget = 340 * list.length * room;
+  const budget = (wantsTurkish() ? 420 : 340) * list.length * room;
   const body = how === 'ollama'
     ? { model: which, format: 'json', stream: false,
         options: { temperature: 0.3, num_predict: budget }, messages: messages }
@@ -538,12 +573,13 @@ function askOnce(list, note, useModel, room) {
     let parsed;
     try { parsed = JSON.parse(text); }
     catch (e) {
-      const a = text.indexOf('{'), b = text.lastIndexOf('}');
-      if (a === -1 || b <= a || cutOff) {
-        if (cutOff || !text) throw new Error('kesildi: cevap yarıda kaldı');
-        throw new Error('cevap JSON değildi');
-      }
-      parsed = JSON.parse(text.slice(a, b + 1));
+      /* An answer that stops in the middle of the list is not a wasted
+         request: the cards written before the cut are whole, and the words
+         missing from it are asked for again anyway. */
+      const saved = salvage(text);
+      if (saved.length) return saved;
+      if (cutOff || !text) throw new Error('kesildi: cevap yarıda kaldı');
+      throw new Error('cevap JSON değildi');
     }
     const cards = parsed.cards || (Array.isArray(parsed) ? parsed : [parsed]);
     return Array.isArray(cards) ? cards : [];
@@ -576,7 +612,11 @@ function intoBatches(list) {
 
 function show(card) {
   const out = $('out'); out.hidden = false;
-  out.textContent += card.term + ' (' + card.pos + ')\n  ' + card.definition +
+  /* The Turkish goes first after the word: it is the thing being judged when
+     the switch is on, and a card printed without it looks like a switch that
+     did nothing. */
+  out.textContent += card.term + ' (' + card.pos + ')' +
+    (card.translation ? '  →  ' + card.translation : '') + '\n  ' + card.definition +
     '\n  ' + card.example +
     (card.collocations.length ? '\n  ' + card.collocations.join(' · ') : '') +
     (card.related.length ? '\n  ' + card.related.map(r => r.kind + ': ' + r.text).join(' · ') : '') + '\n\n';
