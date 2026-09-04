@@ -403,10 +403,19 @@ function termMatch(sentence, term) {
     return odd.length ? '(?:' + self + '|' + odd.map(x => reEscape(x) + tail).join('|') + ')' : self;
   }).join('\\s+');
 
+  /* \b asks for a letter on its side of the join, so a word that begins or
+     ends with punctuation — a.m., at / @ — could never be found in a sentence
+     that plainly contains it. The edge only needs guarding where the word
+     itself has a letter there. */
+  const edge = (ch) => /[\w\u00C0-\u024F]/.test(ch || '') ? '\\b' : '';
+  const open = edge(words[0][0]);
+  const close = edge(words[words.length - 1].slice(-1));
+
   const attempts = words.length > 1 ? [false, true] : [false];
   for (let i = 0; i < attempts.length; i++) {
     try {
-      const m = new RegExp('\\b' + pattern(attempts[i]) + '\\b', 'i').exec(sentence);
+      const m = new RegExp((attempts[i] ? '\\b' : open) + pattern(attempts[i]) + close,
+                           'i').exec(sentence);
       if (m) return [m.index, m.index + m[0].length];
     } catch (e) { return null; }
   }

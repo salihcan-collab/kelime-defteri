@@ -320,7 +320,14 @@ const head = (s) => console.log('\n— ' + s + ' —');
       hang:    t('It took a week to get the hang of the new software.', 'get the hang of'),
       inflect: t('She quickly grasped the concept.', 'grasp'),
       plural:  t('Their arguments were unconvincing.', 'argument'),
-      absent:  t('Nothing here at all.', 'elsewhere')
+      absent:  t('Nothing here at all.', 'elsewhere'),
+      /* Cambridge's list holds words that begin or end in punctuation. A
+         word boundary asks for a letter on its side of the join, so these
+         were never found in a sentence that plainly contained them. */
+      dotted:  t('My train leaves at 6 a.m. tomorrow.', 'a.m.'),
+      signed:  t('Her address has an at / @ before the company name.', 'at / @'),
+      slashed: t('We had breakfast at a café/cafe near the station.', 'café/cafe'),
+      noDot:   t('My train leaves early tomorrow.', 'a.m.')
     };
   });
   is(tricky.idiom === 'a piece of cake', 'a multi-word idiom matches as one phrase');
@@ -328,6 +335,10 @@ const head = (s) => console.log('\n— ' + s + ' —');
   is(!!tricky.inflect && /grasp/i.test(tricky.inflect), 'an inflected verb still matches');
   is(!!tricky.plural && /argument/i.test(tricky.plural), 'a plural noun still matches');
   is(tricky.absent === null, 'a word that is not there matches nothing');
+  is(tricky.dotted === 'a.m.', 'a word that ends in a full stop is found: ' + tricky.dotted);
+  is(tricky.signed === 'at / @', 'so is one that ends in a sign: ' + tricky.signed);
+  is(tricky.slashed === 'café/cafe', 'and one written two ways at once: ' + tricky.slashed);
+  is(tricky.noDot === null, 'and none of that makes it match a sentence without the word');
 
   /* A fill-in-the-blank must actually remove the answer from the sentence. */
   const blanked = await page.evaluate(() => {

@@ -42,6 +42,7 @@ sebebi söylenerek yeniden istenir.</p>
     <select id="provider" style="max-width:200px">
       <option value="ollama">Ollama (bu bilgisayarda)</option>
       <option value="openai">NVIDIA / OpenAI uyumlu</option>
+      <option value="relay">NVIDIA (sunucu üzerinden)</option>
     </select>
     <input type="text" id="host" value="http://127.0.0.1:11434" style="max-width:280px">
     <input type="password" id="key" placeholder="API anahtarı" style="max-width:230px" hidden>
@@ -110,7 +111,12 @@ const PROVIDERS = {
   ollama: { host: 'http://127.0.0.1:11434', models: '/api/tags', chat: '/api/chat', key: false,
             say: 'Ollama uygulaması açıkken Bağlan\'a bas.' },
   openai: { host: 'https://integrate.api.nvidia.com/v1', models: '/models', chat: '/chat/completions',
-            key: true, say: 'build.nvidia.com anahtarını yapıştır ve Bağlan\'a bas.' }
+            key: true, say: 'build.nvidia.com anahtarını yapıştır ve Bağlan\'a bas.' },
+  /* Aynı NVIDIA, ama istek sunucu-baslat'ın açtığı sunucu üzerinden gidiyor.
+     Doğrudan bağlantı "Failed to fetch" derse tarayıcı izin verilmediği için
+     durmuştur; buradan çalışır. */
+  relay:  { host: window.location.origin + '/nvidia/v1', models: '/models', chat: '/chat/completions',
+            key: true, say: 'Anahtarı yapıştır. İstek sunucu-baslat üzerinden gider — doğrudan bağlantı engellenirse bunu kullan.' }
 };
 
 const sig = (w) => w.term + '|' + w.pos + '|' + (w.sense || '');
@@ -203,6 +209,8 @@ $('connect').onclick = async () => {
   } catch (e) {
     say('s1say', 'Bağlanamadım: ' + e.message + (how === 'ollama'
       ? ' — Ollama açık mı? Açıksa tarayıcının bağlanmasına izin vermek için OLLAMA_ORIGINS ayarını * yapman gerekebilir.'
+      : how === 'openai' && /Failed to fetch|NetworkError/i.test(e.message)
+      ? ' — tarayıcı doğrudan bağlanmana izin verilmedi. Yukarıdan "NVIDIA (sunucu üzerinden)" seç ve tekrar dene.'
       : ' — adres ve anahtar doğru mu?'), 'bad');
   }
 };
