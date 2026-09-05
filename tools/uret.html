@@ -96,6 +96,7 @@ eski bir kopyayı gösteriyorsa burada eski tarih yazar. Öyleyse Ctrl+Shift+R y
     <button class="soft-btn" id="save" disabled>Yazılanları indir</button>
     <button class="ghost-btn tiny" id="forget">Kayıtlıları sil</button>
   </div>
+  <p class="say" id="draftsay" hidden></p>
   <div class="bar"><i id="fill"></i></div>
   <div class="nums">
     <span><b id="nDone">0</b> yazıldı</span>
@@ -130,7 +131,7 @@ const $ = (id) => document.getElementById(id);
 const KEY = 'lexio.b1.drafts';
 /* Shown on the page so "am I running the version we just fixed?" is a
    question you can answer by looking, not by guessing at the cache. */
-const BUILD = '4 Eylül — kaydırma';
+const BUILD = '4 Eylül — taslak damgası';
 /* Bumped whenever the way a model is asked or judged changes, which throws
    away every verdict reached the old way. */
 const TRIAL_RULES = 3;
@@ -156,9 +157,48 @@ const PROVIDERS = {
 
 const sig = (w) => w.term + '|' + w.pos + '|' + (w.sense || '');
 const wantsTurkish = () => $('withTr').checked;
-const load = () => { try { drafts = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) { drafts = {}; } };
-const keep = () => { try { localStorage.setItem(KEY, JSON.stringify(drafts)); } catch (e) {
-  say('s1say', 'Tarayıcı deposu doldu — yazılanları indirip "Kayıtlıları sil" de.', 'bad'); } };
+/* Who wrote the drafts that are sitting here. The run skips a word that
+   already has one, so drafts left behind by a weaker model would survive into
+   the deck without ever being asked for again — silently, which is the worst
+   way for it to happen. They are stamped so that can be noticed. */
+let draftsBy = null;
+const stamp = () => ({ model: chosenModel() || model, turkish: wantsTurkish() });
+const load = () => {
+  try {
+    const kept = JSON.parse(localStorage.getItem(KEY) || '{}');
+    /* Drafts written before there was a stamp: who wrote them is unknown. */
+    if (kept && kept.cards && typeof kept.cards === 'object') {
+      drafts = kept.cards; draftsBy = kept.by || null;
+    } else { drafts = kept; draftsBy = null; }
+  } catch (e) { drafts = {}; draftsBy = null; }
+};
+const keep = () => {
+  draftsBy = stamp();
+  try { localStorage.setItem(KEY, JSON.stringify({ by: draftsBy, cards: drafts })); }
+  catch (e) { say('s1say', 'Tarayıcı deposu doldu — yazılanları indirip "Kayıtlıları sil" de.', 'bad'); }
+};
+
+/* Said where the drafts are, not where the model is: this is about what is
+   already in the browser, and what pressing the big button will not touch. */
+function mindTheDrafts() {
+  const n = Object.keys(drafts).length;
+  const now = stamp();
+  if (!n) { $('draftsay').hidden = true; return true; }
+  const same = draftsBy && draftsBy.model === now.model && draftsBy.turkish === now.turkish;
+  $('draftsay').hidden = false;
+  if (same) {
+    say('draftsay', n + ' kart bu modelle yazılmış ve saklanıyor. Tur onları atlar, ' +
+        'kaldığı yerden devam eder.');
+    return true;
+  }
+  say('draftsay', 'Dikkat: saklanan ' + n + ' kart ' +
+      (draftsBy ? '"' + draftsBy.model + '" ile' +
+        (draftsBy.turkish === now.turkish ? '' :
+          (draftsBy.turkish ? ' (Türkçeli)' : ' (Türkçesiz)')) : 'başka bir kurulumla') +
+      ' yazılmış. Tur bu kelimeleri atlar, yani o kartlar desteye böyle girer. ' +
+      'Hepsini bu modele yazdırmak istiyorsan önce "Kayıtlıları sil".', 'bad');
+  return false;
+}
 const say = (id, text, cls) => { const e = $(id); e.textContent = text; e.className = 'say ' + (cls || ''); };
 
 async function loadWords() {
@@ -412,6 +452,7 @@ async function probe() {
   /* A model that answers but breaks a rule is not refused outright: the run
      asks again when a card comes back wrong, and some models come right. */
   $('try20').disabled = $('runAll').disabled = got.verdict === 'dead';
+  mindTheDrafts();
   return worked;
 }
 $('model').onchange = probe;
@@ -760,6 +801,9 @@ async function run(list, remember) {
         failed.slice(0, 8).join(', ') + (failed.length > 8 ? '…' : '') : '') + '.',
       failed.length ? 'bad' : 'good');
   refresh();
+  /* Who wrote what is stored has just changed, so the line saying so should
+     say the new thing. */
+  mindTheDrafts();
 }
 
 $('try20').onclick = () => {
@@ -769,7 +813,13 @@ $('try20').onclick = () => {
   for (let i = 0; i < words.length && pick.length < 20; i += step) pick.push(words[i]);
   run(pick, false);
 };
-$('runAll').onclick = () => { $('out').textContent = ''; run(words.filter(w => !drafts[sig(w)]), true); };
+$('runAll').onclick = () => {
+  if (!mindTheDrafts() &&
+      !confirm('Saklanan kartlar başka bir modelle yazılmış ve bu tur onları atlayacak.\n' +
+               'Yine de devam edilsin mi?')) return;
+  $('out').textContent = '';
+  run(words.filter(w => !drafts[sig(w)]), true);
+};
 $('stop').onclick = () => { stop = true; };
 $('save').onclick = () => {
   const cards = Object.keys(drafts).map(k => drafts[k]);
@@ -780,7 +830,7 @@ $('save').onclick = () => {
 };
 $('forget').onclick = () => {
   if (!confirm('Tarayıcıda saklanan taslaklar silinsin mi? Önce indirdiğinden emin ol.')) return;
-  drafts = {}; localStorage.removeItem(KEY); refresh();
+  drafts = {}; draftsBy = null; localStorage.removeItem(KEY); refresh(); mindTheDrafts();
 };
 
 /* The provider, the address and the key are remembered on this computer so a
@@ -798,7 +848,7 @@ const remember = () => {
     { how: how, host: host, key: key, tr: wantsTurkish() })); }
   catch (e) {}
 };
-$('withTr').onchange = remember;
+$('withTr').onchange = () => { remember(); mindTheDrafts(); };
 
 $('forgetTried').onclick = () => {
   forgetTried();
@@ -826,7 +876,7 @@ $('copyOut').onclick = async () => {
 };
 
 $('build').textContent = BUILD;
-load(); refresh();
+load(); refresh(); mindTheDrafts();
 })();
 </script>
 </body>
