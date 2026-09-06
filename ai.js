@@ -439,10 +439,10 @@ const AI = {
   },
 
   /* A slash in the Cambridge list means "either of these": café/cafe,
-     tooth/teeth, all right/alright. No sentence writes both, so read literally
-     such a word can never be found in one. A lone slash — "at / @", "OK / O.K.
-     / okay" — separates whole spellings with spaces around it and is left
-     alone, because splitting there leaves nothing on one side. */
+     tooth/teeth, all right/alright, and with spaces around it "at / @", "OK /
+     O.K. / okay". No sentence writes both sides, so read literally such a word
+     could never be found in one. A slash with nothing on one side of it is not
+     a choice between anything and is left as it stands. */
   spellingsOf(token) {
     const parts = String(token).split('/');
     const kept = parts.filter(Boolean);
