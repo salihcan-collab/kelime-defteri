@@ -374,7 +374,10 @@ const head = (s) => console.log('\n— ' + s + ' —');
       /* but a preposition that merely follows is not the particle */
       notOn:   t('I go home on Monday.', 'go on'),
       notOn2:  t('We go to the shop on Tuesday.', 'go on'),
-      notLive: t('They live in a house on the hill.', 'live on')
+      notLive: t('They live in a house on the hill.', 'live on'),
+      /* Irregular forms the B1 list needs and the table did not have. */
+      struck:  t('The ball struck the post and bounced away.', 'strike'),
+      bore:    t('The tree bore fruit that summer.', 'bear')
     };
   });
   is(tricky.idiom === 'a piece of cake', 'a multi-word idiom matches as one phrase');
@@ -397,6 +400,8 @@ const head = (s) => console.log('\n— ' + s + ' —');
   is(tricky.after === 'Hand out', 'and it still matches with the object after it: ' + tricky.after);
   is(tricky.notOn === null && tricky.notOn2 === null && tricky.notLive === null,
      'but a preposition that merely follows the verb is not its particle');
+  is(tricky.struck === 'struck' && tricky.bore === 'bore',
+     'every irregular verb the list uses is one the matcher knows');
   is(tricky.noDot === null, 'and none of that makes it match a sentence without the word');
 
   /* A fill-in-the-blank must actually remove the answer from the sentence. */

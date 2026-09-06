@@ -3,6 +3,23 @@
 const { deck, rules, app } = require('./app-context');
 
 const cards = deck().cards;
+
+/* A verb whose past tense shares no letters with it cannot be found in a
+   sentence unless the table names it. Rather than discover that one card at a
+   time, every irregular verb the list holds is checked against the table. */
+const IRREGULAR_IN_LIST = ('awake bear become begin bite break bring build buy catch choose come cost ' +
+  'cut deal do draw drink drive eat fall feed feel fight find fly forget forgive freeze get give go ' +
+  'grow hang have hear hide hit hold hurt keep knit know lay lead learn leave lend let lie lose make ' +
+  'mean meet mistake pay prove put quit read ride ring rise run say see sell send set shake shine ' +
+  'shoot show shut sing sink sit sleep speak speed spell spend spill split spoil spread stand steal ' +
+  'stick sting strike swear swim take teach tear tell think throw understand wake wear win wind ' +
+  'write').split(' ');
+const words = JSON.parse(require('fs').readFileSync(
+  require('path').join(__dirname, 'words.json'), 'utf8'));
+const inList = {};
+words.forEach(w => { inList[w.term.toLowerCase()] = 1; });
+const unknown = IRREGULAR_IN_LIST.filter(v => inList[v] && !app.AI.formsOf(v).length);
+if (unknown.length) bad.push('the matcher does not know the odd forms of: ' + unknown.join(', '));
 const bad = [];
 cards.forEach(c => {
   rules.checkCard(c, app).forEach(p => bad.push(c.term + ' (' + c.pos + ') — ' + p));

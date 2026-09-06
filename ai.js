@@ -638,7 +638,7 @@ function isInflectionOf(form, term) {
 /* "be" is the one verb whose forms share almost no letters with it, and the
    commonest verb in the language: without them "the game is over" does not
    contain "be over". */
-const IRREGULAR = ('be was were am is are being been|beat beat beaten|become became become|begin began begun|' +
+const IRREGULAR = ('be was were am is are being been|awake awoke awoken|bear bore borne|beat beat beaten|become became become|begin began begun|' +
   'bend bent|bet bet|bite bit bitten|bleed bled|blow blew blown|break broke broken|' +
   'bring brought|build built|burn burnt|buy bought|catch caught|choose chose chosen|' +
   'come came come|cost cost|cut cut|deal dealt|dig dug|do did done|draw drew drawn|' +
@@ -646,17 +646,17 @@ const IRREGULAR = ('be was were am is are being been|beat beat beaten|become bec
   'feed fed|feel felt|fight fought|find found|fly flew flown|forget forgot forgotten|' +
   'forgive forgave forgiven|freeze froze frozen|get got gotten|give gave given|' +
   'go went gone|grow grew grown|hang hung|have had|hear heard|hide hid hidden|hit hit|' +
-  'hold held|hurt hurt|keep kept|know knew known|lay laid|lead led|learn learnt|' +
+  'hold held|hurt hurt|keep kept|knit knitted knit|know knew known|lay laid|lead led|learn learnt|' +
   'leave left|lend lent|let let|lie lay lain|light lit|lose lost|make made|mean meant|' +
-  'meet met|pay paid|put put|quit quit|read read|ride rode ridden|ring rang rung|' +
+  'meet met|mistake mistook mistaken|pay paid|prove proved proven|put put|quit quit|read read|ride rode ridden|ring rang rung|' +
   'rise rose risen|run ran run|say said|see saw seen|sell sold|send sent|set set|' +
   'sew sewed sewn|shake shook shaken|shine shone|shoot shot|show showed shown|' +
   'shut shut|sing sang sung|sink sank sunk|sit sat|sleep slept|slide slid|smell smelt|' +
-  'speak spoke spoken|spell spelt|spend spent|spill spilt|split split|spoil spoilt|' +
-  'spread spread|stand stood|steal stole stolen|stick stuck|sting stung|swear swore sworn|' +
+  'speak spoke spoken|speed sped|spell spelt|spend spent|spill spilt|split split|spoil spoilt|' +
+  'spread spread|stand stood|steal stole stolen|stick stuck|strike struck|sting stung|swear swore sworn|' +
   'sweep swept|swim swam swum|swing swung|take took taken|teach taught|tear tore torn|' +
   'tell told|think thought|throw threw thrown|understand understood|wake woke woken|' +
-  'wear wore worn|win won|write wrote written').split('|').reduce((map, line) => {
+  'wear wore worn|win won|wind wound|write wrote written').split('|').reduce((map, line) => {
     const parts = line.split(' ');
     map[parts[0]] = parts.slice(1);
     return map;
