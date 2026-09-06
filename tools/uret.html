@@ -131,7 +131,7 @@ const $ = (id) => document.getElementById(id);
 const KEY = 'lexio.b1.drafts';
 /* Shown on the page so "am I running the version we just fixed?" is a
    question you can answer by looking, not by guessing at the cache. */
-const BUILD = '4 Eylül — taslak damgası';
+const BUILD = '6 Eylül — yazılanı sorma';
 /* Bumped whenever the way a model is asked or judged changes, which throws
    away every verdict reached the old way. */
 const TRIAL_RULES = 3;
@@ -211,9 +211,16 @@ async function loadWords() {
       'klasördeki sunucu-baslat dosyasını çalıştırıp ' +
       'http://localhost:8000/tools/uret.html adresinden aç.');
   }
+  /* What the deck already holds is settled, and the deck is the authority on
+     that — not the list. Matching on the sense as well looked right and was
+     wrong: a card written by hand carries a sense label ("answer — a reply")
+     that the list entry it came from never had, so the word read as unwritten
+     and would have been asked for again, giving the same word a second card.
+     Every entry in the list is one term in one part of speech, so that pair is
+     the whole of the question. */
   const have = {};
-  B1_DECK.cards.forEach(c => { have[c.term + '|' + c.pos + '|' + (c.sense || '')] = 1; });
-  words = all.filter(w => !w.byHand && !have[sig(w)]);
+  B1_DECK.cards.forEach(c => { have[c.term + '|' + c.pos] = 1; });
+  words = all.filter(w => !w.byHand && !have[w.term + '|' + w.pos]);
 }
 
 $('provider').onchange = () => {
