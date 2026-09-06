@@ -358,7 +358,15 @@ const head = (s) => console.log('\n— ' + s + ' —');
       dotted:  t('My train leaves at 6 a.m. tomorrow.', 'a.m.'),
       signed:  t('Her address has an at / @ before the company name.', 'at / @'),
       slashed: t('We had breakfast at a café/cafe near the station.', 'café/cafe'),
-      noDot:   t('My train leaves early tomorrow.', 'a.m.')
+      noDot:   t('My train leaves early tomorrow.', 'a.m.'),
+      /* A slash means "either of these", and the list uses it both ways: over
+         the whole word, and over one part of it. */
+      eitherWay: t('We had breakfast at a café near the station.', 'café/cafe'),
+      asOne:   t('Alright, let us start now.', 'all right/alright'),
+      asTwo:   t('All right, I will meet you at six.', 'all right/alright'),
+      longest: t('The table is made out of oak.', 'made of/from/out of'),
+      beIs:    t('The game is over, so we can go home.', 'be over'),
+      notEither: t('We drank coffee in the kitchen.', 'café/cafe')
     };
   });
   is(tricky.idiom === 'a piece of cake', 'a multi-word idiom matches as one phrase');
@@ -369,6 +377,12 @@ const head = (s) => console.log('\n— ' + s + ' —');
   is(tricky.dotted === 'a.m.', 'a word that ends in a full stop is found: ' + tricky.dotted);
   is(tricky.signed === 'at / @', 'so is one that ends in a sign: ' + tricky.signed);
   is(tricky.slashed === 'café/cafe', 'and one written two ways at once: ' + tricky.slashed);
+  is(tricky.eitherWay === 'café', 'either of those two ways on its own: ' + tricky.eitherWay);
+  is(tricky.asOne === 'Alright', 'a word a sentence may write as one: ' + tricky.asOne);
+  is(tricky.asTwo === 'All right', 'or as two: ' + tricky.asTwo);
+  is(tricky.longest === 'made out of', 'the whole phrase beats a piece of it: ' + tricky.longest);
+  is(tricky.beIs === 'is over', '"be" is found in every form it takes: ' + tricky.beIs);
+  is(tricky.notEither === null, 'and none of that finds a word that is not there');
   is(tricky.noDot === null, 'and none of that makes it match a sentence without the word');
 
   /* A fill-in-the-blank must actually remove the answer from the sentence. */

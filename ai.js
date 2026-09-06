@@ -438,14 +438,58 @@ const AI = {
     return out;
   },
 
+  /* A slash in the Cambridge list means "either of these": café/cafe,
+     tooth/teeth, all right/alright. No sentence writes both, so read literally
+     such a word can never be found in one. A lone slash — "at / @", "OK / O.K.
+     / okay" — separates whole spellings with spaces around it and is left
+     alone, because splitting there leaves nothing on one side. */
+  spellingsOf(token) {
+    const parts = String(token).split('/');
+    const kept = parts.filter(Boolean);
+    return kept.length > 1 && kept.length === parts.length ? kept : [String(token)];
+  },
+
+  /* The whole word, written each of the ways it can be written: "all
+     right/alright" is one word a sentence may write as two or as one, so a
+     search for it has to be a search for either. */
+  termSpellings(term) {
+    const whole = String(term).trim();
+    /* Two readings of the same mark, both real in this list. "all
+       right/alright" splits across the whole word — two words or one. "made
+       of/from/out of" splits one word of it and keeps the rest. Which was
+       meant cannot be told apart from the mark alone, so both are offered and
+       the longest thing actually found in the sentence wins. */
+    let out = [''];
+    whole.split(/\s+/).filter(Boolean).forEach(token => {
+      const ways = this.spellingsOf(token);
+      const next = [];
+      out.forEach(sofar => ways.forEach(w => next.push(sofar ? sofar + ' ' + w : w)));
+      /* No word here alternates enough for this to grow, but a cap costs
+         nothing and a runaway pattern costs a page. */
+      out = next.slice(0, 8);
+    });
+    this.spellingsOf(whole).forEach(one => { if (out.indexOf(one) === -1) out.push(one); });
+    /* And the word exactly as it is written on the card: a sentence may spell
+       out both ways, and then both ways together are what it contains. */
+    if (out.indexOf(whole) === -1) out.push(whole);
+    return out.filter(Boolean).slice(0, 12);
+  },
+
   /* Whether two forms are the same word: a sentence may need "diagnosed" where
      the card says "diagnose", or "worked out" for "work out". Word by word, so
-     a phrase is judged as a phrase. */
+     a phrase is judged as a phrase, and either spelling of a word written two
+     ways counts as that word. */
   sameWord(a, b) {
-    const x = String(a || '').trim().toLowerCase().split(/\s+/).filter(Boolean);
-    const y = String(b || '').trim().toLowerCase().split(/\s+/).filter(Boolean);
-    if (!x.length || x.length !== y.length) return false;
-    return x.every((w, i) => w === y[i] || inflects(w, y[i]) || inflects(y[i], w));
+    /* Each side written every way it can be written, because "alright" is one
+       word where "all right" is two and counting words alone would call them
+       different. */
+    const ways = (s) => this.termSpellings(String(s || '').trim().toLowerCase());
+    const alike = (p, q) => {
+      const x = p.split(/\s+/).filter(Boolean), y = q.split(/\s+/).filter(Boolean);
+      if (!x.length || x.length !== y.length) return false;
+      return x.every((w, i) => w === y[i] || inflects(w, y[i]) || inflects(y[i], w));
+    };
+    return ways(a).some(p => ways(b).some(q => alike(p, q)));
   },
 
   /* One clue per word for a crossword. The grid is the app's business — a
@@ -579,7 +623,10 @@ function isInflectionOf(form, term) {
    down" would not match "break down", and the gap could not be cut. Each entry
    is the plain form followed by the past and the participle; the -s and -ing
    forms are regular and are handled below. */
-const IRREGULAR = ('be was been|beat beat beaten|become became become|begin began begun|' +
+/* "be" is the one verb whose forms share almost no letters with it, and the
+   commonest verb in the language: without them "the game is over" does not
+   contain "be over". */
+const IRREGULAR = ('be was were am is are being been|beat beat beaten|become became become|begin began begun|' +
   'bend bent|bet bet|bite bit bitten|bleed bled|blow blew blown|break broke broken|' +
   'bring brought|build built|burn burnt|buy bought|catch caught|choose chose chosen|' +
   'come came come|cost cost|cut cut|deal dealt|dig dug|do did done|draw drew drawn|' +

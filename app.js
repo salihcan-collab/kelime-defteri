@@ -389,6 +389,27 @@ function reEscape(s) { return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); 
 
 function termMatch(sentence, term) {
   if (!sentence || !term) return null;
+  /* One word written two ways is two searches, not one pattern: "alright" is a
+     single word where "all right" is two, and a pattern built word by word
+     cannot be both. */
+  const ways = AI.termSpellings(term);
+  if (ways.length > 1) {
+    /* The longest hit, not the first: where "made out of" and "out of" are
+       both offered and both there, the whole phrase is the one meant. */
+    let best = null;
+    ways.forEach(one => {
+      const at = matchOneSpelling(sentence, one);
+      if (!at) return;
+      const longer = !best || (at[1] - at[0]) > (best[1] - best[0]);
+      const sameButEarlier = best && (at[1] - at[0]) === (best[1] - best[0]) && at[0] < best[0];
+      if (longer || sameButEarlier) best = at;
+    });
+    return best;
+  }
+  return matchOneSpelling(sentence, term);
+}
+
+function matchOneSpelling(sentence, term) {
   const words = String(term).trim().split(/\s+/).filter(Boolean);
   if (!words.length) return null;
 
@@ -407,9 +428,13 @@ function termMatch(sentence, term) {
      ends with punctuation — a.m., at / @ — could never be found in a sentence
      that plainly contains it. The edge only needs guarding where the word
      itself has a letter there. */
-  const edge = (ch) => /[\w\u00C0-\u024F]/.test(ch || '') ? '\\b' : '';
-  const open = edge(words[0][0]);
-  const close = edge(words[words.length - 1].slice(-1));
+  const LETTER = '\\w\\u00C0-\\u024F';
+  const guarded = (ch) => new RegExp('[' + LETTER + ']').test(ch || '');
+  const open = guarded(words[0][0]) ? '\\b' : '';
+  /* Not \b at the end: a match can finish on an accented letter — café — and
+     \b does not count one as a letter, so the word would be missed in the one
+     sentence that spells it properly. */
+  const close = guarded(words[words.length - 1].slice(-1)) ? '(?![' + LETTER + '])' : '';
 
   const attempts = words.length > 1 ? [false, true] : [false];
   for (let i = 0; i < attempts.length; i++) {
