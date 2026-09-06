@@ -154,8 +154,13 @@ function checkCard(card, ctx, draft) {
         say('a verb\'s Turkish is the infinitive, which ends in -mak or -mek: ' + JSON.stringify(one));
     });
     /* A translation that could pass for English, with none of the letters only
-       Turkish has, is usually the model answering in the wrong language. */
-    if (!TURKISH.test(tr) && ENGLISH_ONLY.test(tr) && match(tr, term, 0))
+       Turkish has, is usually the model answering in the wrong language. Some
+       words really are the same in both — gram, hey, video — so a card may say
+       so, and only a card: the field is not one a model's answer can carry,
+       because toCard builds the card and never copies it. */
+    if (card.sameInTurkish != null && typeof card.sameInTurkish !== 'boolean')
+      say('sameInTurkish is not a yes or no: ' + JSON.stringify(card.sameInTurkish));
+    if (!card.sameInTurkish && !TURKISH.test(tr) && ENGLISH_ONLY.test(tr) && match(tr, term, 0))
       say('the translation is the English word again: ' + JSON.stringify(tr));
   }
 

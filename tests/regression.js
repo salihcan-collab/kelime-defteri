@@ -366,7 +366,15 @@ const head = (s) => console.log('\n— ' + s + ' —');
       asTwo:   t('All right, I will meet you at six.', 'all right/alright'),
       longest: t('The table is made out of oak.', 'made of/from/out of'),
       beIs:    t('The game is over, so we can go home.', 'be over'),
-      notEither: t('We drank coffee in the kitchen.', 'café/cafe')
+      notEither: t('We drank coffee in the kitchen.', 'café/cafe'),
+      /* English puts the object inside a phrasal verb as readily as after it. */
+      inside:  t('She kept the children in as it was so cold.', 'keep in'),
+      inside2: t('Did you get all the notes down?', 'get down'),
+      after:   t('Hand out the books please, Tom.', 'hand out'),
+      /* but a preposition that merely follows is not the particle */
+      notOn:   t('I go home on Monday.', 'go on'),
+      notOn2:  t('We go to the shop on Tuesday.', 'go on'),
+      notLive: t('They live in a house on the hill.', 'live on')
     };
   });
   is(tricky.idiom === 'a piece of cake', 'a multi-word idiom matches as one phrase');
@@ -383,6 +391,12 @@ const head = (s) => console.log('\n— ' + s + ' —');
   is(tricky.longest === 'made out of', 'the whole phrase beats a piece of it: ' + tricky.longest);
   is(tricky.beIs === 'is over', '"be" is found in every form it takes: ' + tricky.beIs);
   is(tricky.notEither === null, 'and none of that finds a word that is not there');
+  is(tricky.inside === 'kept the children in',
+     'a phrasal verb holding its object is still that verb: ' + tricky.inside);
+  is(tricky.inside2 === 'get all the notes down', 'however many words it holds: ' + tricky.inside2);
+  is(tricky.after === 'Hand out', 'and it still matches with the object after it: ' + tricky.after);
+  is(tricky.notOn === null && tricky.notOn2 === null && tricky.notLive === null,
+     'but a preposition that merely follows the verb is not its particle');
   is(tricky.noDot === null, 'and none of that makes it match a sentence without the word');
 
   /* A fill-in-the-blank must actually remove the answer from the sentence. */

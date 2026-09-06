@@ -436,12 +436,35 @@ function matchOneSpelling(sentence, term) {
      sentence that spells it properly. */
   const close = guarded(words[words.length - 1].slice(-1)) ? '(?![' + LETTER + '])' : '';
 
-  const attempts = words.length > 1 ? [false, true] : [false];
+  /* English puts the object inside a phrasal verb as readily as after it: you
+     hand out the books, and you hand the books out. Both are the same word.
+     The gap has to start like an object, or "I go home on Monday" would count
+     as "go on" — so a determiner or a pronoun opens it, and it runs to four
+     words at most. */
+  const OPENS_AN_OBJECT = ('the a an this that these those my your his her its our ' +
+    'their some any no all both each every much many it him her them us me you ' +
+    'something everything anything nothing').split(' ');
+  const split = words.length === 2 && AI.PARTICLES.indexOf(words[1].toLowerCase()) !== -1
+    ? '\\s+(?:' + OPENS_AN_OBJECT.join('|') + ')(?:\\s+[A-Za-z\'-]+){0,3}\\s+'
+    : null;
+
+  /* The loose attempt is for idioms, where the first word carries the tense
+     and the rest is fixed: "get the hang of", "a piece of cake". On a
+     two-word term it leaves the term as its second word alone, so "home on"
+     would count as "go on". Three words or more. */
+  const attempts = words.length > 2 ? [false, true] : [false];
   for (let i = 0; i < attempts.length; i++) {
     try {
       const m = new RegExp((attempts[i] ? '\\b' : open) + pattern(attempts[i]) + close,
                            'i').exec(sentence);
       if (m) return [m.index, m.index + m[0].length];
+      /* Not on the loose attempt: a first word that may be anything, and then
+         room for an object, would find "in a house on" for "live on". */
+      if (split && !attempts[i]) {
+        const apart = new RegExp(open + pattern(attempts[i]).replace('\\s+', split) + close,
+                                 'i').exec(sentence);
+        if (apart) return [apart.index, apart.index + apart[0].length];
+      }
     } catch (e) { return null; }
   }
   return null;

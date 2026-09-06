@@ -479,15 +479,27 @@ const AI = {
      the card says "diagnose", or "worked out" for "work out". Word by word, so
      a phrase is judged as a phrase, and either spelling of a word written two
      ways counts as that word. */
+  /* The words a phrasal verb ends in. English lets the object sit before one
+     of these as readily as after it — hand out the books, hand the books out —
+     and both are the same word. */
+  PARTICLES: ('up down in out on off away back over through along around ' +
+    'about apart aside forward together').split(' '),
+
   sameWord(a, b) {
     /* Each side written every way it can be written, because "alright" is one
        word where "all right" is two and counting words alone would call them
        different. */
     const ways = (s) => this.termSpellings(String(s || '').trim().toLowerCase());
+    const like = (w, v) => w === v || inflects(w, v) || inflects(v, w);
     const alike = (p, q) => {
       const x = p.split(/\s+/).filter(Boolean), y = q.split(/\s+/).filter(Boolean);
-      if (!x.length || x.length !== y.length) return false;
-      return x.every((w, i) => w === y[i] || inflects(w, y[i]) || inflects(y[i], w));
+      if (!x.length) return false;
+      if (x.length === y.length) return x.every((w, i) => like(w, y[i]));
+      /* "kept the children in" is "keep in" with its object inside it. */
+      const wide = x.length > y.length ? x : y, tight = x.length > y.length ? y : x;
+      return tight.length === 2 && wide.length <= 6 &&
+        this.PARTICLES.indexOf(tight[1]) !== -1 &&
+        like(wide[0], tight[0]) && wide[wide.length - 1] === tight[1];
     };
     return ways(a).some(p => ways(b).some(q => alike(p, q)));
   },
