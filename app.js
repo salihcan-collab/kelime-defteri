@@ -129,6 +129,8 @@ function applyAppearance() {
   const r = document.documentElement;
   r.dataset.theme = s.theme; r.dataset.accent = s.accent;
   r.dataset.font = s.font;   r.dataset.size = s.size;
+  /* One switch over all eight typefaces rather than an italic of each. */
+  r.dataset.italic = s.italic ? 'on' : 'off';
 }
 
 /* ---------- routing ---------------------------------------------------------- */
@@ -1144,10 +1146,10 @@ function cardEditor(card, presetDeck) {
       : '<p class="help">Connect an AI assistant in Settings to fill these in automatically.</p>',
     body:
       '<div class="inline-fields">' +
-        '<div class="field"><label>Word or phrase <em class="req">required</em></label>' +
+        '<div class="field"><label>Word or phrase <em class="req" title="Required" aria-label="required">*</em></label>' +
           '<input type="text" id="cTerm" value="' + esc(card ? card.term : '') + '" placeholder="e.g. reliable">' +
           '<span class="help" id="dupHint"></span></div>' +
-        '<div class="field"><label>Part of speech <em class="req">required</em></label><select id="cPos">' +
+        '<div class="field"><label>Part of speech <em class="req" title="Required" aria-label="required">*</em></label><select id="cPos">' +
           '<option value="">—</option>' +
           PARTS_OF_SPEECH.map(p => '<option' + (card && card.pos === p ? ' selected' : '') + '>' + p + '</option>').join('') +
         '</select></div>' +
@@ -1157,7 +1159,7 @@ function cardEditor(card, presetDeck) {
       '<div class="field hidden" id="senseRow"><label>Sense label</label>' +
         '<input type="text" id="cSense" value="' + esc(card ? (card.sense || '') : '') + '" placeholder="e.g. to protest">' +
         '<span class="help" id="senseHelp"></span></div>' +
-      '<div class="field"><label>Meaning (English definition) <em class="req">required</em></label>' +
+      '<div class="field"><label>Meaning (English definition) <em class="req" title="Required" aria-label="required">*</em></label>' +
         '<textarea id="cDef" placeholder="A clear, short definition">' + esc(card ? card.definition : '') + '</textarea></div>' +
       '<div class="field"><label>Example sentence</label>' +
         '<textarea id="cEx" placeholder="A natural sentence that contains the word">' + esc(card ? card.example : '') + '</textarea>' +
@@ -4042,7 +4044,10 @@ function renderSettings(host) {
         FONTS.map(f => '<button class="font-opt' + (s.font === f.id ? ' sel' : '') + '" data-pick-font="' + f.id + '">' +
           '<div class="sample">' + esc(f.sample) + '</div>' +
           '<div class="nm">' + f.name + '</div></button>').join('') +
-      '</div></div>' +
+      '</div>' +
+        '<button class="italic-opt' + (s.italic ? ' sel' : '') + '" data-toggle-italic ' +
+          'aria-pressed="' + (s.italic ? 'true' : 'false') + '">Italic</button>' +
+      '</div>' +
 
       '<div class="field" style="margin-bottom:0"><label>Text size</label><div class="seg">' +
         [['sm', 'Small'], ['md', 'Medium'], ['lg', 'Large'], ['xl', 'X-large']].map(o =>
@@ -4250,6 +4255,7 @@ function bindSettings(host) {
     const t = e.target.closest('[data-pick-theme]');  if (t) return set({ theme: t.dataset.pickTheme });
     const a = e.target.closest('[data-pick-accent]'); if (a) return set({ accent: a.dataset.pickAccent });
     const f = e.target.closest('[data-pick-font]');   if (f) return set({ font: f.dataset.pickFont });
+    if (e.target.closest('[data-toggle-italic]')) return set({ italic: !Store.state.settings.italic });
     const z = e.target.closest('[data-pick-size]');   if (z) return set({ size: z.dataset.pickSize });
     const o = e.target.closest('[data-pick-opts]');
     if (o) { s.optionCount = parseInt(o.dataset.pickOpts, 10); Store.save(); return render('settings'); }

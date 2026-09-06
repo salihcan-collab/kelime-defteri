@@ -126,6 +126,11 @@
 :root[data-font="grotesk"]  { --font:var(--font-grotesk); }
 :root[data-font="clear"]    { --font:var(--font-clear); }
 
+/* Italic is a switch across all eight, not a ninth typeface: set on the root
+   so every rule that says font:inherit — every button, input and select —
+   leans with the rest of the page. */
+:root[data-italic="on"]{ font-style:italic; }
+
 /* Four steps of 1.5px — enough to feel, small enough to fine-tune. */
 :root[data-size="sm"]{ --fs:14.5px; }
 :root[data-size="md"]{ --fs:16px; }
@@ -320,6 +325,15 @@ button:disabled{ opacity:.45; cursor:not-allowed; transform:none !important; }
   font-size:.72rem; font-weight:600; background:var(--surface-2); color:var(--text-dim);
   border:1px solid var(--border-soft); white-space:nowrap;
 }
+/* Shows what it does: the word leans whether or not the switch is on. */
+.italic-opt{
+  align-self:flex-start; margin-top:9px; font-style:italic; padding:7px 15px;
+  border-radius:10px; background:var(--surface-2); color:var(--text-dim);
+  border:1px solid var(--border-soft); font-size:.82rem; font-weight:600;
+}
+.italic-opt:hover{ background:var(--surface-3); color:var(--text); }
+.italic-opt.sel{ background:var(--accent-soft); color:var(--accent); border-color:var(--accent); }
+
 .chip.pos{ background:var(--accent-soft); color:var(--accent); border-color:transparent; font-style:italic; }
 .chip .dot{ width:6px; height:6px; margin:0; background:currentColor; }
 .due-now{ color:var(--bad); font-weight:650; font-size:.82rem; white-space:nowrap; }
@@ -381,9 +395,11 @@ select{ cursor:pointer; appearance:none;
 }
 .tag-chip button:hover{ opacity:1; }
 
+/* A star, not the word: three fields on one form saying "required" is three
+   times the same sentence, and the mark is read at a glance. */
 .field > label em.req{
-  font-style:normal; font-size:.66rem; text-transform:uppercase; letter-spacing:.07em;
-  color:var(--text-faint); font-weight:700; margin-left:7px;
+  font-style:normal; font-size:.95rem; line-height:1; color:var(--bad);
+  font-weight:700; margin-left:3px; vertical-align:-1px;
 }
 input.invalid, select.invalid, textarea.invalid{
   border-color:var(--bad); background:color-mix(in srgb, var(--bad) 7%, var(--surface-2));

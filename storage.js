@@ -41,6 +41,7 @@ const Store = {
         theme: 'dark',
         accent: 'indigo',
         font: 'sans',
+        italic: false,
         size: 'md',
         newPerDay: 15,
         reviewPerDay: 120,

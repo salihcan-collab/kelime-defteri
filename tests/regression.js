@@ -451,6 +451,19 @@ const head = (s) => console.log('\n— ' + s + ' —');
   is(blocked.open && !blocked.saved, 'a word with no meaning and no part of speech is refused');
   is(blocked.flagged === 2, 'the two missing fields are marked in place, not in a second dialog');
   is(/needs/i.test(blocked.said), `the editor says what is missing: "${blocked.said.trim()}"`);
+
+  /* Which fields must be filled is marked, not spelled out three times. */
+  const marks = await page.evaluate(() => {
+    const req = [...document.querySelectorAll('.field > label em.req')];
+    const form = document.querySelector('.modal') || document.body;
+    return { count: req.length, texts: [...new Set(req.map(m => m.textContent.trim()))],
+             colour: req.length ? getComputedStyle(req[0]).color : '',
+             bad: getComputedStyle(document.documentElement).getPropertyValue('--bad').trim(),
+             spellsItOut: /required/i.test(form.textContent) };
+  });
+  is(marks.count === 3 && marks.texts.length === 1 && marks.texts[0] === '*',
+     'the three fields that must be filled carry a star');
+  is(!marks.spellsItOut, 'and the form does not spell the word out as well');
   await page.evaluate(() => closeModal());
   await page.waitForTimeout(200);
 
@@ -2196,6 +2209,39 @@ const head = (s) => console.log('\n— ' + s + ' —');
   }));
   is(survived.card, 'a word added before a reload is still there afterwards');
   is(survived.theme === 'midnight' && survived.onRoot === 'midnight', 'the chosen theme survives a reload too');
+
+  /* Italic is one switch over all eight typefaces, not a ninth typeface. */
+  head('the italic switch');
+  await page.evaluate(() => go('settings', {}));
+  await page.waitForTimeout(300);
+  const slant = await page.evaluate(async () => {
+    const style = () => getComputedStyle(document.body).fontStyle;
+    const upright = style();
+    document.querySelector('[data-toggle-italic]').click();
+    await new Promise(r => setTimeout(r, 150));
+    const leaning = {
+      body: style(),
+      button: getComputedStyle(document.querySelector('.primary-btn, .soft-btn')).fontStyle,
+      input: getComputedStyle(document.querySelector('input, select')).fontStyle
+    };
+    /* every typeface, not only the one in use */
+    const everyFont = FONTS.map(f => {
+      Store.state.settings.font = f.id; applyAppearance();
+      return getComputedStyle(document.body).fontStyle;
+    });
+    document.querySelector('[data-toggle-italic]').click();
+    await new Promise(r => setTimeout(r, 150));
+    return { upright, leaning, everyFont, backAgain: style(),
+             switches: document.querySelectorAll('[data-toggle-italic]').length };
+  });
+  is(slant.switches === 1, 'there is one switch, not one per typeface');
+  is(slant.upright === 'normal' && slant.backAgain === 'normal',
+     'the page starts upright and goes back upright');
+  is(slant.leaning.body === 'italic' && slant.leaning.button === 'italic' &&
+     slant.leaning.input === 'italic',
+     'one press leans the page, its buttons and its inputs alike');
+  is(slant.everyFont.length === 8 && slant.everyFont.every(v => v === 'italic'),
+     'and it holds across all eight typefaces');
 
   const csv = await page.evaluate(() => {
     Store.wipe();
