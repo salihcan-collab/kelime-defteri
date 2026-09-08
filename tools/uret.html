@@ -131,7 +131,7 @@ const $ = (id) => document.getElementById(id);
 const KEY = 'lexio.b1.drafts';
 /* Shown on the page so "am I running the version we just fixed?" is a
    question you can answer by looking, not by guessing at the cache. */
-const BUILD = '8 Eylül — zaman aşımı';
+const BUILD = '8 Eylül — boş cevap';
 /* Bumped whenever the way a model is asked or judged changes, which throws
    away every verdict reached the old way. */
 const TRIAL_RULES = 3;
@@ -359,6 +359,8 @@ async function tryModel(name) {
      is being asked here is whether this model can write a card at all. */
   let some = words.slice(0, TRIAL);
   while (some.length < TRIAL) some.push({ term: 'reliable', pos: 'adjective' });
+  /* Which word it has been cut down to, once it has been cut down to one. */
+  let one = 0;
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
       const answers = await ask(some, '', name);
@@ -373,6 +375,15 @@ async function tryModel(name) {
         CardRules.prune(card, ctx);
         return !CardRules.checkCard(card, ctx, !wantsTurkish()).length;
       }).length;
+      /* Three words were asked for because one bad card proves nothing — every
+         model writes one now and then. Cut down to a single word by a provider
+         too slow for three, that same bad card would decide it, so a word that
+         came out wrong is asked again with another before the model is written
+         off for being slow. */
+      if (!sound && some.length < TRIAL && attempt + 1 < 3 && ++one < words.length) {
+        some = [words[one]];
+        continue;
+      }
       return sound
         ? { verdict: 'ok', slow: some.length < TRIAL,
             note: sound + '/' + some.length + ' kart yazdı' +
@@ -392,6 +403,7 @@ async function tryModel(name) {
       if (/^yavaş/.test(e.message)) return { verdict: 'rules', note: 'tek kelimeye bile çok yavaş' };
       /* Already asked three times with more room each time. */
       if (/^kesildi/.test(e.message)) return { verdict: 'rules', note: 'cevabı hep yarıda kaldı' };
+      if (/^boş/.test(e.message)) return { verdict: 'rules', note: 'boş cevap verdi' };
       if (/JSON/.test(e.message)) return { verdict: 'rules', note: 'JSON döndürmedi' };
       return { verdict: 'dead', note: e.message.slice(0, 40) };
     }
@@ -708,7 +720,14 @@ function askOnce(list, note, useModel, room) {
       throw new Error('cevap JSON değildi');
     }
     const cards = parsed.cards || (Array.isArray(parsed) ? parsed : [parsed]);
-    return Array.isArray(cards) ? cards : [];
+    const written = Array.isArray(cards) ? cards.filter(c => c && c.term) : [];
+    /* An answer with nothing in it at all is not a model that declined to
+       write these particular words — it is a provider that has stopped
+       answering properly. Read as ordinary it costs the rest of the run:
+       every word left is blamed on the model, three tries at a time, and
+       nothing ever says the provider went. */
+    if (!written.length) throw new Error('boş: cevapta hiç kart yoktu');
+    return written;
   });
 }
 
@@ -724,6 +743,16 @@ function lineUp(list, answers) {
     return i === -1 ? null : left.splice(i, 1)[0];
   });
 }
+
+/* Why a word came back without a card. Only the first of these is about the
+   model's writing, and it is the only one written in English — it is fed back
+   to the model as the fault to fix. The other two are the provider, and saying
+   the first when one of them happened is what turned a provider that had
+   stopped into a page full of words the model was blamed for. */
+const whyMissing = trouble =>
+  !trouble ? 'you did not write a card for it'
+  : /^boş/.test(trouble) ? 'sağlayıcı kart içermeyen bir cevap döndürdü'
+  : 'istek başarısız — ' + trouble;
 
 /* Batches of one word each, senses of the same word never together. */
 function intoBatches(list, size) {
@@ -854,6 +883,8 @@ async function run(list, remember) {
           ? 'model bu kelimeyi üç kez yarıda bıraktı — başka bir model gerekebilir'
           : /^yavaş/.test(e.message)
           ? 'tek kelimelik istek bile zaman aşımına uğradı — sağlayıcı çok yavaş'
+          : /^boş/.test(e.message)
+          ? 'sağlayıcı kart içermeyen bir cevap döndürdü — sürerse duruyorum'
           : 'istek başarısız: ' + e.message, 'bad');
       }
       stats.req++;
@@ -862,12 +893,7 @@ async function run(list, remember) {
       want.forEach((w, n) => {
         if (!lined[n]) {
           again.push(w);
-          /* When the request itself failed there was no answer to be missing a
-             word from. Saying "you did not write a card for it" hides the one
-             thing worth knowing — that the provider stopped answering — behind
-             a sentence about the model's work. */
-          why.push(w.term + ': ' + (askFailed ? 'istek başarısız — ' + askFailed
-                                              : 'you did not write a card for it'));
+          why.push(w.term + ': ' + whyMissing(askFailed));
           return;
         }
         const tr = wantsTurkish();
