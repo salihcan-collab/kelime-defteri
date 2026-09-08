@@ -160,6 +160,13 @@ function checkCard(card, ctx, draft) {
        because toCard builds the card and never copies it. */
     if (card.sameInTurkish != null && typeof card.sameInTurkish !== 'boolean')
       say('sameInTurkish is not a yes or no: ' + JSON.stringify(card.sameInTurkish));
+    /* Loosening this to judge each rendering on its own would let "quickly,
+       fast" through — two English words, neither of them Turkish — to save
+       "film, sinema filmi", where the Turkish half happens to use no letter
+       Turkish alone has. Nothing mechanical separates those two, and a card
+       whose Turkish is English is the failure this whole exercise was built to
+       catch. So it stays strict, and the dozen loanwords whose Turkish really
+       is the English word are written by hand and say so. */
     if (!card.sameInTurkish && !TURKISH.test(tr) && ENGLISH_ONLY.test(tr) && match(tr, term, 0))
       say('the translation is the English word again: ' + JSON.stringify(tr));
   }
@@ -207,6 +214,41 @@ function clashes(card, sibling, ctx) {
   return null;
 }
 
+/* Collocations, synonyms, antonyms and word family are the parts of a card
+   that can be dropped without the card ceasing to be one. A collocation that
+   does not contain the word is junk; so is a "family member" that is only the
+   word with an ending on it. Throwing away a whole card — a good definition, a
+   natural example, a Turkish translation — over a junk entry in an optional
+   list is out of all proportion, and asking for the same card again three
+   times over does not make the list better.
+
+   So the junk goes and the card stays. What was dropped is returned, because a
+   list of them is worth reading: a model that keeps offering "cooking" for
+   "cook" is telling you something about the rule, not about the word. */
+function prune(card, ctx) {
+  const term = String(card.term || '').trim();
+  const gone = [];
+  const drop = (why) => { gone.push(why); return false; };
+
+  card.collocations = (card.collocations || []).filter(p =>
+    ctx.findTerm(String(p), term, 0) ? true : drop('collocation: ' + p)).slice(0, 4);
+
+  const kept = [];
+  (card.related || []).forEach(r => {
+    if (['syn', 'ant', 'family'].indexOf(r.kind) === -1) return drop('kind: ' + r.kind);
+    if (!r.text) return drop('an entry with no word');
+    if (ctx.normalize(r.text) === ctx.normalize(term)) return drop('itself: ' + r.text);
+    if (r.kind === 'family' && ctx.isInflectionOf(r.text, term)) return drop('ending: ' + r.text);
+    /* Against what is being kept, so of "grandmother" and "grandmothers" the
+       first one seen survives rather than both going. */
+    if (r.kind === 'family' && kept.some(k => k.kind === 'family' && plural(r.text, k.text)))
+      return drop('plural: ' + r.text);
+    kept.push(r);
+  });
+  card.related = kept;
+  return gone;
+}
+
 /* The shape a model answers in, turned into the shape a card is stored in. */
 function toCard(raw, word, turkish) {
   const list = (v) => (Array.isArray(v) ? v : []).map(x => String(x || '').trim()).filter(Boolean);
@@ -238,5 +280,5 @@ function toCard(raw, word, turkish) {
 
 /* Read from a page as well as from Node: the checks belong to the deck, not to
    whichever of the two happens to be running them. */
-const CardRules = { PROMPT, PROMPT_TR, promptFor, checkCard, clashes, toCard };
+const CardRules = { PROMPT, PROMPT_TR, promptFor, checkCard, clashes, toCard, prune };
 if (typeof module !== 'undefined' && module.exports) module.exports = CardRules;

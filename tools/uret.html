@@ -131,7 +131,7 @@ const $ = (id) => document.getElementById(id);
 const KEY = 'lexio.b1.drafts';
 /* Shown on the page so "am I running the version we just fixed?" is a
    question you can answer by looking, not by guessing at the cache. */
-const BUILD = '6 Eylül — yazılanı sorma';
+const BUILD = '8 Eylül — ayıklama';
 /* Bumped whenever the way a model is asked or judged changes, which throws
    away every verdict reached the old way. */
 const TRIAL_RULES = 3;
@@ -344,8 +344,15 @@ async function tryModel(name) {
       const answers = await ask(some, '', name);
       const lined = lineUp(some, answers);
       const ctx = { findTerm, normalize, isInflectionOf, AI, PARTS_OF_SPEECH };
-      const sound = some.filter((w, i) => lined[i] && !CardRules.checkCard(
-        CardRules.toCard(lined[i], w, wantsTurkish()), ctx, !wantsTurkish()).length).length;
+      /* Judged by what the run would actually keep — pruning included, or a
+         model would be told it cannot write a card over an entry the run
+         throws away without a thought. */
+      const sound = some.filter((w, i) => {
+        if (!lined[i]) return false;
+        const card = CardRules.toCard(lined[i], w, wantsTurkish());
+        CardRules.prune(card, ctx);
+        return !CardRules.checkCard(card, ctx, !wantsTurkish()).length;
+      }).length;
       return sound
         ? { verdict: 'ok', note: sound + '/' + some.length + ' kart yazdı' }
         : { verdict: 'rules', note: 'kart yazamadı' };
@@ -713,6 +720,9 @@ async function run(list, remember) {
   $('stop').hidden = false; $('runAll').disabled = $('try20').disabled = true;
   stats = { done: 0, fail: 0, req: 0, total: list.length, at: Date.now() };
   const failed = [], reasons = [];
+  /* What was quietly thrown away, counted by kind, so the run can say at the
+     end whether the model kept making the same sort of mess. */
+  const dropped = {};
   /* How many words this model's answers have been shown to hold. */
   let fits = BATCH;
   const batches = intoBatches(list, fits);
@@ -765,6 +775,11 @@ async function run(list, remember) {
         const tr = wantsTurkish();
         const card = CardRules.toCard(lined[n], w, tr);
         const ctx = { findTerm, normalize, isInflectionOf, AI, PARTS_OF_SPEECH };
+        /* A junk collocation or a family member that is only the word with an
+           ending on it costs that entry, not the whole card. Asking again for
+           a card whose definition and example were already right never made
+           the list better; it only lost the card. */
+        CardRules.prune(card, ctx).forEach(g => { dropped[g.split(':')[0]] = (dropped[g.split(':')[0]] || 0) + 1; });
         /* A card is a draft until its Turkish is there. When the model is the
            one writing it, the card is not a draft any more and the Turkish is
            held to the same rules as everything else. */
@@ -803,9 +818,11 @@ async function run(list, remember) {
     reasons.map(r => '  ' + r + '\n').join('');
   /* Whatever was on the line last was said in the middle of the work. A run
      that has stopped must say so, or a finished page reads as a stuck one. */
+  const swept = Object.keys(dropped).map(k => dropped[k] + ' ' + k).join(', ');
   say('s1say', (stop ? 'Durduruldu. ' : 'Bitti. ') + stats.done + ' kart yazıldı' +
       (failed.length ? ', ' + failed.length + ' kelime dışarıda kaldı: ' +
-        failed.slice(0, 8).join(', ') + (failed.length > 8 ? '…' : '') : '') + '.',
+        failed.slice(0, 8).join(', ') + (failed.length > 8 ? '…' : '') : '') + '.' +
+      (swept ? ' Ayıklanan: ' + swept + '.' : ''),
       failed.length ? 'bad' : 'good');
   refresh();
   /* Who wrote what is stored has just changed, so the line saying so should
