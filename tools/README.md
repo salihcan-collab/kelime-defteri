@@ -63,6 +63,13 @@ and reports anything the two readings disagree about. All of it should be zero,
 except the ordering: Cambridge's own list has 27 pairs out of alphabetical
 order, and those are reported as its own.
 
+One headword in `words.json` does not match the reading: the list prints
+`suprising`, and the card says **surprising**. Both readings of the PDF agree
+on the misspelling, so it is the source's and not ours — but a card is what a
+learner reads and copies, and this one would teach them to spell it wrong.
+Nothing else is corrected: a list that quietly disagrees with its source is
+worse than one that does so in a single line you can find.
+
 ## Drafting the cards
 
 410 of the cards are marked `byHand` — the phrasal verbs, the phrases, the
