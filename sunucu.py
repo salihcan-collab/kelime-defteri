@@ -16,6 +16,9 @@ import http.server, socketserver, webbrowser, threading, urllib.request, urllib.
 PORT = 8000
 RELAY = '/nvidia/'
 UPSTREAM = 'https://integrate.api.nvidia.com'
+# Sayfa 90 saniyede vazgeçiyor; sunucunun daha uzun beklemesinin kimseye
+# faydası yok, sadece donmuş gibi görünmesine yarar.
+TIMEOUT = 100
 
 class NoCache(http.server.SimpleHTTPRequestHandler):
     def do_POST(self):
@@ -39,10 +42,15 @@ class NoCache(http.server.SimpleHTTPRequestHandler):
             headers={k: v for k, v in self.headers.items()
                      if k.lower() in ('authorization', 'content-type', 'accept')})
         try:
-            r = urllib.request.urlopen(req, timeout=300)
+            r = urllib.request.urlopen(req, timeout=TIMEOUT)
             code, head, out = r.status, r.headers, r.read()
         except urllib.error.HTTPError as e:
             code, head, out = e.code, e.headers, e.read()
+        except TimeoutError:
+            # Yanıt gelmedi diye değil, çok uzun sürdü diye başarısız: 504 bunu
+            # söyleyen koddur, ve üretici sayfası 504 görünce grubu bölüp daha
+            # az kelime sorar — asıl çözüm odur.
+            code, head, out = 504, {}, b'{"error":"upstream timed out"}'
         except Exception as e:
             code, head, out = 502, {}, str(e).encode()
         self.send_response(code)
