@@ -812,13 +812,17 @@ const Store = {
   },
 
   exportCSV(deckId) {
+    /* Every field a card carries. A column short of that is a file that loses
+       something on the way out and cannot say what — a word family, a subject,
+       a note of your own — and the loss is only found later, by its absence. */
     const rows = [['term', 'part of speech', 'sense', 'definition', 'example', 'translation',
-                   'collocations', 'synonyms', 'antonyms', 'deck']];
+                   'collocations', 'synonyms', 'antonyms', 'family', 'tags', 'note', 'deck']];
     const rel = (c, kind) => (c.related || []).filter(r => r.kind === kind).map(r => r.text).join('; ');
     this.cardsOf(deckId).forEach(c => {
       const d = this.deck(c.deckId);
       rows.push([c.term, c.pos, c.sense, c.definition, c.example, c.translation,
-                 (c.collocations || []).join('; '), rel(c, 'syn'), rel(c, 'ant'), d ? d.name : '']);
+                 (c.collocations || []).join('; '), rel(c, 'syn'), rel(c, 'ant'),
+                 rel(c, 'family'), (c.tags || []).join('; '), c.notes || '', d ? d.name : '']);
     });
     return rows.map(r => r.map(v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"').join(',')).join('\n');
   },
@@ -846,6 +850,9 @@ const Store = {
     const iColl  = start ? named(['collocations', 'collocation']) : -1;
     const iSyn   = start ? named(['synonyms', 'synonym']) : -1;
     const iAnt   = start ? named(['antonyms', 'antonym']) : -1;
+    const iFam   = start ? named(['family', 'word family']) : -1;
+    const iTags  = start ? named(['tags', 'tag', 'topic', 'topics']) : -1;
+    const iNote  = start ? named(['note', 'notes']) : -1;
     const list = (v) => String(v == null ? '' : v).split(/[;|]/).map(x => x.trim()).filter(Boolean);
     const at = (row, i) => (i === -1 ? '' : (row[i] || ''));
 
@@ -868,8 +875,11 @@ const Store = {
         example: row[iEx] || '', translation: row[iTr] || '',
         sense: at(row, iSense),
         collocations: list(at(row, iColl)),
+        tags: list(at(row, iTags)),
+        notes: at(row, iNote),
         related: list(at(row, iSyn)).map(t => ({ kind: 'syn', text: t }))
           .concat(list(at(row, iAnt)).map(t => ({ kind: 'ant', text: t })))
+          .concat(list(at(row, iFam)).map(t => ({ kind: 'family', text: t })))
       }, true);
       added++;
     }
