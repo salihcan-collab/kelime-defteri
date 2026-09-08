@@ -131,7 +131,7 @@ const $ = (id) => document.getElementById(id);
 const KEY = 'lexio.b1.drafts';
 /* Shown on the page so "am I running the version we just fixed?" is a
    question you can answer by looking, not by guessing at the cache. */
-const BUILD = '8 Eylül — ayıklama';
+const BUILD = '8 Eylül — duvar';
 /* Bumped whenever the way a model is asked or judged changes, which throws
    away every verdict reached the old way. */
 const TRIAL_RULES = 3;
@@ -357,7 +357,10 @@ async function tryModel(name) {
         ? { verdict: 'ok', note: sound + '/' + some.length + ' kart yazdı' }
         : { verdict: 'rules', note: 'kart yazamadı' };
     } catch (e) {
-      if (/rate-limit/.test(e.message)) continue;      /* it waited; ask again */
+      if (/^rate-limit/.test(e.message)) {              /* busy; wait once and ask again */
+        await new Promise(res => setTimeout(res, (Number(e.message.split(':')[1]) || FIRST_WAIT) * 1000));
+        continue;
+      }
       if (/^404:/.test(e.message)) return { verdict: 'dead', note: 'hesapta açık değil' };
       if (/^40[13]:/.test(e.message)) return { verdict: 'dead', note: 'anahtar yetmiyor' };
       /* Already asked three times with more room each time. */
@@ -624,9 +627,11 @@ function askOnce(list, note, useModel, room) {
       const told = parseInt(r.headers.get('retry-after') || '0', 10);
       const wait = Math.min(60, told > 0 ? told : backoff);
       if (!(told > 0)) backoff = Math.min(60, backoff * 2);
-      say('s1say', 'sağlayıcı beklememi istedi, ' + wait + ' saniye…', 'bad');
-      await new Promise(res => setTimeout(res, wait * 1000));
-      throw new Error('rate-limit');
+      /* Said, not slept: whoever asked decides whether this is worth waiting
+         for. Sleeping here would mean the caller only learns it was told to
+         wait after the waiting is over, and a provider that is closed for the
+         day would be waited on four times before anyone could say stop. */
+      throw new Error('rate-limit:' + wait);
     }
     backoff = FIRST_WAIT;
     if (!r.ok) throw new Error(r.status + ': ' + (await r.text()).slice(0, 160));
@@ -726,13 +731,39 @@ async function run(list, remember) {
   /* How many words this model's answers have been shown to hold. */
   let fits = BATCH;
   const batches = intoBatches(list, fits);
+  /* A batch can come back empty for two quite different reasons, and only one
+     of them is worth carrying on through. A model writing cards that break the
+     rules is ordinary — the next word may go fine. A provider that has stopped
+     answering does not start again on the next batch, and a run that keeps
+     asking turns the rest of the alphabet into failures three tries at a time.
+     So the reason a batch came back empty is remembered, and the run stops on
+     the second kind. */
+  let wallHit = '', silent = 0;
   for (let b = 0; b < batches.length && !stop; b++) {
+    if (wallHit) break;
     let want = batches[b], note = '', why = [];
+    const wasDone = stats.done;
+    /* A batch that was split was not lost, it was put back in the queue in two
+       halves — it has no business counting towards a wall. */
+    let deferred = false;
+    /* Being told to wait costs a card none of its tries, which is right for a
+       provider that is briefly busy and wrong for one whose quota is gone: it
+       would wait, and double the wait, and wait again, for ever. */
+    let waits = 0, lastTrouble = '';
     for (let t = 1; t <= TRIES && want.length && !stop; t++) {
-      let answers = [];
+      let answers = [], askFailed = '';
       try { answers = await ask(want, note); }
       catch (e) {
-        if (/rate-limit/.test(e.message)) { t--; continue; }   /* waited, not failed */
+        askFailed = e.message;
+        lastTrouble = /^rate-limit/.test(e.message) ? 'wait' : 'error';
+        /* Three waits is plenty for a provider that is merely busy: four, eight
+           and sixteen seconds. A fourth means it is not busy, it is closed. */
+        if (/^rate-limit/.test(e.message) && ++waits <= 3) {
+          const secs = Number(e.message.split(':')[1]) || FIRST_WAIT;
+          say('s1say', 'sağlayıcı beklememi istedi, ' + secs + ' saniye…', 'bad');
+          await new Promise(res => setTimeout(res, secs * 1000));
+          t--; continue;
+        }
         /* Not this batch's fault and not the next one's either: the model is
            wrong or the key does not reach it. Repeating that five hundred
            times helps nobody. */
@@ -761,6 +792,7 @@ async function run(list, remember) {
               fits + '\'erli soruyorum');
           stats.req++;
           want = [];
+          deferred = true;
           break;
         }
         say('s1say', /^kesildi/.test(e.message)
@@ -771,7 +803,16 @@ async function run(list, remember) {
       const lined = lineUp(want, answers), again = [];
       why = [];
       want.forEach((w, n) => {
-        if (!lined[n]) { again.push(w); why.push(w.term + ': you did not write a card for it'); return; }
+        if (!lined[n]) {
+          again.push(w);
+          /* When the request itself failed there was no answer to be missing a
+             word from. Saying "you did not write a card for it" hides the one
+             thing worth knowing — that the provider stopped answering — behind
+             a sentence about the model's work. */
+          why.push(w.term + ': ' + (askFailed ? 'istek başarısız — ' + askFailed
+                                              : 'you did not write a card for it'));
+          return;
+        }
         const tr = wantsTurkish();
         const card = CardRules.toCard(lined[n], w, tr);
         const ctx = { findTerm, normalize, isInflectionOf, AI, PARTS_OF_SPEECH };
@@ -809,6 +850,15 @@ async function run(list, remember) {
       want.forEach(w => { failed.push(w.term); stats.fail++; });
       if (want.length) why.forEach(r => reasons.push(r));
     }
+    /* Nothing written, and the reason was the provider rather than the model:
+       that is the wall. A rate limit that outlasts three waits is a quota, not
+       a busy minute, and it is worth saying so by name. */
+    if (deferred || stats.done > wasDone) { silent = 0; }
+    else if (lastTrouble === 'wait') {
+      wallHit = 'Sağlayıcı sürekli beklet diyor — günlük kotan bitmiş olabilir.';
+    } else if (lastTrouble === 'error' && ++silent >= 3) {
+      wallHit = 'Sağlayıcı arka arkaya ' + silent + ' gruba cevap vermedi.';
+    }
     if (remember) keep();
     refresh();
   }
@@ -819,10 +869,12 @@ async function run(list, remember) {
   /* Whatever was on the line last was said in the middle of the work. A run
      that has stopped must say so, or a finished page reads as a stuck one. */
   const swept = Object.keys(dropped).map(k => dropped[k] + ' ' + k).join(', ');
-  say('s1say', (stop ? 'Durduruldu. ' : 'Bitti. ') + stats.done + ' kart yazıldı' +
+  say('s1say', (stop ? 'Durduruldu. ' : wallHit ? wallHit + ' Durdum. ' : 'Bitti. ') +
+      stats.done + ' kart yazıldı' +
       (failed.length ? ', ' + failed.length + ' kelime dışarıda kaldı: ' +
         failed.slice(0, 8).join(', ') + (failed.length > 8 ? '…' : '') : '') + '.' +
-      (swept ? ' Ayıklanan: ' + swept + '.' : ''),
+      (swept ? ' Ayıklanan: ' + swept + '.' : '') +
+      (wallHit ? ' Kalanlar duruyor — sonra tekrar başlat, kaldığı yerden sürer.' : ''),
       failed.length ? 'bad' : 'good');
   refresh();
   /* Who wrote what is stored has just changed, so the line saying so should

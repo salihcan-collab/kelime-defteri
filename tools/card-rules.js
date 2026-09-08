@@ -233,19 +233,22 @@ function prune(card, ctx) {
   card.collocations = (card.collocations || []).filter(p =>
     ctx.findTerm(String(p), term, 0) ? true : drop('collocation: ' + p)).slice(0, 4);
 
-  const kept = [];
-  (card.related || []).forEach(r => {
+  /* Against the whole family, not against what has been kept so far: a model
+     that writes "robotics" before "robotic" would otherwise slip both past,
+     because when the plural is looked at the singular has not been seen yet.
+     Only the plural goes — plural() reads one way, so of any pair exactly one
+     of them is dropped. */
+  const wholeFamily = (card.related || [])
+    .filter(r => r.kind === 'family' && r.text).map(r => r.text);
+  card.related = (card.related || []).filter(r => {
     if (['syn', 'ant', 'family'].indexOf(r.kind) === -1) return drop('kind: ' + r.kind);
     if (!r.text) return drop('an entry with no word');
     if (ctx.normalize(r.text) === ctx.normalize(term)) return drop('itself: ' + r.text);
     if (r.kind === 'family' && ctx.isInflectionOf(r.text, term)) return drop('ending: ' + r.text);
-    /* Against what is being kept, so of "grandmother" and "grandmothers" the
-       first one seen survives rather than both going. */
-    if (r.kind === 'family' && kept.some(k => k.kind === 'family' && plural(r.text, k.text)))
+    if (r.kind === 'family' && wholeFamily.some(f => f !== r.text && plural(r.text, f)))
       return drop('plural: ' + r.text);
-    kept.push(r);
+    return true;
   });
-  card.related = kept;
   return gone;
 }
 
