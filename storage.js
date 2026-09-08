@@ -13,6 +13,12 @@ const RESCUE_KEY = 'lexio.v1.rescued';
    update going wrong — does not take them with it. */
 const SNAPSHOT_KEY = 'lexio.v1.snapshots';
 const SNAPSHOT_MAX = 3;
+/* What the daily copies may cost, of the roughly 5,000 KB a browser gives.
+   A copy of a collection is the size of the collection, so a three thousand
+   card deck would spend the whole allowance on one — and then the collection
+   itself has nowhere to grow. Past this size the copies stop and the backup
+   file takes over, which is the one that survives a cleared browser anyway. */
+const SNAPSHOT_BUDGET = 1024 * 1024;
 const SCHEMA_VERSION = 2;
 /* Rounds kept in the practice history. They carry their own questions so a
    repeat costs nothing, which is also why the list has an end. */
@@ -879,7 +885,14 @@ const Store = {
 
   /* Keep the collection as it stands. One a day unless something is about to
      destroy it, in which case one now. Storage can be full, so the list is
-     shortened until it fits rather than failing outright. */
+     shortened until it fits rather than failing outright.
+
+     Fitting is not enough on its own. A copy of a three thousand card deck is
+     the size of the deck, so a browser that has room for the copy can be left
+     with none for the collection — and the collection is the thing the copy
+     exists to protect. So every length is tried against both: the snapshots go
+     in, and then the collection itself must still go in beside them. A backup
+     that costs you what it was backing up is not a backup. */
   snapshot(raw, force) {
     if (!raw) return null;
     const list = this.snapshots();
@@ -889,9 +902,17 @@ const Store = {
                     cards: this.state.cards.length, decks: this.state.decks.length, raw: raw };
     const all = [entry].concat(list).slice(0, SNAPSHOT_MAX);
     for (let n = all.length; n > 0; n--) {
-      try { localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(all.slice(0, n))); return entry; }
-      catch (e) { /* no room — keep one fewer and try again */ }
+      const text = JSON.stringify(all.slice(0, n));
+      if (text.length > SNAPSHOT_BUDGET) continue;
+      try {
+        localStorage.setItem(SNAPSHOT_KEY, text);
+        localStorage.setItem(STORAGE_KEY, raw);
+        return entry;
+      } catch (e) { /* no room for both — keep one fewer and try again */ }
     }
+    /* Not even one copy fits beside the collection. Whatever older copies were
+       there are in the way now, so they go: the collection comes first. */
+    try { localStorage.removeItem(SNAPSHOT_KEY); } catch (e) {}
     return null;
   },
 

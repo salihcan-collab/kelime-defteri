@@ -4174,7 +4174,15 @@ function renderSettings(host) {
          out, so what has been used is worth showing while it still fits. */
       '<p class="muted" style="margin-bottom:14px">' + Store.state.cards.length +
         ' words take about ' + Math.round(Store.weight().total / 1024) +
-        ' KB, backup copies included. Browsers usually allow about 5,000 KB.</p>' +
+        ' KB, backup copies included. Browsers usually allow about 5,000 KB.' +
+        /* A collection large enough to fill the allowance with one copy of
+           itself is kept without daily copies, so that it has room to grow.
+           Someone who believes they have a safety net should be told when
+           they do not, and where the real one is. */
+        (Store.state.cards.length && !Store.snapshots().length
+          ? ' This collection is too large for daily copies inside the browser, ' +
+            'so none are kept — download a backup instead.'
+          : '') + '</p>' +
       '<div class="row">' +
         '<button class="primary-btn" data-act="backup">Download backup (.json)</button>' +
         '<button class="ghost-btn" data-act="restore">Restore from backup</button>' +
