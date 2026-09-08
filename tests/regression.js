@@ -2219,15 +2219,23 @@ const head = (s) => console.log('\n— ' + s + ' —');
     const upright = style();
     document.querySelector('[data-toggle-italic]').click();
     await new Promise(r => setTimeout(r, 150));
+    /* A font with no italic of its own gets one synthesised, and the computed
+       value then reads "oblique 11.75deg" rather than "italic". Both mean the
+       type leans, which is the whole of the question. */
+    const leans = (el) => /italic|oblique/.test(getComputedStyle(el).fontStyle);
+    const btn = document.querySelector('.primary-btn, .soft-btn');
+    const inp = document.querySelector('input, select');
     const leaning = {
-      body: style(),
-      button: getComputedStyle(document.querySelector('.primary-btn, .soft-btn')).fontStyle,
-      input: getComputedStyle(document.querySelector('input, select')).fontStyle
+      body: leans(document.body),
+      button: btn ? leans(btn) : 'no button on this page',
+      input: inp ? leans(inp) : 'no input on this page',
+      saw: [style(), btn ? getComputedStyle(btn).fontStyle : '',
+            inp ? getComputedStyle(inp).fontStyle : ''].join(' / ')
     };
     /* every typeface, not only the one in use */
     const everyFont = FONTS.map(f => {
       Store.state.settings.font = f.id; applyAppearance();
-      return getComputedStyle(document.body).fontStyle;
+      return leans(document.body);
     });
     document.querySelector('[data-toggle-italic]').click();
     await new Promise(r => setTimeout(r, 150));
@@ -2237,10 +2245,9 @@ const head = (s) => console.log('\n— ' + s + ' —');
   is(slant.switches === 1, 'there is one switch, not one per typeface');
   is(slant.upright === 'normal' && slant.backAgain === 'normal',
      'the page starts upright and goes back upright');
-  is(slant.leaning.body === 'italic' && slant.leaning.button === 'italic' &&
-     slant.leaning.input === 'italic',
-     'one press leans the page, its buttons and its inputs alike');
-  is(slant.everyFont.length === 8 && slant.everyFont.every(v => v === 'italic'),
+  is(slant.leaning.body && slant.leaning.button === true && slant.leaning.input === true,
+     'one press leans the page, its buttons and its inputs alike: ' + slant.leaning.saw);
+  is(slant.everyFont.length === 8 && slant.everyFont.every(v => v === true),
      'and it holds across all eight typefaces');
 
   const csv = await page.evaluate(() => {
