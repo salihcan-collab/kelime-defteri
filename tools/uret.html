@@ -131,7 +131,7 @@ const $ = (id) => document.getElementById(id);
 const KEY = 'lexio.b1.drafts';
 /* Shown on the page so "am I running the version we just fixed?" is a
    question you can answer by looking, not by guessing at the cache. */
-const BUILD = '8 Eylül — duvar';
+const BUILD = '8 Eylül — dosya adı';
 /* Bumped whenever the way a model is asked or judged changes, which throws
    away every verdict reached the old way. */
 const TRIAL_RULES = 3;
@@ -172,10 +172,15 @@ const load = () => {
     } else { drafts = kept; draftsBy = null; }
   } catch (e) { drafts = {}; draftsBy = null; }
 };
+/* A store that will not take any more is not a message to be shown once and
+   scrolled past: everything written after it is written to nothing. */
+let storageFull = false;
 const keep = () => {
   draftsBy = stamp();
-  try { localStorage.setItem(KEY, JSON.stringify({ by: draftsBy, cards: drafts })); }
-  catch (e) { say('s1say', 'Tarayıcı deposu doldu — yazılanları indirip "Kayıtlıları sil" de.', 'bad'); }
+  try {
+    localStorage.setItem(KEY, JSON.stringify({ by: draftsBy, cards: drafts }));
+    storageFull = false;
+  } catch (e) { storageFull = true; }
 };
 
 /* Said where the drafts are, not where the model is: this is about what is
@@ -183,6 +188,12 @@ const keep = () => {
 function mindTheDrafts() {
   const n = Object.keys(drafts).length;
   const now = stamp();
+  if (storageFull) {
+    $('draftsay').hidden = false;
+    say('draftsay', 'Tarayıcı deposu doldu — son yazılanlar kaydedilemiyor. ' +
+        '"Yazılanları indir" ile dosyayı al, sonra "Kayıtlıları sil".', 'bad');
+    return false;
+  }
   if (!n) { $('draftsay').hidden = true; return true; }
   const same = draftsBy && draftsBy.model === now.model && draftsBy.turkish === now.turkish;
   $('draftsay').hidden = false;
@@ -710,6 +721,9 @@ function refresh() {
   $('nLeft').textContent = stats.total ? left : words.length;
   $('fill').style.width = stats.total ? (stats.done / stats.total * 100) + '%' : '0';
   $('save').disabled = !Object.keys(drafts).length;
+  /* Two numbers on one page that disagree are worse than one: this line says
+     how many cards are stored, so it moves when that number does. */
+  if ($('model').value) mindTheDrafts();
   /* Timed off requests rather than cards: a batch stuck on its third retry
      writes nothing, and an estimate that stops moving looks like a hang. */
   if (stats.req && stats.at && left) {
@@ -860,6 +874,9 @@ async function run(list, remember) {
       wallHit = 'Sağlayıcı arka arkaya ' + silent + ' gruba cevap vermedi.';
     }
     if (remember) keep();
+    if (storageFull) {
+      wallHit = 'Tarayıcı deposu doldu — yazılanlar artık kaydedilemiyor.';
+    }
     refresh();
   }
   running = false;
@@ -897,12 +914,22 @@ $('runAll').onclick = () => {
   run(words.filter(w => !drafts[sig(w)]), true);
 };
 $('stop').onclick = () => { stop = true; };
+/* Every draft in the browser, not the cards of the run just finished: the
+   drafts are one store that each run adds to, so the newest file always holds
+   everything the older ones did. Two downloads called the same thing, sitting
+   in the same folder, do not say that — so the name carries the count and the
+   day, and the page says it in words. */
 $('save').onclick = () => {
   const cards = Object.keys(drafts).map(k => drafts[k]);
   const blob = new Blob([JSON.stringify(cards, null, 1)], { type: 'application/json' });
+  const day = new Date().toISOString().slice(0, 10);
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob); a.download = 'drafted-cards.json';
+  a.href = URL.createObjectURL(blob);
+  a.download = 'lexio-b1-' + cards.length + '-kart-' + day + '.json';
   document.body.appendChild(a); a.click(); a.remove();
+  say('draftsay', cards.length + ' kart indirildi — bu dosya şimdiye kadar yazılan ' +
+      'her kartı içerir, sadece son turu değil. Eski dosyalara ihtiyacın yok.', 'good');
+  $('draftsay').hidden = false;
 };
 $('forget').onclick = () => {
   if (!confirm('Tarayıcıda saklanan taslaklar silinsin mi? Önce indirdiğinden emin ol.')) return;
