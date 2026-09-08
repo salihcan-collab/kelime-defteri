@@ -66,43 +66,6 @@ const FONTS = [
    -------------------------------------------------------------------------- */
 const STARTER_DECKS = [
   {
-    name: 'Everyday Essentials',
-    emoji: '☕',
-    description: 'High-frequency words for daily conversation, work and small talk (B1).',
-    cards: [
-      { term:'reliable', pos:'adjective', definition:'Able to be trusted to do what is expected or promised.', example:'She is the most reliable person on the team — she never misses a deadline.', translation:'güvenilir' },
-      { term:'rely', pos:'verb', definition:'To depend on someone or something to do what is needed.', example:'You can rely on her to finish the job on time.', translation:'güvenmek, bel bağlamak',
-        collocations:['rely on someone','rely heavily on'], related:[{kind:'family',text:'reliable'},{kind:'syn',text:'depend on'}] },
-      { term:'reliability', pos:'noun', definition:'How far something can be trusted to work every time.', example:'The reliability of the data was questioned.', translation:'güvenilirlik',
-        related:[{kind:'family',text:'reliable'}] },
-      { term:'reliably', pos:'adverb', definition:'In a way that can be trusted to happen every time.', example:'The train reliably arrives at seven.', translation:'güvenilir biçimde',
-        related:[{kind:'family',text:'reliable'}] },
-      { term:'afford', pos:'verb', definition:'To have enough money or time for something.', example:'We cannot afford a new car this year.', translation:'(parasal olarak) gücü yetmek' },
-      { term:'commute', pos:'noun', definition:'The regular journey between home and work.', example:'My commute takes about forty minutes each way.', translation:'işe gidiş-geliş yolculuğu' },
-      { term:'overwhelmed', pos:'adjective', definition:'Feeling unable to cope because there is too much to deal with.', example:'I felt completely overwhelmed by the number of emails.', translation:'bunalmış, altında ezilmiş' },
-      { term:'errand', pos:'noun', definition:'A short trip to do a small job, usually for someone else.', example:'I have a few errands to run before the shops close.', translation:'ufak iş, ayak işi' },
-      { term:'postpone', pos:'verb', definition:'To move an event to a later time.', example:'They decided to postpone the meeting until Friday.', translation:'ertelemek' },
-      { term:'straightforward', pos:'adjective', definition:'Easy to understand or do; not complicated.', example:'The instructions were straightforward, so it only took ten minutes.', translation:'anlaşılır, basit' },
-      { term:'appreciate', pos:'verb', definition:'To be grateful for something, or to recognise its value.', example:'I really appreciate everything you have done for me.', translation:'minnettar olmak, kıymetini bilmek' },
-      { term:'spare', pos:'adjective', definition:'Kept in case it is needed; extra.', example:'Keep a spare key with your neighbour.', translation:'yedek' },
-      { term:'chore', pos:'noun', definition:'A routine household task.', example:'We split the chores: he cooks and I do the dishes.', translation:'ev işi' },
-      { term:'crowded', pos:'adjective', definition:'Full of people, leaving little space.', example:'The train was so crowded that I had to stand.', translation:'kalabalık' },
-      { term:'borrow', pos:'verb', definition:'To take and use something belonging to someone else, intending to return it.', example:'Can I borrow your charger for a minute?', translation:'ödünç almak' },
-      { term:'deadline', pos:'noun', definition:'The latest time by which something must be finished.', example:'The deadline for the report is Monday morning.', translation:'son teslim tarihi' },
-      { term:'convenient', pos:'adjective', definition:'Useful because it suits your needs or saves trouble.', example:'Would three o’clock be convenient for you?', translation:'uygun, elverişli' },
-      { term:'complain', pos:'verb', definition:'To say that you are annoyed or unhappy about something.', example:'Several guests complained about the noise.', translation:'şikâyet etmek' },
-      { term:'exhausted', pos:'adjective', definition:'Extremely tired.', example:'After the flight I was completely exhausted.', translation:'bitkin, çok yorgun' },
-      { term:'neighbourhood', pos:'noun', definition:'The area of a town where you live and the people in it.', example:'They moved to a quieter neighbourhood near the park.', translation:'mahalle, semt' },
-      { term:'afford to', pos:'phrase', definition:'To be able to risk doing something without bad consequences.', example:'We cannot afford to lose another customer.', translation:'göze alabilmek' },
-      { term:'refund', pos:'noun', definition:'Money paid back to a customer.', example:'They gave me a full refund for the damaged bag.', translation:'para iadesi' },
-      { term:'reschedule', pos:'verb', definition:'To arrange a new time for something.', example:'Could we reschedule our call to tomorrow?', translation:'yeniden planlamak' },
-      { term:'grateful', pos:'adjective', definition:'Feeling thankful for something someone did.', example:'I am grateful for all the help you gave me last week.', translation:'minnettar' },
-      { term:'occasionally', pos:'adverb', definition:'Sometimes, but not often.', example:'We occasionally have dinner at that little Italian place.', translation:'ara sıra' },
-      { term:'struggle', pos:'verb', definition:'To try very hard to do something difficult.', example:'He struggled to explain the idea in English.', translation:'zorlanmak, mücadele etmek' },
-      { term:'worth it', pos:'phrase', definition:'Good enough to justify the money, time or effort spent.', example:'The tickets were expensive, but the concert was worth it.', translation:'değer, buna değer' }
-    ]
-  },
-  {
     name: 'Academic & Formal English',
     emoji: '🎓',
     description: 'Vocabulary for essays, reports, exams and professional writing (B2–C1).',
@@ -235,11 +198,8 @@ const STARTER_UPGRADES = {
      deck that is still there and does not already have the word. */
   additions: [
     { deck: 'Academic & Formal English', term: 'object' },
-    /* Three word families, each hung on a word the starter decks already had,
-       so an existing collection sees its own words gain a family. */
-    { deck: 'Everyday Essentials', term: 'rely' },
-    { deck: 'Everyday Essentials', term: 'reliability' },
-    { deck: 'Everyday Essentials', term: 'reliably' },
+    /* Word families hung on words the starter decks already had, so an
+       existing collection sees its own words gain a family. */
     { deck: 'Academic & Formal English', term: 'analyse' },
     { deck: 'Academic & Formal English', term: 'analysis' },
     { deck: 'Academic & Formal English', term: 'analytical' },

@@ -849,8 +849,8 @@ const head = (s) => console.log('\n— ' + s + ' —');
   const headingGaps = await page.evaluate(() => {
     session = null;
     Store.wipe();
-    const c = Store.state.cards.find(x => x.term === 'reliable');
-    c.collocations = ['a reliable friend'];
+    const c = Store.state.cards.find(x => x.term === 'significant');
+    c.collocations = ['a significant change'];
     Store.state.cards = [c].concat(Store.familyOf(c).filter(m => m.id).map(m => Store.card(m.id)));
     Store.saveNow();
     go('study', {});
@@ -884,21 +884,25 @@ const head = (s) => console.log('\n— ' + s + ' —');
       const c = Store.state.cards.find(x => Store.headKey(x.term) === t);
       return c ? Store.familyOf(c).map(m => m.term).sort() : null;
     };
+    const significant = of('significant');
+    /* A word that declares no family of its own is still found by the ones
+       that declare it: the link is read from either end. */
+    Store.state.cards.find(x => x.term === 'significant').related = [];
     return {
       analyse: of('analyse'),
       analytically: of('analytically'),      /* two hops from analysis */
-      reliable: of('reliable'),              /* never links out itself */
-      significant: of('significant'),
-      lonely: of('borrow')
+      significant: significant,
+      declaresNothing: of('significant'),
+      lonely: of('feasible')
     };
   });
   is(fam.analyse.join(',') === 'analysis,analytical,analytically',
      `analyse sees its whole family (${fam.analyse.join(', ')})`);
   is(fam.analytically.join(',') === 'analyse,analysis,analytical',
      'and every member sees the same family, whichever one you look at');
-  is(fam.reliable.join(',') === 'reliability,reliably,rely',
-     `a word that declares nothing still has its family (${fam.reliable.join(', ')})`);
   is(fam.significant.join(',') === 'significance,significantly', 'significant has its two forms');
+  is(fam.declaresNothing.join(',') === 'significance,significantly',
+     `a word that declares nothing still has its family (${fam.declaresNothing.join(', ')})`);
   is(fam.lonely.length === 0, 'a word with no family has none');
 
   /* Senses of one word are not family, and a family link survives a member
@@ -1781,7 +1785,16 @@ const head = (s) => console.log('\n— ' + s + ' —');
      is what the old "All decks" option meant, so the two must agree. */
   head('picking more than one deck');
   const picking = await page.evaluate(() => {
-    Store.wipe(); Store.saveNow();
+    Store.wipe();
+    /* Picking two of the two decks that ship is picking all of them, and this
+       is about picking some. A third of the learner's own makes the difference
+       visible without tying the test to how many decks the app happens to
+       ship today. */
+    const own = Store.addDeck({ name: 'Mine', emoji: '📓' }, true);
+    ['alpha', 'beta', 'gamma'].forEach(t => Store.addCard({
+      deckId: own.id, term: t, pos: 'noun', definition: 'A word of my own.',
+      example: 'This is my own ' + t + '.', translation: 'kendi sözüm' }, true));
+    Store.saveNow();
     const ids = Store.state.decks.map(d => d.id);
     const words = (list) => Store.cardsOf(list).map(c => c.id).sort();
     const two = [ids[0], ids[1]];
