@@ -1,6 +1,6 @@
 # Testler
 
-`regression.js`, uygulamayı gerçek bir tarayıcıda açıp 220 kontrol yapar.
+`regression.js`, uygulamayı gerçek bir tarayıcıda açıp 279 kontrol yapar.
 Buradaki her kontrol, bir zamanlar gerçekten bozuk olan bir şeyi koruyor:
 kodun içindeki yorumlar hangi hatanın nöbetini tuttuklarını anlatıyor.
 
@@ -21,7 +21,7 @@ node tests/regression.js
 Sonuç şöyle biter:
 
 ```
-220/220 checks passed
+279/279 checks passed
 ```
 
 Bir satır `✗` ile başlıyorsa o kontrol düşmüştür; komut da hata koduyla
@@ -66,3 +66,10 @@ nothing left behind
 | scroll architecture | Sayfanın aşağı inebilmesi ve yukarı dön düğmesi |
 | hints | İpucu açılınca kutunun boyunun değişmemesi |
 | persistence, backup and CSV | Yenilemede veri kaybı olmaması, yedek ve CSV gidiş-gelişi |
+| running out of room | Tarayıcı deposu dolunca kaydın sessizce durmaması |
+| word families | Bir kelimenin ailesini iki uçtan da bulabilmesi |
+| installing the shipped deck | B1 destesinin eklenmesi, senin düzenlediğin kartlara dokunmaması |
+| tags | Cambridge'in konu başlıklarının kartlarda durması ve elle değiştirilebilmesi |
+| picking more than one deck | Birden çok deste seçiminin havuzu, sırayı ve sayıları doğru daraltması |
+| upgrading a collection made before the change | Eski bir koleksiyonun düzeltmeleri alması, senin yazdıklarına dokunulmaması |
+| the italic switch | Tek tuşun sekiz yazı tipinin hepsini eğmesi |

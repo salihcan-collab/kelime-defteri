@@ -54,6 +54,20 @@ seçeneğiyle). Aynı dosyayı başka bir bilgisayarda içe aktararak ilerlemeni
 | **Progress** | Hatırlama oranı, 14 günlük geçmiş, gelecek 14 günün tahmini, aktivite haritası (1 ay – 1 yıl arası seçilebilir; yanında dönem istatistikleri), en çok zorlandığın kelimeler |
 | **Settings** | Tema, font, renk, çalışma kuralları, AI, veri yönetimi |
 
+### Hazır deste: B1 Preliminary
+
+Uygulama, Cambridge'in **B1 Preliminary** kelime listesini (Ağustos 2025) hazır bir deste
+olarak getirir: **3.353 kelime**, her biri tanım, örnek cümle, Türkçe karşılık ve
+Cambridge'in konu başlığıyla. **Decks** ekranındaki **🎓 B1 Preliminary** düğmesiyle
+koleksiyonuna eklenir. Kendi düzenlediğin kartlara dokunmaz; düğmeye ikinci kez basmak
+yalnızca eksik kalanları tamamlar.
+
+Bu kadar büyük bir deste tarayıcının deposunda yaklaşık 2.300 KB yer kaplar; tarayıcılar
+yaklaşık 5.000 KB verir. Bu yüzden deste eklendikten sonra uygulama tarayıcı içi günlük
+yedek kopyalarını tutmayı bırakır (koleksiyonun büyümeye yeri kalsın diye) ve bunu
+Settings'te yazar. **Yedeğini dosya olarak al** — zaten tarayıcı temizlendiğinde hayatta
+kalan tek yedek odur.
+
 ---
 
 ## 4. Aralıklı tekrar (spaced repetition) nasıl çalışır
@@ -524,11 +538,19 @@ son `.json` yedeğini geri yükle.
 ```
 index.html   arayüz iskeleti — açılacak dosya budur
 styles.css   tasarım, temalar, renkler
-data.js      başlangıç desteleri (66 kelime) ve tema/font listeleri
+data.js      başlangıç desteleri (56 kelime) ve tema/font listeleri
+deck-b1.js   Cambridge B1 Preliminary destesi — 3.353 kart
 srs.js       aralıklı tekrar algoritması
 storage.js   kaydetme, yedekleme, içe/dışa aktarma, istatistik hesapları
 ai.js        isteğe bağlı yapay zekâ katmanı
 app.js       ekranlar, çalışma seansı, test motoru
+
+sunucu.py            uygulamayı http://localhost:8000 üzerinden açan küçük sunucu
+sunucu-baslat.bat    aynısı, Windows'ta çift tıklamak için
+sunucu-baslat.command  aynısı, Mac'te
+
+tools/       desteyi kuran ve denetleyen araçlar — uygulamayı çalıştırmak için gerekmez
+tests/       tarayıcıda çalışan gerileme (regression) sınamaları
 ```
 
 Hiçbir dış kütüphane, derleme adımı veya paket kurulumu yoktur.

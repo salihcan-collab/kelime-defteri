@@ -1,14 +1,15 @@
 # Building the B1 Preliminary deck
 
-Three jobs live here: reading Cambridge's list out of its PDF, drafting the
-plain cards on your own computer with Ollama, and holding every card to the
-same rules whoever wrote it. None of it is needed to *run* Lexio — the app is
-still three script tags and no build step.
+Two jobs live here: reading Cambridge's list out of its PDF, and holding every
+card to the same rules whoever wrote it. A third — drafting the plain cards
+with a model — is finished and gone; what it was and what it taught is below.
+None of it is needed to *run* Lexio: the app is still three script tags and no
+build step.
 
 ## The word list
 
 `words.json` is the Cambridge *B1 Preliminary and Preliminary for Schools
-Vocabulary List* (August 2025) as 3,359 cards: the word, its part of speech,
+Vocabulary List* (August 2025) as 3,353 entries: the word, its part of speech,
 whichever bracket note Cambridge attached, and the examples it printed. It is
 already built, so you only need the Python scripts if you want to check the
 reading or rebuild it from a newer edition.
@@ -70,63 +71,43 @@ learner reads and copies, and this one would teach them to spell it wrong.
 Nothing else is corrected: a list that quietly disagrees with its source is
 worse than one that does so in a single line you can find.
 
-## Drafting the cards
+## How the cards were drafted
 
-410 of the cards are marked `byHand` — the phrasal verbs, the phrases, the
+404 of the cards are marked `byHand` — the phrasal verbs, the phrases, the
 exclamations, the plural nouns, the words carrying a British/American note, and
-the words split into several senses whose examples have to be told apart.
-Those are written by hand. The other 2,949 are ordinary nouns, verbs,
-adjectives and adverbs, drafted against an Ollama running on your own machine.
+the words split into several senses whose examples have to be told apart. Those
+were written by hand. The other 2,949 were drafted by a hosted model through a
+page in this folder, `uret.html`, and then held to the checks below.
 
-**`uret.html` is how** — a page like the app itself, needing nothing installed.
-Start the folder's own `sunucu-baslat` and open
-<http://localhost:8000/tools/uret.html>. (It has to be served: a page opened
-straight off the disk cannot read the word list beside it. That server sends
-everything with `Cache-Control: no-store`, so a page you have opened before
-still comes back the version you have now, not the one your browser kept.)
+That page has gone: the deck is written, and 3,352 of the 3,353 words are in
+it. It is in the history if a newer edition of the list ever needs the same
+treatment — `git log -- tools/uret.html` finds it. For a word or two at a time
+the app's own auto-fill does the same job inside the card editor, where the
+result can be read before it is kept.
 
-Try twenty words first and read what comes back. They are taken from across the
-alphabet rather than off the front, because the As are not the hard part.
+Two decisions it was built on are worth keeping, because they are what made the
+result usable:
 
-### Why the Turkish is not drafted
+**The Turkish was not drafted, at first.** Twenty calibration cards from
+qwen2.5:14b came back with English worth keeping — clean definitions, natural
+examples, real collocations — and Turkish that was wrong in seven of fifteen:
+`challenge` as *itiraf etmek* (to confess), `nowadays` as *şimdiki zaman* (the
+present tense), `roll` as *rol*, and `dağrita`, which is not a word in any
+language. None of that can be caught mechanically: they are plausible Turkish
+strings, and a learner meeting them on a card has no way of knowing. A larger
+hosted model later earned the job, and its translations went through the same
+checks as everything else — but the rule stands for whatever writes them next:
+the Turkish is trusted last.
 
-It was, at first. Twenty calibration cards from qwen2.5:14b came back with
-English worth keeping — clean definitions, natural examples, real collocations
-— and Turkish that was wrong in seven of fifteen: `challenge` as *itiraf etmek*
-(to confess), `nowadays` as *şimdiki zaman* (the present tense), `roll` as
-*rol*, and `dağrita`, which is not a word in any language.
-
-None of that can be caught mechanically. They are plausible Turkish strings, and
-a learner meeting them on a card has no way of knowing. So the model is asked
-for English only — where it is good, and where the checks have teeth — and the
-translations, three words a card against sixty, are written by hand afterwards.
-
-The model is never asked about tags and never told them. They were read out of
-Cambridge's appendix long before any of this, sit in `words.json` beside each
-word, and are put on the card as it is built — the model writes the English and
-nothing else.
-
-Nothing the model says is trusted. Every card goes through the same checks in
-`card-rules.js` that the deck itself is held to, and a card that fails is asked
-for again with the reason attached. A word that fails three times is left out
-and listed at the end. The page keeps what it has written after every batch, in the browser's own
-store, so a run survives a closed laptop and picks up where it left off rather
-than starting again. It never writes into `deck-b1.js`: it hands over
-`drafted-cards.json`, and folding that in is a separate, reviewed step.
-
-No batch ever carries two senses of one word. Answers are matched back by their
-term, and a model asked for `cook` twice writes it once — leaving no way to tell
-which of the two the answer belonged to. They meet later instead: a card is
-checked against every draft already written, and a noun that says the same
-thing as its own verb is sent back to be written again. What keeps them apart
-in the first place is that a verb's meaning begins with "To " and nothing
-else's does, which is asked for and checked.
+**Nothing a model said was trusted.** Every card went through the checks in
+`card-rules.js` that the deck itself is held to, and a card that failed was
+asked for again with the reason attached. The tags were never part of that:
+they were read out of Cambridge's appendix long before any of it, sit in
+`words.json` beside each word, and were put on the card as it was built.
 
 ## The rules
 
-`card-rules.js` holds them once — as the instructions a model is given, and as
-the checks its answer goes through. A rule asked for but not checked is a wish;
-a rule checked but never asked for is a trap.
+`card-rules.js` holds them and
 
     node tools/check-b1.js
 
