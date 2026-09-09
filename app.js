@@ -1024,17 +1024,66 @@ function renderDeckDetail(host, deck) {
     '</div>' +
     (deck.description ? '<p class="muted" style="margin-bottom:16px">' + esc(deck.description) + '</p>' : '') +
     (cards.length
-      ? '<div class="table-wrap">' + cardTable(cards) + '</div>'
+      ? pagedTable(cards, 'deck:' + deck.id)
       : '<div class="card"><div class="empty">' + ICONS.empty + '<h3>This deck is empty</h3>' +
         '<button class="primary-btn" data-act="add-card">' + ICONS.plus + 'Add the first word</button></div></div>');
+  listMoreLine();
 
   host.onclick = (e) => {
+    if (e.target.closest('[data-act="more"]')) return growList();
     if (e.target.closest('[data-act="back"]')) return go('decks', {});
     if (e.target.closest('[data-act="edit-deck"]')) return deckEditor(deck);
     if (e.target.closest('[data-act="add-card"]')) return cardEditor(null, deck.id);
     if (e.target.closest('[data-act="study"]')) return go('study', { deckId: deck.id });
     handleCardRowClick(e);
   };
+}
+
+/* How many rows go onto the page at once. A screen holds about thirty; a deck
+   holds thousands. The browser lays out every row it is given whether or not
+   anyone scrolls to it, and laying out three thousand costs a fifth of a
+   second before the first can be read — so a list gets a screenful and a bit,
+   and the rest as the reader goes down.
+
+   One long list is on the screen at a time — the words in a deck, or Browse —
+   so there is one of these. `key` says which list it is: a different deck or a
+   different search starts again at the top, while a redraw of the same one
+   after a word was edited keeps its length and leaves the reader where they
+   were. */
+const LIST_PAGE = 60;
+const listPage = { rows: [], shown: 0, key: '' };
+
+function pagedTable(rows, key) {
+  if (key !== listPage.key) { listPage.key = key; listPage.shown = 0; }
+  listPage.rows = rows;
+  listPage.shown = Math.min(Math.max(listPage.shown, LIST_PAGE), rows.length);
+  return '<div class="table-wrap">' + cardTable(rows.slice(0, listPage.shown)) + '</div>' +
+    '<div class="row" id="listMore" style="margin-top:10px;gap:12px;align-items:center"></div>';
+}
+
+/* Put the next page into the table already on the screen. Appending rather
+   than redrawing keeps the cost to the rows being added. */
+function growList() {
+  const rows = listPage.rows;
+  if (!rows || listPage.shown >= rows.length) return;
+  const body = document.querySelector('#view-' + currentView + ' tbody');
+  if (!body) return;
+  const next = rows.slice(listPage.shown, listPage.shown + LIST_PAGE);
+  body.insertAdjacentHTML('beforeend', cardRows(next));
+  listPage.shown += next.length;
+  listMoreLine();
+}
+
+/* What is left to show, said where the reader will be looking for it. */
+function listMoreLine() {
+  const el = document.getElementById('listMore');
+  if (!el) return;
+  const left = listPage.rows.length - listPage.shown;
+  el.hidden = !left;
+  if (left) el.innerHTML = '<span class="faint">' + listPage.shown + ' of ' +
+    listPage.rows.length + ' shown</span>' +
+    '<button class="soft-btn tiny" data-act="more">Show ' +
+    Math.min(LIST_PAGE, left) + ' more</button>';
 }
 
 function cardTable(cards) {
@@ -3749,40 +3798,7 @@ function drawQuizResults(host) {
 /* ==========================================================================
    Browse
    ========================================================================== */
-let browseState = { q: '', deck: '', status: '', pos: '', sort: 'recent', desc: false,
-                    rows: [], shown: 0, key: '' };
-/* How many rows go onto the page at once. A screen holds about thirty; the
-   collection holds thousands. The browser will lay out every row it is given
-   whether or not anyone scrolls to it, and laying out three thousand takes a
-   fifth of a second before the first one can be read — so it gets a screenful
-   and a bit, and the rest as the reader goes down. */
-const BROWSE_PAGE = 60;
-
-/* Put the next page of rows into the table already on the screen. Appending
-   rather than redrawing keeps the cost to the rows being added, and leaves
-   the reader where they were rather than at the top. */
-function growBrowse() {
-  const rows = browseState.rows;
-  if (!rows || browseState.shown >= rows.length) return;
-  const body = document.querySelector('#view-browse tbody');
-  if (!body) return;
-  const next = rows.slice(browseState.shown, browseState.shown + BROWSE_PAGE);
-  body.insertAdjacentHTML('beforeend', cardRows(next));
-  browseState.shown += next.length;
-  browseMoreLine();
-}
-
-/* What is left to show, said where the reader will be looking for it. */
-function browseMoreLine() {
-  const el = document.getElementById('bMore');
-  if (!el) return;
-  const left = browseState.rows.length - browseState.shown;
-  el.hidden = !left;
-  if (left) el.innerHTML = '<span class="faint">' + browseState.shown + ' of ' +
-    browseState.rows.length + ' shown</span>' +
-    '<button class="soft-btn tiny" data-act="more">Show ' +
-    Math.min(BROWSE_PAGE, left) + ' more</button>';
-}
+let browseState = { q: '', deck: '', status: '', pos: '', sort: 'recent', desc: false };
 
 /* Every way the table can be ordered, and which heading says so. A sort knows
    its own natural direction — newest first, A to Z — and the arrow on the
@@ -3815,14 +3831,8 @@ function renderBrowse(host) {
   rows.sort((BROWSE_SORTS[browseState.sort] || BROWSE_SORTS.recent).by);
   if (browseState.desc) rows.reverse();
 
-  /* Redrawn because a word was edited or deleted, the list is the same one
-     and the reader is still somewhere down it — so it keeps its length. A
-     different search or sort is a different list, and starts at the top. */
-  const key = [browseState.q, browseState.deck, browseState.status, browseState.pos,
-               browseState.sort, browseState.desc].join('\u0000');
-  if (key !== browseState.key) { browseState.key = key; browseState.shown = 0; }
-  browseState.rows = rows;
-  browseState.shown = Math.min(Math.max(browseState.shown, BROWSE_PAGE), rows.length);
+  const key = 'browse:' + [browseState.q, browseState.deck, browseState.status,
+    browseState.pos, browseState.sort, browseState.desc].join('\u0000');
 
   host.innerHTML =
     '<div class="toolbar">' +
@@ -3861,11 +3871,10 @@ function renderBrowse(host) {
     '</div>' +
     '<p class="faint" style="margin-bottom:10px">' + rows.length + ' of ' + Store.state.cards.length + ' words</p>' +
     (rows.length
-      ? '<div class="table-wrap">' + cardTable(rows.slice(0, browseState.shown)) + '</div>' +
-        '<div class="row" id="bMore" style="margin-top:10px;gap:12px;align-items:center"></div>'
+      ? pagedTable(rows, key)
       : '<div class="card"><div class="empty">' + ICONS.empty + '<h3>No words match</h3>' +
         '<p class="faint">Try a different search or filter.</p></div></div>');
-  browseMoreLine();
+  listMoreLine();
 
   host.onclick = (e) => {
     /* A heading sorts by its own column; the same heading again turns the
@@ -3877,7 +3886,7 @@ function renderBrowse(host) {
       else { browseState.sort = key; browseState.desc = false; }
       return render('browse');
     }
-    if (e.target.closest('[data-act="more"]')) return growBrowse();
+    if (e.target.closest('[data-act="more"]')) return growList();
     if (e.target.closest('[data-act="add"]')) return cardEditor(null, browseState.deck || null);
     if (e.target.closest('[data-act="import"]')) return importDialog();
     if (e.target.closest('[data-act="export"]')) {
@@ -4587,10 +4596,10 @@ function boot() {
   const sa = $('#scrollArea'), toTop = $('#toTop');
   sa.addEventListener('scroll', () => {
     toTop.classList.toggle('show', sa.scrollTop > 420);
-    /* Near the end of a long word list, the next page goes in before the
-       reader gets there, so scrolling never stops at a wall. */
-    if (currentView === 'browse' &&
-        sa.scrollHeight - sa.scrollTop - sa.clientHeight < 600) growBrowse();
+    /* Near the end of a long word list — Browse, or a deck's own words — the
+       next page goes in before the reader gets there, so scrolling never
+       stops at a wall. */
+    if (sa.scrollHeight - sa.scrollTop - sa.clientHeight < 600) growList();
   }, { passive: true });
   toTop.onclick = () => {
     /* focus() must come first and skip its own scroll, otherwise it aborts
