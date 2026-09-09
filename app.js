@@ -308,11 +308,7 @@ function cardExtras(card) {
   const family = familyList(card);
   const parts = [];
   if ((card.collocations || []).length) parts.push(['Collocations', collocationList(card)]);
-  /* Two groups need room to sit beside each other, and the narrow column of
-     this strip has none — so a Related block holding both kinds takes a row of
-     its own. One kind is a single group and needs no more than any other part. */
-  const bothKinds = rels.some(r => r.kind === 'syn') && rels.some(r => r.kind === 'ant');
-  if (rels.length) parts.push(['Related', relationChips(card), bothKinds ? 'fx-wide' : '']);
+  if (rels.length) parts.push(['Related', relationChips(card)]);
   if (family) parts.push(['Word family', family]);
   if (card.notes) parts.push(['Your note', '<p class="fx-note">' + esc(card.notes) + '</p>']);
   if (!parts.length) return '';
@@ -321,8 +317,7 @@ function cardExtras(card) {
      mid-card must not redraw the card you are looking at. */
   return '<div class="fc-extras' + (parts.length === 1 ? ' one' : '') +
     (Store.state.settings.showExtras === false ? ' off' : '') + '">' + parts.map(p =>
-    '<div class="fx' + (p[2] ? ' ' + p[2] : '') + '"><div class="fx-k">' + p[0] + '</div>' +
-    p[1] + '</div>').join('') + '</div>';
+    '<div class="fx"><div class="fx-k">' + p[0] + '</div>' + p[1] + '</div>').join('') + '</div>';
 }
 
 /* The rest of the family, each with the part of speech that tells it apart —
@@ -1534,9 +1529,23 @@ function cardEditor(card, presetDeck) {
 
       /* Which synonyms and antonyms point at words you actually have. */
       const showLinks = () => {
-        const draft = Object.assign({}, card || {},
-          { term: $('#cTerm').value.trim(), related: parseRelations($('#cSyn').value, $('#cAnt').value, $('#cFam').value) });
-        const rels = Store.relationsFor(draft);
+        /* Counted straight out of the two boxes, and nothing else. The boxes
+           already hold every relation the word has — the ones another card
+           declares included — so asking Store for them again added the stored
+           version of a word on top of the edited one: break "breeze" into
+           "bree" and the far card still pointed back, so three words in the
+           boxes were counted as four. What is on the screen is what is
+           counted. */
+        const mine = $('#cTerm').value.trim();
+        const seen = {}, rels = [];
+        [['syn', $('#cSyn').value], ['ant', $('#cAnt').value]].forEach(pair => {
+          splitList(pair[1]).forEach(text => {
+            const key = pair[0] + '|' + Store.headKey(text);
+            if (seen[key] || Store.headKey(text) === Store.headKey(mine)) return;
+            seen[key] = 1;
+            rels.push({ text: text, card: Store.cardByTerm(text, card && card.id) });
+          });
+        });
         const linked = rels.filter(r => r.card);
         const loose = rels.length - linked.length;
         /* What a link is, and what happens to the rest. The old line said "3 of

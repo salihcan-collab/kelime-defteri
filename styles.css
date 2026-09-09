@@ -1041,13 +1041,13 @@ kbd{
   color:var(--text-faint); margin-top:2px;
 }
 
-/* Words that mean the same on one side, words that mean the opposite on the
-   other. Each group takes half the room when there is room for two and drops
-   below the other when there is not — grouped either way, which is the point. */
-.rel-row{ display:flex; flex-wrap:wrap; gap:8px 24px; margin-top:8px; align-items:flex-start; }
+/* Words that mean the same in one group, words that mean the opposite in
+   another — never shuffled together. Side by side where there is room for two,
+   one above the other where there is not, which in this column is usually. */
+.rel-row{ display:flex; flex-wrap:wrap; gap:8px 20px; margin-top:8px; align-items:flex-start; }
 .rel-col{ display:flex; flex-wrap:wrap; gap:6px; align-content:flex-start;
           flex:1 1 180px; min-width:0; }
-.chip.rel{ background:transparent; gap:5px; }
+.chip.rel{ background:transparent; gap:3px; }
 /* The mark is a glyph in a box of its own, centred in it both ways: ≈ and ×
    sit at different heights in their own em, and a chip whose contents drift
    off centre looks like a mistake at this size. */
@@ -1064,12 +1064,9 @@ kbd{
    so three phrases and two related words do not become five stacked rows. */
 .fc-extras{
   display:grid; grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);
-  gap:15px 26px; align-items:start; grid-auto-flow:row dense;
+  gap:15px 26px; align-items:start;
   margin-top:4px; padding-top:15px; border-top:1px solid var(--border-soft);
 }
-/* A part that needs the whole width takes a row to itself; the shorter parts
-   fill the gap it leaves rather than following it down the card. */
-.fc-extras .fx-wide{ grid-column:1 / -1; }
 .fc-extras.one{ grid-template-columns:1fr; }
 .fc-extras.off{ display:none; }
 @media (max-width: 720px){ .fc-extras{ grid-template-columns:1fr; } }

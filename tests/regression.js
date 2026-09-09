@@ -897,8 +897,13 @@ const head = (s) => console.log('\n— ' + s + ' —');
       const k = fx.querySelector('.fx-k');
       const body = k.nextElementSibling;
       const line = body.querySelector('li, .fam, .chip') || body;
+      /* Whole pixels. A block on the second row of the strip starts at a
+         different fraction of a pixel from one on the first, so measured in
+         tenths two headings spaced identically read 5.8 and 5.9 — a rounding
+         of the row above, not a gap anyone can see. What this guards against
+         is a heading drifting away from its own content, which is pixels. */
       return { heading: k.textContent,
-               gap: Math.round((line.getBoundingClientRect().top - k.getBoundingClientRect().bottom) * 10) / 10 };
+               gap: Math.round(line.getBoundingClientRect().top - k.getBoundingClientRect().bottom) };
     });
   });
   is(headingGaps.length >= 2 && new Set(headingGaps.map(g => g.gap)).size === 1,
