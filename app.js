@@ -312,12 +312,24 @@ function cardExtras(card) {
   if (family) parts.push(['Word family', family]);
   if (card.notes) parts.push(['Your note', '<p class="fx-note">' + esc(card.notes) + '</p>']);
   if (!parts.length) return '';
-  /* One thing on its own gets the full width; two or three share columns.
+  /* Two stacks rather than a grid of rows. Related is the block that grows —
+     a word with a dozen synonyms and opposites makes it several rows tall —
+     and in a grid everything beside it waits for it, so Word family sat below
+     a hole the length of the chips. Stacked, each side is only as tall as its
+     own contents. A side with nothing in it is not built at all, and the one
+     that is left takes the whole width by itself.
+
      The strip is always built, and the switch only hides it — turning it off
      mid-card must not redraw the card you are looking at. */
-  return '<div class="fc-extras' + (parts.length === 1 ? ' one' : '') +
-    (Store.state.settings.showExtras === false ? ' off' : '') + '">' + parts.map(p =>
-    '<div class="fx"><div class="fx-k">' + p[0] + '</div>' + p[1] + '</div>').join('') + '</div>';
+  const stack = (cls, list) => list.length
+    ? '<div class="' + cls + '">' + list.map(p =>
+        '<div class="fx"><div class="fx-k">' + p[0] + '</div>' + p[1] + '</div>').join('') + '</div>'
+    : '';
+  return '<div class="fc-extras' +
+    (Store.state.settings.showExtras === false ? ' off' : '') + '">' +
+    stack('fx-main', parts.filter(p => p[0] !== 'Related')) +
+    stack('fx-side', parts.filter(p => p[0] === 'Related')) +
+    '</div>';
 }
 
 /* The rest of the family, each with the part of speech that tells it apart —
@@ -584,8 +596,12 @@ function heatmapHTML(weeks, withMonths) {
       const n = map[k] || 0;
       const lvl = n === 0 ? 0 : clamp(Math.ceil(4 * n / max), 1, 4);
       const future = cur > today;
-      cells += '<div class="hm-cell" data-lvl="' + (future ? 0 : lvl) + '" title="' + dmy(k) + ' · ' + n +
-               ' review' + (n === 1 ? '' : 's') + '"></div>';
+      /* Which square is now. Without it the eye counts columns from the right
+         to find where today's work sits among the weeks behind it. */
+      const isToday = k === todayKey();
+      cells += '<div class="hm-cell' + (isToday ? ' is-today' : '') +
+               '" data-lvl="' + (future ? 0 : lvl) + '" title="' + dmy(k) + ' · ' + n +
+               ' review' + (n === 1 ? '' : 's') + (isToday ? ' · today' : '') + '"></div>';
       cur.setDate(cur.getDate() + 1);
     }
     columns.push({ month: month, cells: cells });
@@ -4194,6 +4210,7 @@ function renderSettings(host) {
           '<input type="number" id="setRev" min="10" max="999" value="' + s.reviewPerDay + '">' +
           '<span class="help">A safety cap so a backlog never becomes overwhelming.</span></div>' +
       '</div>' +
+      '<div class="inline-fields">' +
       '<div class="field"><label>Question side</label><select id="setDir">' +
         [['term-first', 'Show the English word — recall what it means'],
          ['translation-first', 'Show the translation — recall the English word'],
@@ -4206,6 +4223,7 @@ function renderSettings(host) {
           (optionCount() === n ? 'sel' : '') + '">' + n + ' options</button>').join('') +
       '</div><span class="help">Applies to the multiple-choice drills and AI quizzes. ' +
       'How long a round is set on the Practice screen itself.</span></div>' +
+      '</div>' +
       '<label class="switch"><input type="checkbox" id="setEx"' + (s.showExampleOnFront ? ' checked' : '') + '>' +
         '<span class="track"></span><span class="txt">Show the example sentence on the front' +
         '<small>Seeing the word in context. When the word is what you have to recall, ' +

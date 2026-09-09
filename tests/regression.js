@@ -872,13 +872,23 @@ const head = (s) => console.log('\n— ' + s + ' —');
     return {
       main: [...v.querySelectorAll('.fc-block .k')].map(x => x.textContent),
       extras: [...v.querySelectorAll('.fx-k')].map(x => x.textContent),
-      columns: ex ? getComputedStyle(ex).gridTemplateColumns.split(' ').length : 0,
+      /* Two columns, asked of the layout rather than of one property: the
+         first block of each side starts at the same height and at a different
+         place across. */
+      columns: (() => {
+        const sides = ex ? [ex.querySelector('.fx-main .fx'), ex.querySelector('.fx-side .fx')] : [];
+        if (sides.length !== 2 || !sides[0] || !sides[1]) return 0;
+        const a = sides[0].getBoundingClientRect(), b = sides[1].getBoundingClientRect();
+        return Math.abs(a.top - b.top) < 2 && b.left > a.right ? 2 : 1;
+      })(),
       separated: ex ? getComputedStyle(ex).borderTopWidth : '0px'
     };
   });
   is(backShape.main.join(',') === 'Meaning,Example,Translation',
      `the answer is still three blocks (${backShape.main.join(', ')})`);
-  is(backShape.extras.join(',') === 'Collocations,Related,Your note',
+  /* Related is read last now: it lives in the second stack, and everything
+     that is not it in the first. */
+  is(backShape.extras.join(',') === 'Collocations,Your note,Related',
      `everything else moves below into one strip (${backShape.extras.join(', ')})`);
   is(backShape.columns === 2, 'that strip uses two columns rather than stacking');
   is(backShape.separated !== '0px', 'and is separated from the answer by a rule');

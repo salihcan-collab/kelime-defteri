@@ -327,7 +327,7 @@ button:disabled{ opacity:.45; cursor:not-allowed; transform:none !important; }
 }
 /* Shows what it does: the word leans whether or not the switch is on. */
 .italic-opt{
-  align-self:flex-start; margin-top:9px; font-style:italic; padding:7px 15px;
+  align-self:flex-start; margin-top:9px; font-style:italic; padding:7px 15px; cursor:pointer;
   border-radius:10px; background:var(--surface-2); color:var(--text-dim);
   border:1px solid var(--border-soft); font-size:.82rem; font-weight:600;
 }
@@ -885,6 +885,9 @@ input[type=range]::-moz-range-thumb{
 .hm-cell[data-lvl="3"]{ background:color-mix(in srgb,var(--accent) 74%, var(--surface-2)); }
 .hm-cell[data-lvl="4"]{ background:var(--accent); }
 .hm-cell:hover{ outline:2px solid var(--text-dim); outline-offset:1px; }
+/* Today, so the eye lands on it rather than counting columns back from the
+   right. Darker than the hover ring, which is passing and this is not. */
+.hm-cell.is-today{ outline:2px solid var(--text); outline-offset:1px; }
 .hm-legend{ display:flex; align-items:center; gap:5px; font-size:.72rem; color:var(--text-faint); }
 
 .chart{ display:flex; align-items:stretch; gap:5px; height:150px; padding-top:8px; }
@@ -1062,14 +1065,18 @@ kbd{
 
 /* The quieter half of the card back: one hairline, smaller type, and columns
    so three phrases and two related words do not become five stacked rows. */
+/* Two stacks side by side, not a grid of rows: a grid row is as tall as its
+   tallest cell, so a long list of related words held everything beside it down
+   the card and left a hole under the shorter side. */
 .fc-extras{
-  display:grid; grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);
-  gap:15px 26px; align-items:start;
+  display:flex; align-items:flex-start; gap:26px;
   margin-top:4px; padding-top:15px; border-top:1px solid var(--border-soft);
 }
-.fc-extras.one{ grid-template-columns:1fr; }
+.fx-main, .fx-side{ display:flex; flex-direction:column; gap:15px; min-width:0; }
+.fx-main{ flex:1.5; }
+.fx-side{ flex:1; }
 .fc-extras.off{ display:none; }
-@media (max-width: 720px){ .fc-extras{ grid-template-columns:1fr; } }
+@media (max-width: 720px){ .fc-extras{ flex-direction:column; gap:15px; } }
 .fx-k{
   font-size:.64rem; text-transform:uppercase; letter-spacing:.09em;
   color:var(--text-faint); font-weight:700; margin-bottom:6px;
