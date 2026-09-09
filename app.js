@@ -1050,21 +1050,25 @@ function cardTable(cards) {
     '<th class="col-meaning">Meaning</th><th class="col-translation">Translation</th>' +
     head('col-level', 'Level', 'strong') + head('col-next', 'Next review', 'due') +
     '<th class="col-actions"></th>' +
-    '</tr></thead><tbody>' +
-    cards.map(c =>
-      '<tr data-card="' + c.id + '">' +
-        '<td class="term col-word">' + esc(c.term) + senseSub(c) + '</td>' +
-        '<td class="col-type">' + (c.pos ? '<span class="chip pos">' + esc(c.pos) + '</span>' : '') + '</td>' +
-        '<td class="muted col-meaning"><span class="clamp2">' + esc(c.definition || '') + '</span></td>' +
-        '<td class="col-translation"><span class="clamp2">' + esc(c.translation) + '</span></td>' +
-        '<td class="col-level">' + levelChip(c) + '</td>' +
-        '<td class="col-next">' + dueCell(c) + '</td>' +
-        '<td class="col-actions"><div class="tr-actions">' +
-          '<button class="icon-btn" data-edit="' + c.id + '" title="Edit">' + ICONS.edit + '</button>' +
-          '<button class="icon-btn" data-del="' + c.id + '" title="Delete">' + ICONS.trash + '</button>' +
-        '</div></td>' +
-      '</tr>').join('') +
-    '</tbody></table>';
+    '</tr></thead><tbody>' + cardRows(cards) + '</tbody></table>';
+}
+
+/* The rows on their own, so a page of them can be added to a table already on
+   the screen without building the whole thing again. */
+function cardRows(cards) {
+  return cards.map(c =>
+    '<tr data-card="' + c.id + '">' +
+      '<td class="term col-word">' + esc(c.term) + senseSub(c) + '</td>' +
+      '<td class="col-type">' + (c.pos ? '<span class="chip pos">' + esc(c.pos) + '</span>' : '') + '</td>' +
+      '<td class="muted col-meaning"><span class="clamp2">' + esc(c.definition || '') + '</span></td>' +
+      '<td class="col-translation"><span class="clamp2">' + esc(c.translation) + '</span></td>' +
+      '<td class="col-level">' + levelChip(c) + '</td>' +
+      '<td class="col-next">' + dueCell(c) + '</td>' +
+      '<td class="col-actions"><div class="tr-actions">' +
+        '<button class="icon-btn" data-edit="' + c.id + '" title="Edit">' + ICONS.edit + '</button>' +
+        '<button class="icon-btn" data-del="' + c.id + '" title="Delete">' + ICONS.trash + '</button>' +
+      '</div></td>' +
+    '</tr>').join('');
 }
 
 function handleCardRowClick(e) {
@@ -3745,7 +3749,40 @@ function drawQuizResults(host) {
 /* ==========================================================================
    Browse
    ========================================================================== */
-let browseState = { q: '', deck: '', status: '', pos: '', sort: 'recent', desc: false };
+let browseState = { q: '', deck: '', status: '', pos: '', sort: 'recent', desc: false,
+                    rows: [], shown: 0, key: '' };
+/* How many rows go onto the page at once. A screen holds about thirty; the
+   collection holds thousands. The browser will lay out every row it is given
+   whether or not anyone scrolls to it, and laying out three thousand takes a
+   fifth of a second before the first one can be read — so it gets a screenful
+   and a bit, and the rest as the reader goes down. */
+const BROWSE_PAGE = 60;
+
+/* Put the next page of rows into the table already on the screen. Appending
+   rather than redrawing keeps the cost to the rows being added, and leaves
+   the reader where they were rather than at the top. */
+function growBrowse() {
+  const rows = browseState.rows;
+  if (!rows || browseState.shown >= rows.length) return;
+  const body = document.querySelector('#view-browse tbody');
+  if (!body) return;
+  const next = rows.slice(browseState.shown, browseState.shown + BROWSE_PAGE);
+  body.insertAdjacentHTML('beforeend', cardRows(next));
+  browseState.shown += next.length;
+  browseMoreLine();
+}
+
+/* What is left to show, said where the reader will be looking for it. */
+function browseMoreLine() {
+  const el = document.getElementById('bMore');
+  if (!el) return;
+  const left = browseState.rows.length - browseState.shown;
+  el.hidden = !left;
+  if (left) el.innerHTML = '<span class="faint">' + browseState.shown + ' of ' +
+    browseState.rows.length + ' shown</span>' +
+    '<button class="soft-btn tiny" data-act="more">Show ' +
+    Math.min(BROWSE_PAGE, left) + ' more</button>';
+}
 
 /* Every way the table can be ordered, and which heading says so. A sort knows
    its own natural direction — newest first, A to Z — and the arrow on the
@@ -3777,6 +3814,15 @@ function renderBrowse(host) {
   if (browseState.pos) rows = rows.filter(c => (c.pos || '') === browseState.pos);
   rows.sort((BROWSE_SORTS[browseState.sort] || BROWSE_SORTS.recent).by);
   if (browseState.desc) rows.reverse();
+
+  /* Redrawn because a word was edited or deleted, the list is the same one
+     and the reader is still somewhere down it — so it keeps its length. A
+     different search or sort is a different list, and starts at the top. */
+  const key = [browseState.q, browseState.deck, browseState.status, browseState.pos,
+               browseState.sort, browseState.desc].join('\u0000');
+  if (key !== browseState.key) { browseState.key = key; browseState.shown = 0; }
+  browseState.rows = rows;
+  browseState.shown = Math.min(Math.max(browseState.shown, BROWSE_PAGE), rows.length);
 
   host.innerHTML =
     '<div class="toolbar">' +
@@ -3815,10 +3861,11 @@ function renderBrowse(host) {
     '</div>' +
     '<p class="faint" style="margin-bottom:10px">' + rows.length + ' of ' + Store.state.cards.length + ' words</p>' +
     (rows.length
-      ? '<div class="table-wrap">' + cardTable(rows.slice(0, 500)) + '</div>' +
-        (rows.length > 500 ? '<p class="faint" style="margin-top:10px">Showing the first 500 — narrow the search to see more.</p>' : '')
+      ? '<div class="table-wrap">' + cardTable(rows.slice(0, browseState.shown)) + '</div>' +
+        '<div class="row" id="bMore" style="margin-top:10px;gap:12px;align-items:center"></div>'
       : '<div class="card"><div class="empty">' + ICONS.empty + '<h3>No words match</h3>' +
         '<p class="faint">Try a different search or filter.</p></div></div>');
+  browseMoreLine();
 
   host.onclick = (e) => {
     /* A heading sorts by its own column; the same heading again turns the
@@ -3830,6 +3877,7 @@ function renderBrowse(host) {
       else { browseState.sort = key; browseState.desc = false; }
       return render('browse');
     }
+    if (e.target.closest('[data-act="more"]')) return growBrowse();
     if (e.target.closest('[data-act="add"]')) return cardEditor(null, browseState.deck || null);
     if (e.target.closest('[data-act="import"]')) return importDialog();
     if (e.target.closest('[data-act="export"]')) {
@@ -4539,6 +4587,10 @@ function boot() {
   const sa = $('#scrollArea'), toTop = $('#toTop');
   sa.addEventListener('scroll', () => {
     toTop.classList.toggle('show', sa.scrollTop > 420);
+    /* Near the end of a long word list, the next page goes in before the
+       reader gets there, so scrolling never stops at a wall. */
+    if (currentView === 'browse' &&
+        sa.scrollHeight - sa.scrollTop - sa.clientHeight < 600) growBrowse();
   }, { passive: true });
   toTop.onclick = () => {
     /* focus() must come first and skip its own scroll, otherwise it aborts
