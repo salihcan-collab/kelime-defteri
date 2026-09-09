@@ -628,6 +628,13 @@ input[type=range]::-moz-range-thumb{
 /* The button stays put and the answer beside it keeps its space, so revealing
    one row never moves the next. */
 .review-reveal{ display:flex; align-items:center; gap:12px; margin-top:8px; }
+/* A marked sentence is several lines, not one — the button belongs at the top
+   of them rather than halfway down. */
+.review-reveal.stacked{ align-items:flex-start; }
+.review-write{ display:grid; gap:7px; font-size:.92rem; line-height:1.55; }
+.review-write .wrote{ color:var(--text); }
+.review-write .wrote.missed{ color:var(--bad); text-decoration:line-through; opacity:.8; }
+.review-write .faint{ font-size:.86rem; }
 /* "Show" and "Hide" are different widths, and the options sit on the same
    line — so the button is given one width and keeps it. */
 /* "Show" and "Hide" are different widths, and the options sit on the same
@@ -1084,7 +1091,14 @@ kbd{
 .fx-note{ margin:0; font-size:.88rem; color:var(--text-dim); line-height:1.55; }
 .fc-extras .colloc{ margin-top:0; }
 .fc-extras .colloc li{ font-size:.88rem; }
-.fc-extras .rel-row{ margin-top:0; }
+/* Up by the chip's own top inset. Every block in the strip starts its box the
+   same 6px below its heading, but a chip puts a border and 3px of padding in
+   front of its text, so the related words began 3px lower than the
+   collocations, the family and the note. Measured, not guessed: 3px is exact
+   in the typeface the app starts in, and inside a pixel in the other seven —
+   the chip's line is a smaller size than the lines it is being matched to, so
+   no single number is exact for every font. */
+.fc-extras .rel-row{ margin-top:-3px; }
 
 .colloc{ list-style:none; margin:8px 0 0; padding:0; display:grid; gap:4px; }
 .colloc li{

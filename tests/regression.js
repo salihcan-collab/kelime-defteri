@@ -903,17 +903,33 @@ const head = (s) => console.log('\n— ' + s + ' —');
     go('study', {});
     startSession(null, false);
     revealCard();
+    /* Where the letters start, not where the box does. A chip carries a border
+       and padding in front of its text, so boxes level with each other put the
+       related words lower than everything else — the strip sets that right by
+       lifting the chips, which means the boxes are deliberately not level and
+       measuring them would now assert the opposite of the rule.
+
+       Whole pixels: a block on the second row of the strip starts at a
+       different fraction of a pixel from one on the first, so in tenths two
+       headings spaced identically read 5.8 and 5.9 — a rounding of the row
+       above, not a gap anyone can see. */
+    const inkTop = (el) => {
+      const walk = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+      let best = Infinity, n;
+      while ((n = walk.nextNode())) {
+        if (!n.textContent.trim()) continue;
+        const rg = document.createRange(); rg.selectNodeContents(n);
+        const t = rg.getBoundingClientRect().top;
+        if (t && t < best) best = t;
+      }
+      return best;
+    };
     return [...document.querySelectorAll('#view-study .fx')].map(fx => {
       const k = fx.querySelector('.fx-k');
       const body = k.nextElementSibling;
       const line = body.querySelector('li, .fam, .chip') || body;
-      /* Whole pixels. A block on the second row of the strip starts at a
-         different fraction of a pixel from one on the first, so measured in
-         tenths two headings spaced identically read 5.8 and 5.9 — a rounding
-         of the row above, not a gap anyone can see. What this guards against
-         is a heading drifting away from its own content, which is pixels. */
       return { heading: k.textContent,
-               gap: Math.round(line.getBoundingClientRect().top - k.getBoundingClientRect().bottom) };
+               gap: Math.round(inkTop(line) - inkTop(k) - k.getBoundingClientRect().height) };
     });
   });
   is(headingGaps.length >= 2 && new Set(headingGaps.map(g => g.gap)).size === 1,

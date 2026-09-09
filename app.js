@@ -3216,6 +3216,11 @@ async function gradeWriting(item) {
 function recordAnswer(item, ok, given, close, extra) {
   quiz.state = 'answered';
   item.given = given; item.ok = ok;      /* kept for the review afterwards */
+  /* And what the marker said about it. lastResult is one slot, overwritten by
+     the next question, so anything left only there is gone by the time the
+     round is packed up — which is why a writing review used to have nothing to
+     show but the sentence you wrote. */
+  if (extra) item.marked = extra;
   quiz.lastResult = Object.assign({ ok: ok, close: close }, extra || {});
   if (ok) quiz.correct++;
   quiz.results.push({ card: item.card, ok: ok, given: given, answer: item.answer || (item.card && item.card.term) });
@@ -3643,8 +3648,14 @@ function packReview() {
                    given: solved || misses ? '' : null });
       });
     } else if (it.type === 'write') {
-      out.push({ kind: 'q', term: term, q: 'Write a sentence using "' + term + '"',
-                 answer: '', given: it.given == null ? null : String(it.given), ok: !!it.ok });
+      /* There is no one right sentence to compare against — what there is is
+         what the coach said, so that is what the review keeps. */
+      const m = it.marked || {};
+      out.push({ kind: 'write', term: term, q: 'Write a sentence using "' + term + '"',
+                 given: it.given == null ? null : String(it.given), ok: !!it.ok,
+                 corrected: m.corrected || '',
+                 /* the marker calls it aiFeedback; the round has no other kind */
+                 feedback: m.aiFeedback || m.feedback || '', note: m.note || '' });
     } else {
       out.push({ kind: 'q', term: term, q: it.cloze || it.prompt || it.question || term,
                  answer: it.answer || term, options: it.options || null,
@@ -3687,7 +3698,8 @@ function reviewRound(entry) {
      is: a question is worth trying again one at a time, and a control that
      disappears when used takes the line under it with it. */
   const showBtn = '<button class="hint-btn review-show" data-show>Hide</button>';
-  const reveal = (inner) => '<div class="review-reveal">' + showBtn + (inner || '') + '</div>';
+  const reveal = (inner, cls) => '<div class="review-reveal' + (cls ? ' ' + cls : '') + '">' +
+    showBtn + (inner || '') + '</div>';
 
   const body = head + '<div class="review-list" id="reviewList">' +
     (entry.review || []).map(r => {
@@ -3704,6 +3716,24 @@ function reviewRound(entry) {
               '<span class="cwm-given">' + esc(given) + '</span>' +
               '<span class="cwm-answer">' + esc(c.letter) + '</span></div>';
           }).join('') + '</div>' + reveal('') + '</div>';
+      }
+      /* A sentence you wrote has no right answer to be set beside it — it had a
+         marker instead. Struck through and then repeated, which is what the
+         generic row did with an empty answer, told you nothing at all: the
+         same words twice, one of them in red. */
+      if (r.kind === 'write') {
+        const said = [r.feedback, r.note].filter(Boolean);
+        return '<div class="review-row shown">' +
+          '<div class="review-q">' + esc(r.q) + '</div>' +
+          reveal(r.given == null
+            ? '<span class="review-given">not reached</span>'
+            : '<div class="review-a review-write">' +
+                '<div class="wrote' + (r.ok ? '' : ' missed') + '">' + esc(r.given) + '</div>' +
+                (r.corrected && normalize(r.corrected) !== normalize(r.given)
+                  ? '<div class="fc-example">' + esc(r.corrected) + '</div>' : '') +
+                said.map((t, i) => '<div class="' + (i ? 'faint' : '') + '">' + esc(t) + '</div>').join('') +
+              '</div>', 'stacked') +
+          '</div>';
       }
       if (r.kind === 'passage')
         return '<div class="review-row shown"><p class="passage">' +
@@ -3730,8 +3760,14 @@ function reviewRound(entry) {
         (opts
           ? '<div class="review-opts">' + showBtn + choices(r) + notReached + '</div>'
           : reveal(notReached + '<span class="review-a">' +
-              (missed ? '<s>' + esc(r.given) + '</s>' : '') +
-              (r.answer ? '<b>' + esc(r.answer) + '</b>' : esc(r.given || '')) + '</span>')) +
+              /* Struck through means "not this — that". With no answer to put
+                 beside it there is no "that", and printing the same words
+                 again in black said nothing twice. Older rounds recorded
+                 writing this way, before it had a shape of its own. */
+              (r.answer
+                ? (missed ? '<s>' + esc(r.given) + '</s>' : '') + '<b>' + esc(r.answer) + '</b>'
+                : missed ? '<s>' + esc(r.given || '') + '</s>' : esc(r.given || '')) +
+            '</span>')) +
         '</div>';
     }).join('') + '</div>';
 
