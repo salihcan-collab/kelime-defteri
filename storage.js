@@ -443,9 +443,11 @@ const Store = {
     return this.state.cards.find(c => c.id !== exceptId && this.headKey(c.term) === key) || null;
   },
 
-  /* Relations are written on one word but true of both, so a word shows the
-     links it declares and the links other words declare about it. Nothing is
-     stored twice, and deleting a word cannot leave a broken reference. */
+  /* Every relation a word has: the links it declares, and the links other
+     words declare about it. linkBothWays keeps a hand-edited pair written at
+     both ends, but this still reads both directions — the shipped deck's links
+     are one-sided until someone edits the card, and a word deleted from under
+     a link leaves plain text rather than a broken reference. */
   relationsFor(card) {
     if (!card) return [];
     const out = [];
@@ -467,6 +469,48 @@ const Store = {
       });
     });
     return out;
+  },
+
+  /* A relation is one thing with two ends. It used to be written on whichever
+     word you happened to be editing and read from both — nothing stored twice,
+     but the other word's own form never showed it, so a link made from one end
+     looked lost from the other.
+
+     Now the edited card's list is the list, and the other card is brought into
+     step with it: a link added here is added there, a link removed here is
+     removed there. Only words that exist are touched — a synonym you have not
+     added yet has no card to write to and stays plain text, as it always did.
+
+     Family mirrors one hop and no further. familyOf already follows the set
+     transitively, so writing every member onto every other would store the
+     same family a dozen times over to say what one link already says. */
+  linkBothWays(card, before, after) {
+    const list = (rels, kind) => (rels || []).filter(r => r.kind === kind && r.text);
+    const has = (rels, kind, text) => list(rels, kind)
+      .some(r => this.headKey(r.text) === this.headKey(text));
+    let touched = 0;
+    ['syn', 'ant', 'family'].forEach(kind => {
+      const both = {};
+      list(before, kind).forEach(r => { both[this.headKey(r.text)] = r.text; });
+      list(after, kind).forEach(r => { both[this.headKey(r.text)] = r.text; });
+      Object.keys(both).forEach(key => {
+        const text = both[key];
+        const other = this.cardByTerm(text, card.id);
+        if (!other) return;                      /* not a word you have: plain text */
+        const wanted = has(after, kind, text);
+        const mirrored = has(other.related, kind, card.term);
+        if (wanted && !mirrored) {
+          other.related = (other.related || []).concat({ kind: kind, text: card.term });
+          other.updatedAt = Date.now(); touched++;
+        } else if (!wanted && mirrored) {
+          other.related = (other.related || []).filter(r =>
+            !(r.kind === kind && this.headKey(r.text) === this.headKey(card.term)));
+          other.updatedAt = Date.now(); touched++;
+        }
+      });
+    });
+    if (touched) this.save();
+    return touched;
   },
 
   /* A word family — analyse, analysis, analytical, analytically — is the set of

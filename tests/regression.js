@@ -591,18 +591,55 @@ const head = (s) => console.log('\n— ' + s + ' —');
                               related: [{ kind: 'syn', text: 'zzzsecond' }] }, true);
     const b = Store.addCard({ term: 'zzzsecond', pos: 'noun', definition: 'two', deckId: deck }, true);
     const forward = Store.relationsFor(a);
+    /* A link written on one card only — as the shipped deck's are — is still
+       read from the other end. Pairing them up is the editor's job, not
+       addCard's: installing three thousand cards must not walk the collection
+       once per card. */
     const backward = Store.relationsFor(b);
+    const storedOnB = (b.related || []).length;
     Store.deleteCard(b.id);
     const afterDelete = Store.relationsFor(a);
     return {
       forwardLinked: forward.some(r => r.text === 'zzzsecond' && r.card && r.card.id === b.id),
       backLinked: backward.some(r => r.text === 'zzzfirst' && r.card && r.card.id === a.id),
+      storedOnB: storedOnB,
       survives: afterDelete.some(r => r.text === 'zzzsecond' && !r.card)
     };
   });
   is(twoWay.forwardLinked, 'a synonym you already have becomes a link');
-  is(twoWay.backLinked, 'the other word shows the same link back, without storing it twice');
+  is(twoWay.backLinked && twoWay.storedOnB === 0,
+     'a link written on one card only is still read from the other end');
   is(twoWay.survives, 'deleting the other word leaves plain text, never a broken link');
+
+  /* Edited by hand, a relation is written at both ends, so the other word's own
+     form shows it — and removing it from either end removes the pair. */
+  const paired = await page.evaluate(() => {
+    Store.wipe();
+    const deck = Store.state.decks[0].id;
+    const a = Store.addCard({ term: 'zzzleft', pos: 'noun', definition: 'one', deckId: deck }, true);
+    const b = Store.addCard({ term: 'zzzright', pos: 'noun', definition: 'two', deckId: deck }, true);
+    const synOf = (card) => (Store.card(card.id).related || [])
+      .filter(r => r.kind === 'syn').map(r => r.text);
+    Store.updateCard(a.id, { related: [{ kind: 'syn', text: 'zzzright' }] });
+    Store.linkBothWays(Store.card(a.id), [], [{ kind: 'syn', text: 'zzzright' }]);
+    const written = { a: synOf(a), b: synOf(b) };
+    /* now taken away from the far end */
+    const wasB = Store.card(b.id).related.slice();
+    Store.updateCard(b.id, { related: [] });
+    Store.linkBothWays(Store.card(b.id), wasB, []);
+    return { written: written, a: synOf(a), b: synOf(b),
+             stranger: (() => {
+               Store.updateCard(a.id, { related: [{ kind: 'syn', text: 'zzznotaword' }] });
+               Store.linkBothWays(Store.card(a.id), [], [{ kind: 'syn', text: 'zzznotaword' }]);
+               return synOf(a);
+             })() };
+  });
+  is(paired.written.a.join() === 'zzzright' && paired.written.b.join() === 'zzzleft',
+     'a relation edited by hand is written on both cards');
+  is(!paired.a.length && !paired.b.length,
+     'and taking it off either card takes it off both');
+  is(paired.stranger.join() === 'zzznotaword',
+     'a word you have not added has no card to write to, so it stays plain text');
 
   /* ------------------------------------------------------------------ *
      8d. Bringing an older collection up to date.

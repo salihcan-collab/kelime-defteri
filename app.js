@@ -218,8 +218,33 @@ function isDueNow(card) { return card.srs.state !== 'new' && SRS.isDue(card.srs)
 function splitLines(v) { return String(v || '').split('\n').map(x => x.trim()).filter(Boolean); }
 function splitList(v)  { return String(v || '').split(/[,;]/).map(x => x.trim()).filter(Boolean); }
 
+/* What goes in the Synonyms / Antonyms / Word family boxes: every relation the
+   word has, including the ones another card declares about it. Those are as
+   real as the card's own — the study card has always shown them — and leaving
+   them out of the form is what made a link made from the other end look lost.
+
+   Family is gathered one hop out rather than through familyOf, which follows
+   the whole set: the box asks which members this word is linked to, and its
+   own help says one is enough. */
 function relText(card, kind) {
-  return (card.related || []).filter(r => r.kind === kind).map(r => r.text).join(', ');
+  if (!card) return '';
+  if (kind !== 'family') {
+    return Store.relationsFor(card).filter(r => r.kind === kind).map(r => r.text).join(', ');
+  }
+  const seen = {}, out = [];
+  const add = (t) => {
+    const k = Store.headKey(t);
+    if (!t || seen[k] || k === Store.headKey(card.term)) return;
+    seen[k] = 1; out.push(t);
+  };
+  (card.related || []).forEach(r => { if (r.kind === 'family') add(r.text); });
+  Store.state.cards.forEach(other => {
+    if (other.id === card.id) return;
+    (other.related || []).forEach(r => {
+      if (r.kind === 'family' && Store.headKey(r.text) === Store.headKey(card.term)) add(other.term);
+    });
+  });
+  return out.join(', ');
 }
 function parseRelations(synValue, antValue, familyValue) {
   return splitList(synValue).map(t => ({ kind: 'syn', text: t }))
@@ -252,12 +277,26 @@ function relationChips(card) {
   /* A solid chip is a word you have saved; a dashed one is a word you have
      only written down. Neither is clickable — following a link mid-session
      would throw you out of the session you are in. */
-  return '<div class="rel-row">' + rels.map(r =>
+  /* Grouped, never interleaved: words that mean the same on one side, words
+     that mean the opposite on the other. Mixed in one row they had to be read
+     mark by mark. No headings — the ≈ and the × and their colours say which
+     side is which, and the back of the card stays quiet. */
+  const chip = (r) =>
     '<span class="chip rel ' + r.kind + (r.card ? ' known' : '') + '"' +
       ' title="' + esc(REL_LABEL[r.kind] || r.kind) +
       (r.card ? ' — saved in your collection' : ' — not saved as a word yet') + '">' +
       '<i class="mark">' + (REL_MARK[r.kind] || '') + '</i>' + esc(r.text) +
-    '</span>').join('') + '</div>';
+    '</span>';
+  const group = (kind) => {
+    const some = rels.filter(r => r.kind === kind);
+    return some.length ? '<div class="rel-col">' + some.map(chip).join('') + '</div>' : '';
+  };
+  /* Anything that is neither — there is no third kind today, but a chip that
+     quietly vanished would be worse than one in the wrong column. */
+  const rest = rels.filter(r => r.kind !== 'syn' && r.kind !== 'ant');
+  return '<div class="rel-row">' + group('syn') + group('ant') +
+    (rest.length ? '<div class="rel-col">' + rest.map(chip).join('') + '</div>' : '') +
+    '</div>';
 }
 
 /* Everything below the answer itself — the phrases the word lives in, the words
@@ -269,7 +308,11 @@ function cardExtras(card) {
   const family = familyList(card);
   const parts = [];
   if ((card.collocations || []).length) parts.push(['Collocations', collocationList(card)]);
-  if (rels.length) parts.push(['Related', relationChips(card)]);
+  /* Two groups need room to sit beside each other, and the narrow column of
+     this strip has none — so a Related block holding both kinds takes a row of
+     its own. One kind is a single group and needs no more than any other part. */
+  const bothKinds = rels.some(r => r.kind === 'syn') && rels.some(r => r.kind === 'ant');
+  if (rels.length) parts.push(['Related', relationChips(card), bothKinds ? 'fx-wide' : '']);
   if (family) parts.push(['Word family', family]);
   if (card.notes) parts.push(['Your note', '<p class="fx-note">' + esc(card.notes) + '</p>']);
   if (!parts.length) return '';
@@ -278,7 +321,8 @@ function cardExtras(card) {
      mid-card must not redraw the card you are looking at. */
   return '<div class="fc-extras' + (parts.length === 1 ? ' one' : '') +
     (Store.state.settings.showExtras === false ? ' off' : '') + '">' + parts.map(p =>
-    '<div class="fx"><div class="fx-k">' + p[0] + '</div>' + p[1] + '</div>').join('') + '</div>';
+    '<div class="fx' + (p[2] ? ' ' + p[2] : '') + '"><div class="fx-k">' + p[0] + '</div>' +
+    p[1] + '</div>').join('') + '</div>';
 }
 
 /* The rest of the family, each with the part of speech that tells it apart —
@@ -1357,7 +1401,12 @@ function cardEditor(card, presetDeck) {
           toast('"' + data.term + '" is already saved — check below', 'err');
           return false;
         }
-        if (isNew) Store.addCard(data); else Store.updateCard(card.id, data);
+        /* The relations as they stood before this edit, so the other end can be
+           brought into step: what was added here is added there, what was
+           removed here is removed there. */
+        const before = card && card.id ? (Store.card(card.id) || {}).related : [];
+        const saved = isNew ? Store.addCard(data) : Store.updateCard(card.id, data);
+        if (saved) Store.linkBothWays(saved, before, data.related);
         return true;
       };
       /* Tags are made as they are typed: Enter or a comma turns what is in the
@@ -1489,10 +1538,24 @@ function cardEditor(card, presetDeck) {
           { term: $('#cTerm').value.trim(), related: parseRelations($('#cSyn').value, $('#cAnt').value, $('#cFam').value) });
         const rels = Store.relationsFor(draft);
         const linked = rels.filter(r => r.card);
-        $('#relLinks').innerHTML = rels.length
-          ? '<p class="help" style="margin:-8px 0 14px">' +
-              (linked.length ? linked.length + ' of ' + rels.length + ' linked to words you have. ' : '') +
-              'Words you have not added yet are kept as plain text.</p>'
+        const loose = rels.length - linked.length;
+        /* What a link is, and what happens to the rest. The old line said "3 of
+           4 linked to words you have", which named neither. */
+        const said = [];
+        if (linked.length) said.push(
+          (loose ? linked.length + ' of these ' + rels.length
+                 : (linked.length === 1 ? 'This' : 'These')) +
+          (linked.length === 1
+            ? ' is a word you already have, so the two cards link to each other.'
+            : ' are words you already have, so the cards link to each other.'));
+        if (loose) said.push(
+          (linked.length
+            ? 'The other ' + (loose === 1 ? 'one stays' : loose + ' stay')
+            : (loose === 1 ? 'This word is not in your collection yet, so it stays'
+                           : 'These words are not in your collection yet, so they stay')) +
+          ' as plain text until you add ' + (loose === 1 ? 'it' : 'them') + '.');
+        $('#relLinks').innerHTML = said.length
+          ? '<p class="help" style="margin:-8px 0 14px">' + said.join(' ') + '</p>'
           : '';
       };
       ['cTerm', 'cPos', 'cDef'].forEach(id => {

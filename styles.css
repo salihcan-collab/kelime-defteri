@@ -1041,11 +1041,20 @@ kbd{
   color:var(--text-faint); margin-top:2px;
 }
 
-.rel-row{ display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
-.chip.rel{ background:transparent; }
+/* Words that mean the same on one side, words that mean the opposite on the
+   other. Each group takes half the room when there is room for two and drops
+   below the other when there is not — grouped either way, which is the point. */
+.rel-row{ display:flex; flex-wrap:wrap; gap:8px 24px; margin-top:8px; align-items:flex-start; }
+.rel-col{ display:flex; flex-wrap:wrap; gap:6px; align-content:flex-start;
+          flex:1 1 180px; min-width:0; }
+.chip.rel{ background:transparent; gap:5px; }
+/* The mark is a glyph in a box of its own, centred in it both ways: ≈ and ×
+   sit at different heights in their own em, and a chip whose contents drift
+   off centre looks like a mistake at this size. */
 .chip.rel .mark{
   font-style:normal; font-size:1.05em; line-height:1;
-  display:inline-block; width:1em; text-align:center; margin-right:.4em;
+  display:flex; align-items:center; justify-content:center;
+  width:1em; height:1em; flex:none;
 }
 .chip.rel.syn{ color:var(--good); border-color:color-mix(in srgb, var(--good) 40%, transparent); }
 .chip.rel.ant{ color:var(--warn); border-color:color-mix(in srgb, var(--warn) 40%, transparent); }
@@ -1055,9 +1064,12 @@ kbd{
    so three phrases and two related words do not become five stacked rows. */
 .fc-extras{
   display:grid; grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);
-  gap:15px 26px; align-items:start;
+  gap:15px 26px; align-items:start; grid-auto-flow:row dense;
   margin-top:4px; padding-top:15px; border-top:1px solid var(--border-soft);
 }
+/* A part that needs the whole width takes a row to itself; the shorter parts
+   fill the gap it leaves rather than following it down the card. */
+.fc-extras .fx-wide{ grid-column:1 / -1; }
 .fc-extras.one{ grid-template-columns:1fr; }
 .fc-extras.off{ display:none; }
 @media (max-width: 720px){ .fc-extras{ grid-template-columns:1fr; } }
