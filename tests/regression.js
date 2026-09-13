@@ -928,12 +928,23 @@ const head = (s) => console.log('\n— ' + s + ' —');
       const k = fx.querySelector('.fx-k');
       const body = k.nextElementSibling;
       const line = body.querySelector('li, .fam, .chip') || body;
-      return { heading: k.textContent,
-               gap: Math.round(inkTop(line) - inkTop(k) - k.getBoundingClientRect().height) };
+      const base = inkTop(k) + k.getBoundingClientRect().height;
+      /* A pill lines up by its edge, the text around it by its type, so each
+         is measured the way it is meant to sit. */
+      return { heading: k.textContent, chip: line.classList.contains('chip'),
+               gap: Math.round((line.classList.contains('chip')
+                 ? line.getBoundingClientRect().top : inkTop(line)) - base) };
     });
   });
-  is(headingGaps.length >= 2 && new Set(headingGaps.map(g => g.gap)).size === 1,
-     `every heading sits the same distance above its first line (${headingGaps.map(g => g.heading + ' ' + g.gap + 'px').join(', ')})`);
+  const textGaps = headingGaps.filter(g => !g.chip).map(g => g.gap);
+  const chipGap = (headingGaps.filter(g => g.chip)[0] || {}).gap;
+  const said = headingGaps.map(g => g.heading + ' ' + g.gap + 'px' + (g.chip ? ' (border)' : '')).join(', ');
+  is(textGaps.length >= 2 && new Set(textGaps).size === 1,
+     `every heading sits the same distance above its own words (${said})`);
+  /* The chips are the one block measured to its edge rather than its letters,
+     and sit a little tighter for it. Not equal to the rest on purpose. */
+  is(chipGap === undefined || chipGap === textGaps[0] - 1,
+     `and the related chips sit one pixel tighter, edge to heading (${chipGap}px)`);
   await page.evaluate(() => { session = null; Store.wipe(); Store.saveNow(); });
   await page.evaluate(() => { session = null; Store.wipe(); Store.saveNow(); });
 

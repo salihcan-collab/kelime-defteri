@@ -1086,19 +1086,22 @@ kbd{
 @media (max-width: 720px){ .fc-extras{ flex-direction:column; gap:15px; } }
 .fx-k{
   font-size:.64rem; text-transform:uppercase; letter-spacing:.09em;
-  color:var(--text-faint); font-weight:700; margin-bottom:6px;
+  color:var(--text-faint); font-weight:700; margin-bottom:5px;
 }
 .fx-note{ margin:0; font-size:.88rem; color:var(--text-dim); line-height:1.55; }
 .fc-extras .colloc{ margin-top:0; }
 .fc-extras .colloc li{ font-size:.88rem; }
-/* Up by the chip's own top inset. Every block in the strip starts its box the
-   same 6px below its heading, but a chip puts a border and 3px of padding in
-   front of its text, so the related words began 3px lower than the
-   collocations, the family and the note. Measured, not guessed: 3px is exact
-   in the typeface the app starts in, and inside a pixel in the other seven —
-   the chip's line is a smaller size than the lines it is being matched to, so
-   no single number is exact for every font. */
-.fc-extras .rel-row{ margin-top:-3px; }
+/* A pill is a block and lines up by its edge, where the text around it lines
+   up by its type: the collocations, the family and the note sit 6px from the
+   heading's letters to their own, and the chips sit 5px from the heading to
+   their border. The two cannot both be one number, so this is the difference
+   between them — measured in the typeface the app starts in, and inside a
+   pixel in the other seven.
+
+   6px, not 1px: this margin and the heading's own 5px are adjacent, so they
+   collapse to the larger of the two rather than adding up. Anything below 5
+   here does nothing at all. */
+.fc-extras .rel-row{ margin-top:6px; }
 
 .colloc{ list-style:none; margin:8px 0 0; padding:0; display:grid; gap:4px; }
 .colloc li{

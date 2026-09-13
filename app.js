@@ -3875,11 +3875,16 @@ function drawQuizResults(host) {
       '</div>' +
       (answered
         ? '<div class="card"><div class="section-title" style="margin:0 0 8px"><h2>Review</h2></div>' +
+          /* "You wrote" is true of the Writing coach and of nothing else: in a
+             multiple-choice round nobody wrote anything, they picked. */
           quiz.results.map(r =>
             '<div class="row between" style="padding:9px 0;border-bottom:1px solid var(--border-soft)">' +
               '<div style="min-width:0"><b>' + esc(r.card ? r.card.term : r.answer) + '</b>' +
+                (r.card && r.card.pos ? ' <span class="chip pos">' + esc(r.card.pos) + '</span>' : '') +
                 (r.card && r.card.translation ? ' <span class="faint">· ' + esc(r.card.translation) + '</span>' : '') +
-                (!r.ok && r.given && r.given !== '—' ? '<div class="faint">you wrote: ' + esc(r.given) + '</div>' : '') +
+                (!r.ok && r.given && r.given !== '—'
+                  ? '<div class="faint">' + (quiz.mode === 'ai-writing' ? 'you wrote' : 'your answer') +
+                    ': ' + esc(r.given) + '</div>' : '') +
               '</div>' +
               '<span class="chip ' + (r.ok ? 'review' : 'due') + '">' + (r.ok ? 'correct' : 'missed') + '</span>' +
             '</div>').join('') + '</div>'
