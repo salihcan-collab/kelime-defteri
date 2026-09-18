@@ -641,6 +641,37 @@ const head = (s) => console.log('\n— ' + s + ' —');
   is(paired.stranger.join() === 'zzznotaword',
      'a word you have not added has no card to write to, so it stays plain text');
 
+  /* The boxes show what other words declare about this one as well as its own
+     links, so deleting a word there has to reach the card that holds it. The
+     shipped deck's links are written on one card only: taken out of the box at
+     the far end, such a link used to come straight back the next time the form
+     was opened, read from the end that still declared it.
+
+     And the boxes list words, not senses — every sense of the word stops
+     claiming it, not just the first one found. */
+  const oneSided = await page.evaluate(() => {
+    Store.wipe();
+    const deck = Store.state.decks[0].id;
+    const near = Store.addCard({ term: 'zzznear', pos: 'noun', definition: 'one', deckId: deck }, true);
+    const far1 = Store.addCard({ term: 'zzzfar', pos: 'noun', definition: 'two', deckId: deck,
+      related: [{ kind: 'syn', text: 'zzznear' }] }, true);
+    const far2 = Store.addCard({ term: 'zzzfar', pos: 'verb', definition: 'three', deckId: deck,
+      related: [{ kind: 'syn', text: 'zzznear' }] }, true);
+    const box = () => relText(Store.card(near.id), 'syn');
+    const shown = box();
+    const stored = (Store.card(near.id).related || []).length;
+    /* saved with that word taken out of the box, as the form does it */
+    const was = Store.card(near.id).related || [];
+    Store.updateCard(near.id, { related: [] });
+    Store.linkBothWays(Store.card(near.id), was, []);
+    const claims = (id) => (Store.card(id).related || []).filter(r => r.kind === 'syn').length;
+    return { shown: shown, stored: stored, after: box(), left: claims(far1.id) + claims(far2.id) };
+  });
+  is(oneSided.shown === 'zzzfar' && oneSided.stored === 0,
+     'a link only the other word declares is shown in the box, though nothing is stored here');
+  is(oneSided.after === '', 'and deleting it there reaches the card that holds it');
+  is(oneSided.left === 0, 'every sense of that word lets go of it, not only the first');
+
   /* ------------------------------------------------------------------ *
      8d. Bringing an older collection up to date.
 

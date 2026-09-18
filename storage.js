@@ -481,6 +481,19 @@ const Store = {
      removed there. Only words that exist are touched — a synonym you have not
      added yet has no card to write to and stays plain text, as it always did.
 
+     "The list" is the boxes as the form fills them, and those show the links
+     other words declare about this one beside its own. So what has to be
+     brought into step is not only what this card used to store: a link only
+     the far word ever declared still appears in the box, and deleting it there
+     has to reach the card that holds it. Without that the shipped deck's
+     one-sided links could be taken out of the box and came straight back the
+     next time it was opened, read from the end that still declared them.
+
+     A word is a word, not a sense: the boxes list terms, so taking one out
+     takes it from every sense of that term — object the noun and object the
+     verb both stop claiming it. Adding still writes to one card, because one
+     link is all it takes to join two words.
+
      Family mirrors one hop and no further. familyOf already follows the set
      transitively, so writing every member onto every other would store the
      same family a dozen times over to say what one link already says. */
@@ -488,25 +501,42 @@ const Store = {
     const list = (rels, kind) => (rels || []).filter(r => r.kind === kind && r.text);
     const has = (rels, kind, text) => list(rels, kind)
       .some(r => this.headKey(r.text) === this.headKey(text));
+    const self = this.headKey(card.term);
+
+    /* Every word that declares a link about this card, in one pass. Senses of
+       this same word are left out: the form does not show them, and nothing
+       should be removed that could not be seen. */
+    const inbound = { syn: {}, ant: {}, family: {} };
+    this.state.cards.forEach(other => {
+      if (other.id === card.id || this.headKey(other.term) === self) return;
+      (other.related || []).forEach(r => {
+        if (inbound[r.kind] && this.headKey(r.text) === self)
+          inbound[r.kind][this.headKey(other.term)] = other.term;
+      });
+    });
+
     let touched = 0;
     ['syn', 'ant', 'family'].forEach(kind => {
       const both = {};
       list(before, kind).forEach(r => { both[this.headKey(r.text)] = r.text; });
       list(after, kind).forEach(r => { both[this.headKey(r.text)] = r.text; });
+      Object.keys(inbound[kind]).forEach(k => { both[k] = both[k] || inbound[kind][k]; });
       Object.keys(both).forEach(key => {
         const text = both[key];
-        const other = this.cardByTerm(text, card.id);
-        if (!other) return;                      /* not a word you have: plain text */
-        const wanted = has(after, kind, text);
-        const mirrored = has(other.related, kind, card.term);
-        if (wanted && !mirrored) {
-          other.related = (other.related || []).concat({ kind: kind, text: card.term });
-          other.updatedAt = Date.now(); touched++;
-        } else if (!wanted && mirrored) {
-          other.related = (other.related || []).filter(r =>
-            !(r.kind === kind && this.headKey(r.text) === this.headKey(card.term)));
-          other.updatedAt = Date.now(); touched++;
+        const senses = this.sensesOf(text, card.id);
+        if (!senses.length) return;              /* not a word you have: plain text */
+        const said = senses.filter(other => has(other.related, kind, card.term));
+        if (has(after, kind, text)) {
+          if (said.length) return;               /* one of its senses says it already */
+          senses[0].related = (senses[0].related || []).concat({ kind: kind, text: card.term });
+          senses[0].updatedAt = Date.now(); touched++;
+          return;
         }
+        said.forEach(other => {
+          other.related = other.related.filter(r =>
+            !(r.kind === kind && this.headKey(r.text) === self));
+          other.updatedAt = Date.now(); touched++;
+        });
       });
     });
     if (touched) this.save();
