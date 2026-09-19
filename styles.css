@@ -414,24 +414,49 @@ select{ cursor:pointer; appearance:none;
 .def-box.invalid:focus-within{
   border-color:var(--bad); box-shadow:0 0 0 3px color-mix(in srgb, var(--bad) 22%, transparent);
 }
-.sense-line{ display:flex; flex-wrap:wrap; align-items:center; gap:4px 9px; margin-top:6px; }
+.sense-line{
+  position:relative; display:flex; flex-wrap:wrap; align-items:center;
+  gap:4px 9px; margin-top:6px; min-height:24px;
+}
+/* The pill and the box it turns into are the same box to the pixel. Anything
+   else and swapping one for the other changes the height of the meaning, and
+   the dialog is centred — so half of that change moves the whole page. */
+.sense-add, .def-box .sense-input{
+  height:24px; box-sizing:border-box; padding:0 10px;
+  border:1px solid transparent; border-radius:99px;
+  /* Colour only. A blanket transition animates the width as well, and the box
+     is re-measured on every keystroke — it would never settle, and would read
+     as lag rather than as the box following the word. */
+  transition:background-color .15s, border-color .15s, color .15s;
+}
 /* A pill, not a form control: something you may add, in the shape a tag
    already has (.tag-chip), so it reads as a label rather than a blank. */
 .sense-add{
-  display:inline-flex; align-items:center; padding:3px 9px; border:0; border-radius:99px;
-  font-size:.72rem; font-weight:600; cursor:pointer;
-  background:var(--accent-soft); color:var(--accent); transition:.15s;
+  display:inline-flex; align-items:center; cursor:pointer;
+  font-size:.72rem; font-weight:600;
+  background:var(--accent-soft); color:var(--accent);
 }
 .sense-add:hover{ filter:brightness(1.15); }
-/* As wide as what is in it, not a reserved strip: the line beside it is about
-   this label, and a fixed width would leave the two adrift of each other. The
-   width comes from the `size` attribute, set as you type. */
+/* Quiet, but plainly something you are typing in — and as wide as the words in
+   it, so the line beside it keeps its distance from the label rather than from
+   a reserved strip. The width is set in JS, measured in the box's own font.
+   The lift is mixed from the text colour rather than named, so it shows on the
+   meaning box's two backgrounds and in all eleven themes. */
 .def-box .sense-input{
-  flex:0 1 auto; width:auto; min-width:0; padding:2px 0;
+  flex:0 0 auto; width:auto; min-width:0;
   font-size:.82rem; font-style:italic;
-  background:none; border:0; box-shadow:none;
+  background:color-mix(in srgb, var(--text) 7%, transparent);
+  border-color:var(--border-soft); box-shadow:none;
 }
-.def-box .sense-input:focus{ background:none; border:0; box-shadow:none; }
+.def-box .sense-input:focus{
+  border-color:var(--accent); box-shadow:none;
+  background:color-mix(in srgb, var(--accent) 12%, transparent);
+}
+/* Never seen: it exists to be measured. */
+.sense-ghost{
+  position:absolute; left:0; top:0; visibility:hidden; pointer-events:none;
+  white-space:pre;
+}
 
 /* A star, not the word: three fields on one form saying "required" is three
    times the same sentence, and the mark is read at a glance. */

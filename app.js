@@ -1275,6 +1275,8 @@ function cardEditor(card, presetDeck) {
               ' title="A short label that tells this meaning from the word\u2019s others">+ Sense label</button>' +
             '<input type="text" id="cSense" class="sense-input" hidden value="' +
               esc(card ? (card.sense || '') : '') + '" placeholder="e.g. to protest">' +
+            /* What the box is measured against, in the box's own typeface. */
+            '<span class="sense-ghost" id="senseGhost" aria-hidden="true"></span>' +
             '<span class="help" id="senseHelp"></span>' +
           '</div>' +
         '</div></div>' +
@@ -1550,9 +1552,24 @@ function cardEditor(card, presetDeck) {
          and the card in front of you made four. Whatever is said, the words in
          the brackets are the words being counted. */
       const senseAdd = $('#senseAdd'), senseBox = $('#cSense'), senseHelp = $('#senseHelp');
-      /* Wide enough for the label and no wider, so the line about it stays
-         beside it rather than across a reserved strip. */
-      const fitSense = () => { senseBox.size = Math.min(40, Math.max(14, senseBox.value.length + 1)); };
+      /* As wide as the words in it and no wider, so the line about the label
+         keeps the same distance from it however long the label is.
+
+         Measured, not counted: the `size` attribute counts zero-widths, which
+         is wrong for an italic proportional face and wrong by a different
+         amount in each of the eight typefaces. The twin span is given the
+         box's own font and asked how wide the words come out. */
+      const ghost = $('#senseGhost');
+      const SENSE_MAX = 260;
+      const fitSense = () => {
+        const cs = getComputedStyle(senseBox);
+        ['fontFamily', 'fontSize', 'fontStyle', 'fontWeight', 'letterSpacing']
+          .forEach(k => { ghost.style[k] = cs[k]; });
+        ghost.textContent = senseBox.value || senseBox.placeholder;
+        const frame = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight) +
+                      parseFloat(cs.borderLeftWidth) + parseFloat(cs.borderRightWidth);
+        senseBox.style.width = Math.min(SENSE_MAX, ghost.offsetWidth + frame + 2) + 'px';
+      };
       const showSenseBox = (focus) => {
         senseAdd.hidden = true; senseBox.hidden = false; fitSense();
         if (focus) senseBox.focus();
@@ -1563,6 +1580,9 @@ function cardEditor(card, presetDeck) {
       };
       senseAdd.onclick = () => showSenseBox(true);
       senseBox.addEventListener('input', fitSense);
+      /* Measured again on the way in, so the box can never be left at a width
+         taken under conditions that have since changed. */
+      senseBox.addEventListener('focus', fitSense);
       /* Emptied and left, not emptied and still being typed in: clearing the
          box to write something else is the commonest thing done in it, and
          taking it away mid-word would be worse than the tidiness it buys.

@@ -580,11 +580,71 @@ const head = (s) => console.log('\n— ' + s + ' —');
   is(labelNew.focused && labelNew.stored === 'the first one',
      'the pill opens a box that saves its label on the very first sense');
 
+  /* The pill and the box it turns into are one box in two states, so reaching
+     for the label cannot resize the meaning — and the dialog is centred, which
+     turns any height change into the whole page shifting under the pointer. */
+  await page.click('#view-browse [data-act="add"]');
+  await page.waitForTimeout(280);
+  const steady = await page.evaluate(async () => {
+    const box = document.getElementById('cDefBox'), modal = document.querySelector('.modal');
+    /* Not rounded. The difference this exists to catch was 0.47px — a pill
+       23.84px tall swapping for a box 24.31px tall — which rounding hides and
+       the eye does not. */
+    const at = () => ({ box: box.getBoundingClientRect().height,
+                        top: modal.getBoundingClientRect().top });
+    const before = at();
+    const pill = document.getElementById('senseAdd').getBoundingClientRect().height;
+    document.getElementById('senseAdd').click();
+    await new Promise(r => setTimeout(r, 120));
+    const open = at();
+    const input = document.getElementById('cSense');
+    const boxed = input.getBoundingClientRect().height;
+    const narrow = input.getBoundingClientRect().width;
+    input.value = 'a considerably longer label'; input.dispatchEvent(new Event('input'));
+    await new Promise(r => setTimeout(r, 120));
+    const typed = at();
+    const wide = input.getBoundingClientRect().width;
+    const gap = (() => {
+      const h = document.getElementById('senseHelp').getBoundingClientRect();
+      return Math.round(h.left - input.getBoundingClientRect().right);
+    })();
+    input.value = 'one'; input.dispatchEvent(new Event('input'));
+    await new Promise(r => setTimeout(r, 120));
+    const shortGap = (() => {
+      const h = document.getElementById('senseHelp').getBoundingClientRect();
+      return Math.round(h.left - input.getBoundingClientRect().right);
+    })();
+    /* Hugging, not merely growing: the twin span the box is measured against
+       says how wide the word really is, and the box should hold that and a
+       caret's worth, not a reserved strip of characters. */
+    const ghost = document.getElementById('senseGhost');
+    const pad = (() => { const cs = getComputedStyle(input);
+      return parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight); })();
+    const slack = ghost ? input.clientWidth - pad - ghost.offsetWidth : -1;
+    return { before, open, typed, pill: pill, boxed: boxed, slack: slack,
+             narrow: narrow, wide: wide, gap: gap, shortGap: shortGap };
+  });
+  is(steady.pill === steady.boxed && steady.before.box === steady.open.box &&
+     steady.open.box === steady.typed.box,
+     `the pill and its box are one height to the pixel (${steady.pill.toFixed(2)}px vs ` +
+     `${steady.boxed.toFixed(2)}px), so the meaning never resizes`);
+  is(steady.before.top === steady.open.top && steady.open.top === steady.typed.top,
+     `and the dialog does not shift when the label is reached for ` +
+     `(${steady.before.top.toFixed(2)} → ${steady.open.top.toFixed(2)})`);
+  is(steady.wide > steady.narrow && steady.gap === steady.shortGap,
+     `the box grows with its label and the line keeps its ${steady.gap}px from it`);
+  is(steady.slack >= 0 && steady.slack <= 3,
+     `and it holds the word itself, with ${steady.slack}px to spare, not a strip of characters`);
+  await page.evaluate(() => closeModal());
+  await page.waitForTimeout(150);
+
   const named = await page.evaluate(async () => {
     Store.wipe();
-    /* the fourth object: one the shipped deck would bring, with no label */
-    Store.addCard({ term: 'object', pos: 'noun', definition: 'A thing, unlabelled.',
-                    deckId: Store.state.decks[0].id });
+    /* Through the deck's own door, not by hand: the starters carry three
+       labelled `object` cards and the shipped deck a fourth with no label, and
+       whether that fourth one really arrives is the whole question. Adding it
+       with addCard would only be asserting what this test assumed. */
+    Store.installDeck(B1_DECK);
     Store.saveNow();
     const said = [];
     for (const c of Store.state.cards.filter(c => c.term === 'object')) {
@@ -602,7 +662,17 @@ const head = (s) => console.log('\n— ' + s + ' —');
     const asNew = document.getElementById('senseHelp').textContent;
     closeModal();
     await new Promise(r => setTimeout(r, 120));
-    return { total: Store.sensesOf('object').length, said: said, asNew: asNew };
+    /* And Browse must show every one of them: a count in the editor that no
+       list can account for is exactly what made the old line unbelievable. */
+    go('browse', {});
+    await new Promise(r => setTimeout(r, 300));
+    browseState.q = 'object'; browseState.deck = '';
+    render('browse');
+    await new Promise(r => setTimeout(r, 350));
+    const listed = Array.from(document.querySelectorAll('#view-browse tbody .col-word'))
+      .filter(td => /^object/i.test(td.textContent.trim())).length;
+    browseState.q = '';
+    return { total: Store.sensesOf('object').length, said: said, asNew: asNew, listed: listed };
   });
   const counted = (line) => {
     const n = /^(One|\d+)/.exec(line), inside = /\(([^)]*)\)/.exec(line);
@@ -617,6 +687,8 @@ const head = (s) => console.log('\n— ' + s + ' —');
      'the card carrying no label of its own is named by its part of speech');
   is(!/other/.test(named.asNew) && (counted(named.asNew) || {}).said === 4,
      `a word not saved yet counts no self: "${named.asNew}"`);
+  is(named.listed === named.total,
+     `and Browse lists every one it counts (${named.listed} rows for ${named.total} cards)`);
   await page.evaluate(() => { Store.wipe(); Store.saveNow(); });
 
   /* The bug this prevents: "What does object mean?" offering both "a thing"
