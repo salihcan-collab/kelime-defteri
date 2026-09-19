@@ -1256,19 +1256,28 @@ function cardEditor(card, presetDeck) {
       '<div class="inline-fields">' +
         '<div class="field"><label>Word or phrase <em class="req" title="Required" aria-label="required">*</em></label>' +
           '<input type="text" id="cTerm" value="' + esc(card ? card.term : '') + '" placeholder="e.g. reliable">' +
-          '<span class="help" id="dupHint"></span></div>' +
+        '</div>' +
         '<div class="field"><label>Part of speech <em class="req" title="Required" aria-label="required">*</em></label><select id="cPos">' +
           '<option value="">—</option>' +
           PARTS_OF_SPEECH.map(p => '<option' + (card && card.pos === p ? ' selected' : '') + '>' + p + '</option>').join('') +
         '</select></div>' +
       '</div>' +
-      /* Only shown once the word turns out to have more than one sense —
-         most words never need it, so it stays out of the way until then. */
-      '<div class="field hidden" id="senseRow"><label>Sense label</label>' +
-        '<input type="text" id="cSense" value="' + esc(card ? (card.sense || '') : '') + '" placeholder="e.g. to protest">' +
-        '<span class="help" id="senseHelp"></span></div>' +
+      /* The sense label belongs to the meaning, so it lives in the same box:
+         a line under what you typed, a pill until there is something to say.
+         It used to be a field of its own that appeared only once the word
+         turned out to have a twin — which meant the first sense of a word
+         could never be labelled, and you had to come back for it. */
       '<div class="field"><label>Meaning (English definition) <em class="req" title="Required" aria-label="required">*</em></label>' +
-        '<textarea id="cDef" placeholder="A clear, short definition">' + esc(card ? card.definition : '') + '</textarea></div>' +
+        '<div class="def-box" id="cDefBox">' +
+          '<textarea id="cDef" rows="1" placeholder="A clear, short definition">' + esc(card ? card.definition : '') + '</textarea>' +
+          '<div class="sense-line">' +
+            '<button type="button" class="sense-add" id="senseAdd"' +
+              ' title="A short label that tells this meaning from the word\u2019s others">+ Sense label</button>' +
+            '<input type="text" id="cSense" class="sense-input" hidden value="' +
+              esc(card ? (card.sense || '') : '') + '" placeholder="e.g. to protest">' +
+            '<span class="help" id="senseHelp"></span>' +
+          '</div>' +
+        '</div></div>' +
       '<div class="field"><label>Example sentence</label>' +
         '<textarea id="cEx" placeholder="A natural sentence that contains the word">' + esc(card ? card.example : '') + '</textarea>' +
         '<span class="help">Used for fill-in-the-blank practice, so keep the word inside the sentence.</span></div>' +
@@ -1353,7 +1362,9 @@ function cardEditor(card, presetDeck) {
       const markMissing = (missing) => {
         ['cTerm', 'cPos', 'cDef'].forEach(id => {
           const el = $('#' + id);
-          if (el) el.classList.toggle('invalid', missing.some(m => m[0] === id));
+          /* The meaning's border belongs to the box around it now, so the mark
+             goes there — on the textarea it would draw nothing. */
+          if (el) (el.closest('.def-box') || el).classList.toggle('invalid', missing.some(m => m[0] === id));
         });
         if (missing.length) $('#' + missing[0][0]).focus();
       };
@@ -1515,7 +1526,7 @@ function cardEditor(card, presetDeck) {
              looks as though nothing happened. */
           const more = f.querySelector('.more-fields') || document.querySelector('.more-fields');
           if (more && ['cColl', 'cSyn', 'cAnt'].some(id => $('#' + id).value.trim())) more.open = true;
-          checkSenses(); showLinks();
+          checkSenses(); showLinks(); grow();
 
           toast(filled
             ? 'Filled ' + filled + ' empty field' + (filled === 1 ? '' : 's') + ' — check before saving'
@@ -1524,23 +1535,53 @@ function cardEditor(card, presetDeck) {
         fill.disabled = false; fill.innerHTML = original;
       };
 
-      /* Reveal the sense label the moment the word turns out to have more than
-         one meaning, and say which meanings are already saved. */
-      const hint = $('#dupHint');
-      const senseRow = $('#senseRow');
+      /* The meaning box grows with what is in it, so the sense line underneath
+         always sits below the last line you typed rather than floating in the
+         middle of a fixed box. */
+      const def = $('#cDef');
+      const grow = () => { def.style.height = 'auto'; def.style.height = def.scrollHeight + 'px'; };
+
+      /* The label is a pill until it has something to say, and it says how many
+         other senses are saved — naming every one of them.
+
+         Naming them all is the point. The old line counted the senses but
+         listed only the labelled ones, so a word like `object`, three of whose
+         four cards carry a label, showed three names beside "3 other senses"
+         and the card in front of you made four. Whatever is said, the words in
+         the brackets are the words being counted. */
+      const senseAdd = $('#senseAdd'), senseBox = $('#cSense'), senseHelp = $('#senseHelp');
+      /* Wide enough for the label and no wider, so the line about it stays
+         beside it rather than across a reserved strip. */
+      const fitSense = () => { senseBox.size = Math.min(40, Math.max(14, senseBox.value.length + 1)); };
+      const showSenseBox = (focus) => {
+        senseAdd.hidden = true; senseBox.hidden = false; fitSense();
+        if (focus) senseBox.focus();
+      };
+      const hideSenseBox = () => {
+        if (senseBox.value.trim()) return;
+        senseBox.hidden = true; senseAdd.hidden = false;
+      };
+      senseAdd.onclick = () => showSenseBox(true);
+      senseBox.addEventListener('input', fitSense);
+      /* Emptied and left, not emptied and still being typed in: clearing the
+         box to write something else is the commonest thing done in it, and
+         taking it away mid-word would be worse than the tidiness it buys.
+         Escape is left alone, so it closes the dialog here as it does from
+         every other field. */
+      senseBox.addEventListener('blur', hideSenseBox);
+      if (senseBox.value.trim()) showSenseBox(false);
+
       const checkSenses = () => {
         const siblings = Store.sensesOf($('#cTerm').value, card && card.id);
-        const has = siblings.length > 0 || !!$('#cSense').value.trim();
-        senseRow.classList.toggle('hidden', !has);
-        if (!siblings.length) { hint.textContent = ''; hint.classList.remove('warn'); return; }
-        const labelled = siblings.filter(d => senseLabel(d)).map(d => senseLabel(d));
-        $('#senseHelp').textContent = labelled.length
-          ? 'Already saved: ' + labelled.join(', ') + '.'
-          : 'Give each meaning a short label so you can tell them apart.';
-        hint.textContent = siblings.length === 1
-          ? 'One other sense of this word is saved.'
-          : siblings.length + ' other senses of this word are saved.';
-        hint.classList.add('warn');
+        /* A card with no label of its own is named by its part of speech,
+           which is what tells a noun from a verb on the same spelling. */
+        const names = siblings.map(d => senseLabel(d) || d.pos || 'no label');
+        senseHelp.textContent = !names.length ? ''
+          : (isNew
+              /* Nothing saved to be "other" than yet. */
+              ? names.length + ' sense' + (names.length === 1 ? '' : 's') + ' saved'
+              : (names.length === 1 ? 'One other sense' : names.length + ' other senses'))
+            + ' (' + names.join(', ') + ')';
       };
 
       /* Which synonyms and antonyms point at words you actually have. */
@@ -1585,9 +1626,11 @@ function cardEditor(card, presetDeck) {
       };
       ['cTerm', 'cPos', 'cDef'].forEach(id => {
         const el = $('#' + id);
-        if (el) el.addEventListener('input', () => el.classList.remove('invalid'));
-        if (el && el.tagName === 'SELECT') el.addEventListener('change', () => el.classList.remove('invalid'));
+        const marked = el && (el.closest('.def-box') || el);
+        if (el) el.addEventListener('input', () => marked.classList.remove('invalid'));
+        if (el && el.tagName === 'SELECT') el.addEventListener('change', () => marked.classList.remove('invalid'));
       });
+      def.addEventListener('input', grow);
       const t = $('#cTerm');
       if (t) {
         t.addEventListener('input', () => {
@@ -1602,6 +1645,7 @@ function cardEditor(card, presetDeck) {
       ['cSyn', 'cAnt', 'cFam'].forEach(id => { const el = $('#' + id); if (el) el.addEventListener('input', showLinks); });
       checkSenses();
       showLinks();
+      grow();
     }
   });
 }

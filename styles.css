@@ -395,6 +395,44 @@ select{ cursor:pointer; appearance:none;
 }
 .tag-chip button:hover{ opacity:1; }
 
+/* The sense label belongs to the meaning, so the meaning is one box holding
+   two things: what the word means, and under it the label that tells this
+   meaning from the word's others. The box carries the border the textarea used
+   to, and the textarea grows with what is typed — so the line underneath sits
+   below the last line of the definition instead of floating in a fixed box. */
+.def-box{
+  width:100%; padding:10px 13px; border-radius:10px;
+  background:var(--surface-2); border:1px solid var(--border-soft); transition:.15s;
+}
+.def-box:focus-within{ border-color:var(--accent); background:var(--surface); box-shadow:0 0 0 3px var(--accent-soft); }
+.def-box textarea{
+  display:block; padding:0; min-height:0; resize:none; overflow:hidden;
+  background:none; border:0; box-shadow:none;
+}
+.def-box textarea:focus{ background:none; border:0; box-shadow:none; }
+.def-box.invalid{ border-color:var(--bad); background:color-mix(in srgb, var(--bad) 7%, var(--surface-2)); }
+.def-box.invalid:focus-within{
+  border-color:var(--bad); box-shadow:0 0 0 3px color-mix(in srgb, var(--bad) 22%, transparent);
+}
+.sense-line{ display:flex; flex-wrap:wrap; align-items:center; gap:4px 9px; margin-top:6px; }
+/* A pill, not a form control: something you may add, in the shape a tag
+   already has (.tag-chip), so it reads as a label rather than a blank. */
+.sense-add{
+  display:inline-flex; align-items:center; padding:3px 9px; border:0; border-radius:99px;
+  font-size:.72rem; font-weight:600; cursor:pointer;
+  background:var(--accent-soft); color:var(--accent); transition:.15s;
+}
+.sense-add:hover{ filter:brightness(1.15); }
+/* As wide as what is in it, not a reserved strip: the line beside it is about
+   this label, and a fixed width would leave the two adrift of each other. The
+   width comes from the `size` attribute, set as you type. */
+.def-box .sense-input{
+  flex:0 1 auto; width:auto; min-width:0; padding:2px 0;
+  font-size:.82rem; font-style:italic;
+  background:none; border:0; box-shadow:none;
+}
+.def-box .sense-input:focus{ background:none; border:0; box-shadow:none; }
+
 /* A star, not the word: three fields on one form saying "required" is three
    times the same sentence, and the mark is read at a glance. */
 .field > label em.req{

@@ -443,13 +443,24 @@ const head = (s) => console.log('\n— ' + s + ' —');
   const blocked = await page.evaluate(() => ({
     open: !!document.querySelector('#cTerm'),
     saved: Store.state.cards.some(c => c.term === 'zzzplaceholder'),
+    /* The meaning sits in a box with the sense label, and the box carries the
+       border now, so that is where its mark goes — on the borderless textarea
+       it would draw nothing. What must hold is that both fields are marked
+       where they are, which is what the red outline is. */
     flagged: ['cPos', 'cDef'].filter(id => {
-      const el = document.getElementById(id); return el && el.classList.contains('invalid');
+      const el = document.getElementById(id);
+      return el && (el.closest('.def-box') || el).classList.contains('invalid');
+    }).length,
+    red: ['cPos', 'cDef'].filter(id => {
+      const el = document.getElementById(id);
+      const drawn = el && (el.closest('.def-box') || el);
+      return drawn && getComputedStyle(drawn).borderTopColor !== getComputedStyle(document.getElementById('cTerm')).borderTopColor;
     }).length,
     said: (document.querySelectorAll('.toast')[document.querySelectorAll('.toast').length - 1] || {}).textContent || ''
   }));
   is(blocked.open && !blocked.saved, 'a word with no meaning and no part of speech is refused');
-  is(blocked.flagged === 2, 'the two missing fields are marked in place, not in a second dialog');
+  is(blocked.flagged === 2 && blocked.red === 2,
+     'the two missing fields are marked in place, not in a second dialog');
   is(/needs/i.test(blocked.said), `the editor says what is missing: "${blocked.said.trim()}"`);
 
   /* Which fields must be filled is marked, not spelled out three times. */
@@ -530,6 +541,83 @@ const head = (s) => console.log('\n— ' + s + ' —');
   is(senses.separateSchedules && senses.siblingCount === senses.objectSenses - 1,
      'each sense is its own card, and each one knows its siblings');
   is(senses.caseInsensitive === 3, 'senses are found whatever the capitalisation');
+
+  /* The label is part of the meaning now — a pill under the definition, in the
+     same box — so any word can be given one. It used to be a field of its own
+     that appeared only once a second sense existed, which meant the first
+     sense of a word could never be labelled at the moment you wrote it.
+
+     And the line beside it names every sense it counts. The old one counted
+     all the siblings but listed only the labelled ones, so a word like object,
+     three of whose four cards carry a label, showed three names beside "3
+     other senses" and the card in front of you made four. */
+  await page.evaluate(() => { Store.wipe(); Store.saveNow(); go('browse', {}); });
+  await page.waitForTimeout(250);
+  await page.click('#view-browse [data-act="add"]');
+  await page.waitForTimeout(280);
+  const labelNew = await page.evaluate(async () => {
+    const pill = document.getElementById('senseAdd'), box = document.getElementById('cSense');
+    const started = { pill: !!pill && !pill.hidden, boxAway: !!box && box.hidden,
+                      inMeaning: !!document.querySelector('.def-box #cSense') };
+    /* Report it rather than throwing: a missing control should fail this one
+       assertion, not take the rest of the suite down with it. */
+    if (!pill || !box) return { started: started, focused: false, stored: null };
+    pill.click();
+    await new Promise(r => setTimeout(r, 60));
+    const focused = document.activeElement === box;
+    box.value = 'the first one'; box.dispatchEvent(new Event('input'));
+    document.getElementById('cTerm').value = 'zzzonlysense';
+    document.getElementById('cTerm').dispatchEvent(new Event('input'));
+    document.getElementById('cPos').value = 'noun';
+    document.getElementById('cDef').value = 'A word with no twin at all.';
+    document.querySelector('.modal-foot [data-act="save"]').click();
+    await new Promise(r => setTimeout(r, 320));
+    const saved = Store.state.cards.find(c => c.term === 'zzzonlysense');
+    return { started: started, focused: focused, stored: saved && saved.sense };
+  });
+  is(labelNew.started.pill && labelNew.started.boxAway && labelNew.started.inMeaning,
+     'a word with no twin still offers a sense label, inside the meaning box');
+  is(labelNew.focused && labelNew.stored === 'the first one',
+     'the pill opens a box that saves its label on the very first sense');
+
+  const named = await page.evaluate(async () => {
+    Store.wipe();
+    /* the fourth object: one the shipped deck would bring, with no label */
+    Store.addCard({ term: 'object', pos: 'noun', definition: 'A thing, unlabelled.',
+                    deckId: Store.state.decks[0].id });
+    Store.saveNow();
+    const said = [];
+    for (const c of Store.state.cards.filter(c => c.term === 'object')) {
+      cardEditor(c);
+      await new Promise(r => setTimeout(r, 240));
+      said.push(document.getElementById('senseHelp').textContent);
+      closeModal();
+      await new Promise(r => setTimeout(r, 120));
+    }
+    cardEditor(null);
+    await new Promise(r => setTimeout(r, 240));
+    document.getElementById('cTerm').value = 'object';
+    document.getElementById('cTerm').dispatchEvent(new Event('input'));
+    await new Promise(r => setTimeout(r, 60));
+    const asNew = document.getElementById('senseHelp').textContent;
+    closeModal();
+    await new Promise(r => setTimeout(r, 120));
+    return { total: Store.sensesOf('object').length, said: said, asNew: asNew };
+  });
+  const counted = (line) => {
+    const n = /^(One|\d+)/.exec(line), inside = /\(([^)]*)\)/.exec(line);
+    return n && inside
+      ? { said: n[1] === 'One' ? 1 : +n[1], named: inside[1].split(',').length } : null;
+  };
+  is(named.said.length === 4 && named.said.every(l => /^3 other senses/.test(l)),
+     `each of the ${named.total} object cards says "3 other senses"`);
+  is(named.said.every(l => { const c = counted(l); return c && c.said === c.named; }),
+     'and the number it says is the number it names');
+  is(named.said.filter(l => /noun/.test(l)).length === 3,
+     'the card carrying no label of its own is named by its part of speech');
+  is(!/other/.test(named.asNew) && (counted(named.asNew) || {}).said === 4,
+     `a word not saved yet counts no self: "${named.asNew}"`);
+  await page.evaluate(() => { Store.wipe(); Store.saveNow(); });
 
   /* The bug this prevents: "What does object mean?" offering both "a thing"
      and "to protest" — two correct answers, one of them marked wrong. */
