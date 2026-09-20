@@ -433,8 +433,13 @@ select{ cursor:pointer; appearance:none;
    already has (.tag-chip), so it reads as a label rather than a blank. */
 .sense-add{
   display:inline-flex; align-items:center; cursor:pointer;
-  font-size:.72rem; font-weight:600;
+  font-size:.6rem; font-weight:600;
   background:var(--accent-soft); color:var(--accent);
+  /* Its letters are smaller than the count line's beside it and so sat high:
+     measured, the line's letters land 1.67px lower. Nudged rather than
+     re-padded, because a transform moves no layout — the pill stays 24px, the
+     meaning box stays the height it was, and nothing shifts. */
+  transform:translateY(2px);
 }
 .sense-add:hover{ filter:brightness(1.15); }
 /* Quiet, but plainly something you are typing in — and as wide as the words in
@@ -867,6 +872,26 @@ input[type=range]::-moz-range-thumb{
 .toolbar .search svg{ position:absolute; left:12px; top:50%; transform:translateY(-50%); width:16px; height:16px; color:var(--text-faint); }
 .toolbar .search input{ padding-left:36px; }
 .toolbar select{ width:auto; min-width:130px; }
+/* Built from the same padding, border and radius as the boxes beside it, so it
+   is the same height as the selects without a number saying so. */
+.tickbox{
+  display:inline-flex; align-items:center; gap:8px; cursor:pointer; user-select:none;
+  padding:10px 13px; border-radius:10px; font-size:.9rem; white-space:nowrap;
+  background:var(--surface-2); border:1px solid var(--border-soft);
+  color:var(--text-dim); transition:.15s;
+}
+.tickbox:hover{ color:var(--text); }
+.tickbox input{
+  appearance:none; flex:none; width:16px; height:16px; margin:0; position:relative;
+  border:1px solid var(--border); border-radius:5px; background:var(--surface);
+  cursor:pointer; transition:.15s;
+}
+.tickbox input:checked{ background:var(--accent); border-color:var(--accent); }
+.tickbox input:checked::after{
+  content:""; position:absolute; left:5px; top:2px; width:4px; height:8px;
+  border:solid #fff; border-width:0 2px 2px 0; transform:rotate(43deg);
+}
+.tickbox input:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
 
 /* Fixed layout: without it the browser hands the width to whichever column has
    the longest unbreakable word, and the meaning column ends up squeezed. */

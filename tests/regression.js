@@ -689,6 +689,92 @@ const head = (s) => console.log('\n— ' + s + ' —');
      `a word not saved yet counts no self: "${named.asNew}"`);
   is(named.listed === named.total,
      `and Browse lists every one it counts (${named.listed} rows for ${named.total} cards)`);
+
+  /* Searching everything saved about a word is the right default and the wrong
+     question when you are looking one up: `object` appears in the meaning of a
+     dozen cards that are not it. The tick beside the box says which is being
+     asked. */
+  const tick = await page.evaluate(async () => {
+    go('browse', {});
+    await new Promise(r => setTimeout(r, 300));
+    const count = () => document.querySelectorAll('#view-browse tbody tr').length;
+    browseState.q = 'object'; browseState.wordOnly = false; render('browse');
+    await new Promise(r => setTimeout(r, 320));
+    const everything = count();
+    const box = document.getElementById('bWordOnly');
+    box.click();
+    await new Promise(r => setTimeout(r, 340));
+    const itself = count();
+    const rows = Array.from(document.querySelectorAll('#view-browse tbody .col-word'))
+      .map(td => td.textContent.trim());
+    const height = (el) => +el.getBoundingClientRect().height.toFixed(2);
+    const same = height(document.querySelector('.tickbox')) === height(document.getElementById('bDeck'));
+    browseState.q = ''; browseState.wordOnly = false; render('browse');
+    await new Promise(r => setTimeout(r, 250));
+    return { everything: everything, itself: itself, rows: rows, same: same,
+             saved: Store.state.cards.filter(c => /object/i.test(c.term)).length,
+             kept: box.checked };
+  });
+  is(tick.everything > tick.itself,
+     `"Word itself" narrows the search (${tick.everything} rows to ${tick.itself})`);
+  is(tick.itself === tick.saved && tick.rows.every(w => /object/i.test(w)),
+     `and leaves exactly the ${tick.saved} cards spelled that way, no more and no fewer`);
+  is(tick.same, 'the tick is the same height as the boxes beside it');
+
+  /* A synonym is true of a meaning, not of a spelling. The link is stored as
+     text, so "a synonym of object" says which *word* and not which sense —
+     and reading it onto all three senses is how they came to carry the same
+     list: each one showed the whole spelling's links, and saving the form
+     wrote them onto that card. A word family is different and is left alone:
+     every sense of object shares objection and objective, which is why
+     familyOf walks all the senses on purpose. */
+  const owned = await page.evaluate(async () => {
+    Store.wipe();
+    const d = Store.state.decks[0].id;
+    const add = (o) => Store.addCard(Object.assign({ deckId: d, definition: 'x' }, o), true);
+    add({ term: 'zzzsp', pos: 'noun', sense: 'one', related: [{ kind: 'syn', text: 'zzzone' }] });
+    add({ term: 'zzzsp', pos: 'noun', sense: 'two', related: [{ kind: 'syn', text: 'zzztwo' }] });
+    add({ term: 'zzzsp', pos: 'verb', sense: 'three', related: [{ kind: 'syn', text: 'zzzthree' }] });
+    ['zzzone', 'zzztwo', 'zzzthree'].forEach(t => add({ term: t, pos: 'noun' }));
+    add({ term: 'zzzfar', pos: 'noun', related: [{ kind: 'syn', text: 'zzzsp' }] });
+    Store.saveNow();
+    const syn = (t, s) => { const c = Store.state.cards.find(c => c.term === t && (s === undefined || c.sense === s));
+                            return (c.related || []).filter(r => r.kind === 'syn').map(r => r.text).join(); };
+    const boxes = {};
+    for (const s of ['one', 'two', 'three']) {
+      cardEditor(Store.state.cards.find(c => c.term === 'zzzsp' && c.sense === s));
+      await new Promise(r => setTimeout(r, 230));
+      boxes[s] = document.getElementById('cSyn').value;
+      closeModal();
+      await new Promise(r => setTimeout(r, 110));
+    }
+    /* one sense edited: a synonym added, and the save going through at once */
+    cardEditor(Store.state.cards.find(c => c.term === 'zzzsp' && c.sense === 'one'));
+    await new Promise(r => setTimeout(r, 230));
+    const el = document.getElementById('cSyn');
+    el.value = 'zzzone, zzzthree'; el.dispatchEvent(new Event('input'));
+    await new Promise(r => setTimeout(r, 60));
+    document.querySelector('.modal-foot [data-act="save"]').click();
+    await new Promise(r => setTimeout(r, 300));
+    const nagged = !!document.querySelector('#dupWarn .feedback');
+    const open = !!document.getElementById('cTerm');
+    if (open) closeModal();
+    await new Promise(r => setTimeout(r, 120));
+    return { boxes: boxes, nagged: nagged, stillOpen: open,
+             one: syn('zzzsp', 'one'), two: syn('zzzsp', 'two'), three: syn('zzzsp', 'three'),
+             third: syn('zzzthree'), far: syn('zzzfar') };
+  });
+  is(owned.boxes.one === 'zzzone' && owned.boxes.two === 'zzztwo' && owned.boxes.three === 'zzzthree',
+     'each sense of a spelling shows its own synonyms and none of its siblings’');
+  is(!/zzzfar/.test(Object.keys(owned.boxes).map(k => owned.boxes[k]).join()),
+     'and a synonym written against the spelling is claimed by none of them');
+  is(!owned.nagged && !owned.stillOpen,
+     'editing a sense that has been saved for weeks does not stop to warn about itself');
+  is(owned.one === 'zzzone,zzzthree' && owned.two === 'zzztwo' && owned.three === 'zzzthree',
+     'editing one sense leaves the other two exactly as they were');
+  is(owned.third === '' && owned.far === 'zzzsp',
+     'the mirror is not written where the spelling could mean three things, and the far card keeps its own');
+  await page.evaluate(() => { Store.wipe(); Store.saveNow(); });
   await page.evaluate(() => { Store.wipe(); Store.saveNow(); });
 
   /* The bug this prevents: "What does object mean?" offering both "a thing"

@@ -1377,6 +1377,12 @@ function cardEditor(card, presetDeck) {
          and asks for a label; a second, deliberate click goes through. */
       let senseAcknowledged = false;
 
+      /* What the notice has to do: say what is already saved, say what the
+         button will do if pressed again, and say where the label that tells
+         them apart now lives. The old wording asked for "a short sense label"
+         on a form that no longer had a field by that name, never mentioned
+         that the button had changed under it, and quietly showed only the
+         first four of however many were saved. */
       const senseNotice = (siblings) => {
         const rows = siblings.slice(0, 4).map(d => {
           const deck = Store.deck(d.deckId);
@@ -1387,13 +1393,24 @@ function cardEditor(card, presetDeck) {
               '<div class="faint">' + esc(d.definition || d.translation || 'no meaning saved') + '</div></div>' +
             '<span class="faint">' + esc(deck ? deck.emoji + ' ' + deck.name : 'no deck') + '</span></div>';
         }).join('');
+        const n = siblings.length;
+        const rest = n - Math.min(n, 4);
+        const count = n === 1 ? 'under one meaning'
+          : 'under ' + (['', '', 'two', 'three', 'four', 'five', 'six'][n] || n) + ' meanings';
         $('#dupWarn').innerHTML =
           '<div class="feedback no" style="margin-top:4px">' +
-            '<b>You already have ' + esc(siblings[0].term) + '.</b> If this is another meaning of the ' +
-            'same word, give both a short sense label so you can tell them apart while studying. ' +
-            'Each sense keeps its own review schedule.' +
+            '<b>“' + esc(siblings[0].term) + '” is already saved</b> — ' + count + ':' +
             rows +
-            '<div class="row end" style="margin-top:10px">' +
+            (rest ? '<div class="faint" style="padding-top:7px">… and ' + rest + ' more.</div>' : '') +
+            '<p style="margin:10px 0 0">The button below now reads <b>Save as another sense</b>. ' +
+            'Press it to keep what you have typed as a card of its own, with its own review ' +
+            'schedule and its own synonyms. The label under the meaning — ' +
+            (siblings.some(d => senseLabel(d))
+              ? '“' + esc(senseLabel(siblings.filter(d => senseLabel(d))[0])) + '” above, say'
+              : '“a thing”, “to protest”') +
+            ' — is what tells them apart while you study.</p>' +
+            '<div class="row between" style="margin-top:10px;gap:10px">' +
+              '<span class="faint">Same meaning as one of these? Open it instead.</span>' +
               '<button class="soft-btn tiny" data-act="open-dup">Open the existing word</button>' +
             '</div>' +
           '</div>';
@@ -1417,8 +1434,14 @@ function cardEditor(card, presetDeck) {
           return false;
         }
         markMissing([]);
+        /* Only when the collision is new. Editing a sense that has been saved
+           for weeks and being told "you already have object" every time is not
+           a warning, it is a toll — the decision was made when the card was
+           made. Renaming a word into a spelling you already have is a new
+           collision, and still stops to ask. */
         const siblings = Store.sensesOf(data.term, card && card.id);
-        if (siblings.length && !senseAcknowledged) {
+        const newCollision = isNew || Store.headKey(data.term) !== Store.headKey(card.term);
+        if (siblings.length && newCollision && !senseAcknowledged) {
           senseAcknowledged = true;
           senseNotice(siblings);
           setSaveLabel('Save as another sense');
@@ -1620,22 +1643,34 @@ function cardEditor(card, presetDeck) {
             const key = pair[0] + '|' + Store.headKey(text);
             if (seen[key] || Store.headKey(text) === Store.headKey(mine)) return;
             seen[key] = 1;
-            rels.push({ text: text, card: Store.cardByTerm(text, card && card.id) });
+            const senses = Store.sensesOf(text, card && card.id);
+            rels.push({ text: text, card: senses.length === 1 ? senses[0] : null,
+                        many: senses.length > 1 });
           });
         });
         const linked = rels.filter(r => r.card);
-        const loose = rels.length - linked.length;
+        const many = rels.filter(r => r.many);
+        const loose = rels.length - linked.length - many.length;
         /* What a link is, and what happens to the rest. The old line said "3 of
-           4 linked to words you have", which named neither. */
+           4 linked to words you have", which named neither.
+
+           A word saved under more than one meaning is a third case: it is a
+           word you have, but "a synonym of object" does not say which object,
+           so the link is kept here rather than pinned on a meaning at random. */
         const said = [];
         if (linked.length) said.push(
-          (loose ? linked.length + ' of these ' + rels.length
+          (rels.length > linked.length ? linked.length + ' of these ' + rels.length
                  : (linked.length === 1 ? 'This' : 'These')) +
           (linked.length === 1
             ? ' is a word you already have, so the two cards link to each other.'
             : ' are words you already have, so the cards link to each other.'));
+        if (many.length) said.push(
+          (many.length === 1
+            ? '\u201c' + many[0].text + '\u201d is saved under more than one meaning, so that link stays'
+            : many.length + ' of them are saved under more than one meaning, so those links stay') +
+          ' on this card.');
         if (loose) said.push(
-          (linked.length
+          (linked.length || many.length
             ? 'The other ' + (loose === 1 ? 'one stays' : loose + ' stay')
             : (loose === 1 ? 'This word is not in your collection yet, so it stays'
                            : 'These words are not in your collection yet, so they stay')) +
@@ -3991,7 +4026,7 @@ function drawQuizResults(host) {
 /* ==========================================================================
    Browse
    ========================================================================== */
-let browseState = { q: '', deck: '', status: '', pos: '', sort: 'recent', desc: false };
+let browseState = { q: '', deck: '', status: '', pos: '', sort: 'recent', desc: false, wordOnly: false };
 
 /* Every way the table can be ordered, and which heading says so. A sort knows
    its own natural direction — newest first, A to Z — and the arrow on the
@@ -4012,8 +4047,12 @@ const BROWSE_SORTS = {
 function renderBrowse(host) {
   let rows = Store.state.cards.slice();
   const q = browseState.q.toLowerCase().trim();
-  if (q) rows = rows.filter(c =>
-    (c.term + ' ' + c.sense + ' ' + c.definition + ' ' + c.translation + ' ' + c.example).toLowerCase().indexOf(q) !== -1);
+  /* Searching everything is right for "what did I save about trains?", and
+     wrong for looking up a word: `object` is in the meaning of a dozen cards
+     that are not it. The tick says which question is being asked. */
+  if (q) rows = rows.filter(c => (browseState.wordOnly ? c.term
+    : c.term + ' ' + c.sense + ' ' + c.definition + ' ' + c.translation + ' ' + c.example)
+    .toLowerCase().indexOf(q) !== -1);
   if (browseState.deck) rows = rows.filter(c => c.deckId === browseState.deck);
   if (browseState.status) rows = rows.filter(c => {
     if (browseState.status === 'due') return isDueNow(c);
@@ -4025,7 +4064,7 @@ function renderBrowse(host) {
   if (browseState.desc) rows.reverse();
 
   const key = 'browse:' + [browseState.q, browseState.deck, browseState.status,
-    browseState.pos, browseState.sort, browseState.desc].join('\u0000');
+    browseState.pos, browseState.sort, browseState.desc, browseState.wordOnly].join('\u0000');
 
   host.innerHTML =
     '<div class="toolbar">' +
@@ -4033,6 +4072,9 @@ function renderBrowse(host) {
         '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>' +
         '<input type="search" id="bQ" placeholder="Search your words…" value="' + esc(browseState.q) + '">' +
       '</div>' +
+      '<label class="tickbox" title="Match the word itself, not its meaning, translation or example">' +
+        '<input type="checkbox" id="bWordOnly"' + (browseState.wordOnly ? ' checked' : '') + '>' +
+        '<span>Word itself</span></label>' +
       '<select id="bDeck">' + deckOptions(browseState.deck, 'All decks') + '</select>' +
       '<select id="bStatus">' +
         '<option value=""' + (browseState.status === '' ? ' selected' : '') + '>Any word</option>' +
@@ -4090,6 +4132,12 @@ function renderBrowse(host) {
   };
   let t;
   $('#bQ').oninput = (e) => { clearTimeout(t); const v = e.target.value; t = setTimeout(() => { browseState.q = v; render('browse'); const i = $('#bQ'); if (i) { i.focus(); i.setSelectionRange(v.length, v.length); } }, 220); };
+  $('#bWordOnly').onchange = (e) => {
+    browseState.wordOnly = e.target.checked;
+    render('browse');
+    /* Ticking it is part of searching, so the cursor goes back where it was. */
+    const i = $('#bQ'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); }
+  };
   $('#bDeck').onchange   = (e) => { browseState.deck = e.target.value; render('browse'); };
   $('#bStatus').onchange = (e) => { browseState.status = e.target.value; render('browse'); };
   $('#bPos').onchange    = (e) => { browseState.pos = e.target.value; render('browse'); };
