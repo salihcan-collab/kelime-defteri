@@ -775,6 +775,56 @@ const head = (s) => console.log('\n— ' + s + ' —');
   is(owned.third === '' && owned.far === 'zzzsp',
      'the mirror is not written where the spelling could mean three things, and the far card keeps its own');
   await page.evaluate(() => { Store.wipe(); Store.saveNow(); });
+
+  /* A synonym has to be the same kind of word to be the saved one. The link
+     is text, and `instrument` (noun) saying "implement" means the tool — but
+     the only saved implement was the verb, and matching by spelling alone put
+     a solid "saved" chip on the verb for a word that is not its synonym. Same
+     part of speech, grouped as words are: a phrasal verb is a verb, a plural
+     noun a noun, and a phrase or idiom names no part of speech at all. */
+  const kinds = await page.evaluate(() => {
+    Store.wipe();
+    const d = Store.state.decks[0].id;
+    const add = (o) => Store.addCard(Object.assign({ deckId: d, definition: 'x' }, o), true);
+    const verb = add({ term: 'zzzdo', pos: 'verb' });
+    const noun = add({ term: 'zzztool', pos: 'noun', related: [{ kind: 'syn', text: 'zzzdo' }] });
+    const pv = add({ term: 'zzzgive up', pos: 'phrasal verb', related: [{ kind: 'syn', text: 'zzzquit' }] });
+    add({ term: 'zzzquit', pos: 'verb' });
+    const adv = add({ term: 'zzzactually', pos: 'adverb', related: [{ kind: 'syn', text: 'zzzin fact' }] });
+    add({ term: 'zzzin fact', pos: 'phrase' });
+    const an = add({ term: 'zzzanalyse', pos: 'verb', related: [{ kind: 'family', text: 'zzzanalysis' }] });
+    add({ term: 'zzzanalysis', pos: 'noun' });
+    const solo = add({ term: 'zzzbuild', pos: 'verb' });
+    add({ term: 'zzzmake', pos: 'verb' });
+    add({ term: 'zzzframe', pos: 'noun' });
+    Store.saveNow();
+    const find = (card, text) => Store.relationsFor(card).filter(r => r.text === text)[0];
+    /* written from the editor: a verb given a verb, and a verb given a noun */
+    const was = Store.card(solo.id).related || [];
+    const now = [{ kind: 'syn', text: 'zzzmake' }, { kind: 'syn', text: 'zzzframe' }];
+    Store.updateCard(solo.id, { related: now });
+    Store.linkBothWays(Store.card(solo.id), was, now);
+    const back = (t) => (Store.state.cards.find(c => c.term === t).related || []).map(r => r.text).join();
+    return {
+      onVerb: !!find(verb, 'zzztool'),
+      onNoun: (r => r ? (r.card ? 'solid' : 'dashed') : 'missing')(find(noun, 'zzzdo')),
+      phrasal: !!(find(pv, 'zzzquit') || {}).card,
+      phrase: !!(find(adv, 'zzzin fact') || {}).card,
+      family: Store.familyOf(an).some(m => m.term === 'zzzanalysis'),
+      sameKind: back('zzzmake'), otherKind: back('zzzframe'),
+      chips: (find(solo, 'zzzmake') || {}).card ? 'solid' : 'dashed',
+      chipOther: (find(solo, 'zzzframe') || {}).card ? 'solid' : 'dashed'
+    };
+  });
+  is(!kinds.onVerb, 'a noun’s synonym is not read onto a verb that only shares its spelling');
+  is(kinds.onNoun === 'dashed', 'on the noun it stays, as plain text: that word is not saved as a noun');
+  is(kinds.phrasal && kinds.phrase,
+     'a phrasal verb answers to a verb, and a phrase to anything — those stay saved words');
+  is(kinds.family, 'a word family still runs across parts of speech');
+  is(kinds.sameKind === 'zzzbuild' && kinds.otherKind === '' &&
+     kinds.chips === 'solid' && kinds.chipOther === 'dashed',
+     'from the editor, a verb’s verb is linked both ways and its noun is kept as plain text');
+  await page.evaluate(() => { Store.wipe(); Store.saveNow(); });
   await page.evaluate(() => { Store.wipe(); Store.saveNow(); });
 
   /* The bug this prevents: "What does object mean?" offering both "a thing"
@@ -899,9 +949,12 @@ const head = (s) => console.log('\n— ' + s + ' —');
     Store.wipe();
     const deck = Store.state.decks[0].id;
     const near = Store.addCard({ term: 'zzznear', pos: 'noun', definition: 'one', deckId: deck }, true);
-    const far1 = Store.addCard({ term: 'zzzfar', pos: 'noun', definition: 'two', deckId: deck,
+    /* Two senses that both mean zzznear — two nouns. A verb's "synonym"
+       would not: a noun cannot be a verb's synonym, so its link names no
+       saved card and is not this card's to take away. */
+    const far1 = Store.addCard({ term: 'zzzfar', pos: 'noun', sense: 'one', definition: 'two', deckId: deck,
       related: [{ kind: 'syn', text: 'zzznear' }] }, true);
-    const far2 = Store.addCard({ term: 'zzzfar', pos: 'verb', definition: 'three', deckId: deck,
+    const far2 = Store.addCard({ term: 'zzzfar', pos: 'noun', sense: 'other', definition: 'three', deckId: deck,
       related: [{ kind: 'syn', text: 'zzznear' }] }, true);
     const box = () => relText(Store.card(near.id), 'syn');
     const shown = box();

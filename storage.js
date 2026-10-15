@@ -25,6 +25,12 @@ const SCHEMA_VERSION = 2;
 const PRACTICE_MAX = 12;
 /* Words of the day kept: a hundred is a season's worth to look back over. */
 const WOTD_HISTORY = 100;
+/* Parts of speech that answer to each other when a synonym or an opposite is
+   matched to a saved card. A phrasal verb is a verb and a plural noun a noun;
+   "phrase" and "idiom" say a word is several words, not what kind of word it
+   is, so they are held against nothing. */
+const POS_KIN = { 'phrasal verb': 'verb', 'plural noun': 'noun' };
+const POS_OPEN = { phrase: 1, idiom: 1 };
 
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 const todayKey = (d) => {
@@ -443,6 +449,23 @@ const Store = {
     return this.state.cards.find(c => c.id !== exceptId && this.headKey(c.term) === key) || null;
   },
 
+  /* Whether two parts of speech can be synonyms of each other. A card with no
+     part of speech is held against nothing, as every card was before this. */
+  posFits(a, b) {
+    if (!a || !b || POS_OPEN[a] || POS_OPEN[b]) return true;
+    return (POS_KIN[a] || a) === (POS_KIN[b] || b);
+  },
+
+  /* The saved cards a synonym or opposite written on `from` can mean: the same
+     spelling, in a part of speech that fits. cardByTerm answered by spelling
+     alone, so `instrument` the noun was taken for a synonym of `implement` the
+     verb — the noun's own card says implement, and means the tool. `pos`
+     overrides the card's own, for the editor's choice not yet saved. */
+  relTargets(from, text, pos) {
+    const p = pos === undefined ? (from && from.pos) : pos;
+    return this.sensesOf(text, from && from.id).filter(c => this.posFits(p, c.pos));
+  },
+
   /* Every relation a word has: the links it declares, and the links other
      words declare about it. linkBothWays keeps a hand-edited pair written at
      both ends, but this still reads both directions — the shipped deck's links
@@ -450,35 +473,42 @@ const Store = {
      a link leaves plain text rather than a broken reference.
 
      Both directions, though, only where the far end is not guessing. A link is
-     stored as text, and text names a spelling: "a synonym of object". When one
-     card is spelled that way, it is plainly the one meant. When three are, the
-     word names none of them, and reading it onto all three is what made the
-     three senses of object carry the same synonyms — each one showed the whole
-     spelling's links, and saving the form wrote them onto that card.
+     stored as text, and text names a spelling: "a synonym of object". It means
+     a saved card only when exactly one card has that spelling in a part of
+     speech that fits (relTargets). Three senses of object, two of them nouns,
+     leave a noun's "object" naming neither — and reading it onto all of them
+     is what once made the three senses carry the same synonyms. A spelling
+     saved only as another part of speech names nothing either: `instrument`
+     (noun) says implement, meaning the tool, and the only saved implement is
+     the verb.
 
-     A synonym is true of a meaning, so a sense of a repeated word keeps its
-     own and is shown no others. A word family is true of a spelling — every
-     sense of object has the same objection and objective — and familyOf
-     follows it across the senses on purpose. */
+     So a link from another card is shown here only when it resolves to this
+     card. A link of this card's own whose far word is not saved in a fitting
+     part of speech is kept and shown, as plain text — the dashed chip.
+
+     A word family is a property of the spelling, across parts of speech and
+     senses — analyse, analysis, analytical — and familyOf follows it as such. */
   relationsFor(card) {
     if (!card) return [];
     const out = [];
     const seen = {};
-    const push = (kind, text, from) => {
+    const push = (kind, text, far, from) => {
       const key = kind + '|' + this.headKey(text);
       if (!text || seen[key] || this.headKey(text) === this.headKey(card.term)) return;
       seen[key] = 1;
-      out.push({ kind: kind, text: text, card: this.cardByTerm(text, card.id), via: from || null });
+      out.push({ kind: kind, text: text, card: far || null, via: from || null });
     };
     /* Family links are followed separately, by familyOf — a family is a whole
        set, not a list of one-to-one links. */
-    (card.related || []).forEach(r => { if (r.kind !== 'family') push(r.kind, r.text, null); });
-    if (this.sensesOf(card.term, card.id).length) return out;   /* one spelling, several meanings */
+    (card.related || []).forEach(r => {
+      if (r.kind !== 'family') push(r.kind, r.text, this.relTargets(card, r.text)[0], null);
+    });
     this.state.cards.forEach(other => {
       if (other.id === card.id) return;
       (other.related || []).forEach(r => {
-        if (r.kind === 'family') return;
-        if (this.headKey(r.text) === this.headKey(card.term)) push(r.kind, other.term, other.id);
+        if (r.kind === 'family' || this.headKey(r.text) !== this.headKey(card.term)) return;
+        const meant = this.relTargets(other, r.text);
+        if (meant.length === 1 && meant[0].id === card.id) push(r.kind, other.term, other, other.id);
       });
     });
     return out;
@@ -502,10 +532,11 @@ const Store = {
      one-sided links could be taken out of the box and came straight back the
      next time it was opened, read from the end that still declared them.
 
-     A word is a word, not a sense: the boxes list terms, so taking one out
-     takes it from every sense of that term — object the noun and object the
-     verb both stop claiming it. Adding still writes to one card, because one
-     link is all it takes to join two words.
+     The far end is whichever card the text means — for a synonym, the one
+     card of that spelling in a part of speech that fits (relTargets), and
+     nothing when there is not exactly one; for a family, any card of the
+     spelling. Taking a word out reaches every card whose own link means this
+     one, and none whose link means something else.
 
      Family mirrors one hop and no further. familyOf already follows the set
      transitively, so writing every member onto every other would store the
@@ -516,12 +547,16 @@ const Store = {
       .some(r => this.headKey(r.text) === this.headKey(text));
     const self = this.headKey(card.term);
     /* A synonym is true of a meaning, a word family of a spelling — so the two
-       kinds answer "who is the far end?" differently when a spelling has more
-       than one card. See relationsFor: a synonym written against a spelling
-       three cards share names none of them, so it is neither read here nor
-       taken away from there. */
+       kinds answer "who is the far end?" differently. Does `other`'s link to
+       this spelling mean this card? For a family, yes: the family is the
+       spelling's. For a synonym, only if this is the one card of the spelling
+       whose part of speech fits `other`'s — see relationsFor. */
     const byMeaning = { syn: 1, ant: 1 };
-    const sole = this.sensesOf(card.term, card.id).length === 0;
+    const meansMe = (other, kind) => {
+      if (!byMeaning[kind]) return true;
+      const meant = this.relTargets(other, card.term);
+      return meant.length === 1 && meant[0].id === card.id;
+    };
 
     /* Every word that declares a link about this card, in one pass. Senses of
        this same word are left out: the form does not show them, and nothing
@@ -531,7 +566,7 @@ const Store = {
       if (other.id === card.id || this.headKey(other.term) === self) return;
       (other.related || []).forEach(r => {
         if (!inbound[r.kind] || this.headKey(r.text) !== self) return;
-        if (byMeaning[r.kind] && !sole) return;
+        if (!meansMe(other, r.kind)) return;
         inbound[r.kind][this.headKey(other.term)] = other.term;
       });
     });
@@ -546,21 +581,26 @@ const Store = {
         const text = both[key];
         const senses = this.sensesOf(text, card.id);
         if (!senses.length) return;              /* not a word you have: plain text */
-        const said = senses.filter(other => has(other.related, kind, card.term));
+        const said = senses.filter(other => has(other.related, kind, card.term) && meansMe(other, kind));
         if (has(after, kind, text)) {
-          if (said.length) return;               /* one of its senses says it already */
-          /* Both ends have to be nameable for a text link to be written at the
-             far end: "a synonym of object" says nothing if three cards are
-             spelled object, and a link written *from* one of three senses
-             cannot claim the far word for the other two. Either way it stays
-             on this card — and the far word still shows it, read back from
-             here, so nothing is lost but the second copy. */
-          if (byMeaning[kind] && (!sole || senses.length > 1)) return;
-          senses[0].related = (senses[0].related || []).concat({ kind: kind, text: card.term });
-          senses[0].updatedAt = Date.now(); touched++;
+          if (said.length) return;               /* the far card says it already */
+          /* Both ends have to name each other for a text link to be written at
+             the far end: this card's word has to mean one card, and that
+             card's link back has to mean this one. Otherwise it stays on this
+             card — a noun's "synonym" saved only as a verb is plain text, and
+             a link from one of two nouns spelled alike cannot be claimed for
+             both. Where the far word does resolve to this card it still shows
+             the link, read back from here; only the second copy is missing. */
+          let far = senses[0];
+          if (byMeaning[kind]) {
+            const meant = this.relTargets(card, text);
+            if (meant.length !== 1 || !meansMe(meant[0], kind)) return;
+            far = meant[0];
+          }
+          far.related = (far.related || []).concat({ kind: kind, text: card.term });
+          far.updatedAt = Date.now(); touched++;
           return;
         }
-        if (byMeaning[kind] && !sole) return;    /* not this meaning's to take away */
         said.forEach(other => {
           other.related = other.related.filter(r =>
             !(r.kind === kind && this.headKey(r.text) === self));

@@ -1637,26 +1637,39 @@ function cardEditor(card, presetDeck) {
            boxes were counted as four. What is on the screen is what is
            counted. */
         const mine = $('#cTerm').value.trim();
+        /* The part of speech as it stands in the form, not as it was saved:
+           changing it is exactly what changes which words count as yours. */
+        const pos = $('#cPos').value;
         const seen = {}, rels = [];
         [['syn', $('#cSyn').value], ['ant', $('#cAnt').value]].forEach(pair => {
           splitList(pair[1]).forEach(text => {
             const key = pair[0] + '|' + Store.headKey(text);
             if (seen[key] || Store.headKey(text) === Store.headKey(mine)) return;
             seen[key] = 1;
-            const senses = Store.sensesOf(text, card && card.id);
-            rels.push({ text: text, card: senses.length === 1 ? senses[0] : null,
-                        many: senses.length > 1 });
+            const meant = Store.relTargets({ id: card && card.id }, text, pos);
+            rels.push({ text: text, card: meant.length === 1 ? meant[0] : null,
+                        many: meant.length > 1,
+                        saved: meant.length ? [] : Store.sensesOf(text, card && card.id) });
           });
         });
         const linked = rels.filter(r => r.card);
         const many = rels.filter(r => r.many);
-        const loose = rels.length - linked.length - many.length;
+        const elsewhere = rels.filter(r => r.saved.length);
+        const loose = rels.length - linked.length - many.length - elsewhere.length;
+        const article = (p) => (/^[aeiou]/.test(p) ? 'an ' : 'a ') + p;
+        const kinds = (cards) => Array.from(new Set(cards.map(c => c.pos).filter(Boolean)))
+          .map(article).join(' and ');
         /* What a link is, and what happens to the rest. The old line said "3 of
            4 linked to words you have", which named neither.
 
            A word saved under more than one meaning is a third case: it is a
            word you have, but "a synonym of object" does not say which object,
-           so the link is kept here rather than pinned on a meaning at random. */
+           so the link is kept here rather than pinned on a meaning at random.
+
+           And a fourth: the spelling is saved, but as another part of speech.
+           A verb's synonym cannot be a noun, so `instrument` saved as a noun is
+           not the word a verb means — it stays plain text, and the line says
+           why rather than calling it a word you have not added. */
         const said = [];
         if (linked.length) said.push(
           (rels.length > linked.length ? linked.length + ' of these ' + rels.length
@@ -1669,8 +1682,14 @@ function cardEditor(card, presetDeck) {
             ? '\u201c' + many[0].text + '\u201d is saved under more than one meaning, so that link stays'
             : many.length + ' of them are saved under more than one meaning, so those links stay') +
           ' on this card.');
+        if (elsewhere.length) said.push(
+          (elsewhere.length === 1
+            ? '\u201c' + elsewhere[0].text + '\u201d is saved as ' + kinds(elsewhere[0].saved) +
+              ', not as ' + article(pos) + ', so it stays'
+            : elsewhere.length + ' of them are saved only as another part of speech, so they stay') +
+          ' as plain text.');
         if (loose) said.push(
-          (linked.length || many.length
+          (linked.length || many.length || elsewhere.length
             ? 'The other ' + (loose === 1 ? 'one stays' : loose + ' stay')
             : (loose === 1 ? 'This word is not in your collection yet, so it stays'
                            : 'These words are not in your collection yet, so they stay')) +
@@ -1698,6 +1717,7 @@ function cardEditor(card, presetDeck) {
         t.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); const a = $('#aiFill'); if (a) a.click(); } };
       }
       ['cSyn', 'cAnt', 'cFam'].forEach(id => { const el = $('#' + id); if (el) el.addEventListener('input', showLinks); });
+      $('#cPos').addEventListener('change', showLinks);
       checkSenses();
       showLinks();
       grow();
