@@ -1692,38 +1692,51 @@ function cardEditor(card, presetDeck) {
         /* Said in terms of what the card will show, not how the link is
            stored: a word that links is a solid outline on the card back, one
            that does not is a dashed one. "Plain text" was the storage talking.
-           A single word is named rather than called "this"; whatever was typed
-           is escaped, since it goes into the line as markup. */
-        const q = (t) => '“' + esc(t) + '”';
+
+           The words are named — "protest", not "the other one" — up to three
+           of them; past that a list stops being read and a number does the
+           job better. Whatever was typed is escaped, since it goes into the
+           line as markup. */
+        const q = (t) => '\u201c' + esc(t) + '\u201d';
+        const named = (list) => {
+          if (list.length > 3) return null;
+          const w = list.map(r => q(r.text));
+          return w.length === 1 ? w[0] : w.slice(0, -1).join(', ') + ' and ' + w[w.length - 1];
+        };
         const said = [];
         if (linked.length) said.push(
           (linked.length === 1
-            ? q(linked[0].text) + ' is a word you have, so the two cards link'
-            : linked.length === rels.length
-              ? 'These are all words you have, so the cards link'
-              : linked.length + ' of these ' + rels.length + ' are words you have, so those cards link') +
-          ' to each other — shown with a solid outline.');
+            ? named(linked) + ' is a word you have, so the two cards link'
+            : named(linked)
+              ? named(linked) + ' are words you have, so the cards link'
+              : linked.length === rels.length
+                ? 'These are all words you have, so the cards link'
+                : linked.length + ' of these ' + rels.length + ' are words you have, so those cards link') +
+          ' to each other \u2014 shown with a solid outline.');
         if (many.length) said.push(
           (many.length === 1
-            ? q(many[0].text) + ' is saved under more than one meaning, so the link stays'
-            : many.length + ' of these are saved under more than one meaning, so those links stay') +
+            ? named(many) + ' is saved under more than one meaning, so the link stays'
+            : (named(many) || many.length + ' of these') +
+              ' are saved under more than one meaning, so those links stay') +
           ' on this card only.');
         if (elsewhere.length) said.push(
           (elsewhere.length === 1
-            ? q(elsewhere[0].text) + ' is saved as ' + kinds(elsewhere[0].saved) +
-              ', not as ' + withArticle(pos) + ', so it isn’t linked'
-            : elsewhere.length + ' of these are saved only as other parts of speech, so they aren’t linked') +
-          ' — shown with a dashed outline.');
+            ? named(elsewhere) + ' is saved as ' + kinds(elsewhere[0].saved) +
+              ', not as ' + withArticle(pos) + ', so it isn\u2019t linked'
+            : (named(elsewhere) || elsewhere.length + ' of these') +
+              ' are saved only as other parts of speech, so they aren\u2019t linked') +
+          ' \u2014 shown with a dashed outline.');
+        /* After another sentence the outline has been explained, so the last
+           one can be short; on its own it says the whole thing. */
+        const first = !(linked.length || many.length || elsewhere.length);
+        const one = loose.length === 1;
         if (loose.length) said.push(
-          linked.length || many.length || elsewhere.length
-            ? (loose.length === 1
-                ? 'The other one isn’t in your collection yet — dashed until you add it.'
-                : 'The other ' + loose.length + ' aren’t in your collection yet — dashed until you add them.')
-            : (loose.length === 1
-                ? q(loose[0].text) + ' isn’t in your collection yet, so it isn’t linked — ' +
-                  'shown with a dashed outline until you add it.'
-                : 'These words aren’t in your collection yet, so they aren’t linked — ' +
-                  'shown with a dashed outline until you add them.'));
+          (named(loose) || (first ? 'These ' + loose.length + ' words' : 'The other ' + loose.length)) +
+          (one ? ' isn\u2019t' : ' aren\u2019t') + ' in your collection yet' +
+          (first
+            ? ', so ' + (one ? 'it isn\u2019t' : 'they aren\u2019t') + ' linked \u2014 shown with a dashed outline'
+            : ' \u2014 dashed') +
+          ' until you add ' + (one ? 'it' : 'them') + '.');
         $('#relLinks').innerHTML = said.length
           ? '<p class="help" style="margin:-8px 0 14px">' + said.join(' ') + '</p>'
           : '';
@@ -4121,10 +4134,12 @@ function renderBrowse(host) {
       '<div class="search">' +
         '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>' +
         '<input type="search" id="bQ" placeholder="Search your words…" value="' + esc(browseState.q) + '">' +
+        /* Inside the search box: it changes what the box searches, so it is
+           part of the box rather than a control beside it. */
+        '<label class="tickbox" title="Match the word itself, not its meaning, translation or example">' +
+          '<input type="checkbox" id="bWordOnly"' + (browseState.wordOnly ? ' checked' : '') + '>' +
+          '<span>Word itself</span></label>' +
       '</div>' +
-      '<label class="tickbox" title="Match the word itself, not its meaning, translation or example">' +
-        '<input type="checkbox" id="bWordOnly"' + (browseState.wordOnly ? ' checked' : '') + '>' +
-        '<span>Word itself</span></label>' +
       '<select id="bDeck">' + deckOptions(browseState.deck, 'All decks') + '</select>' +
       '<select id="bStatus">' +
         '<option value=""' + (browseState.status === '' ? ' selected' : '') + '>Any word</option>' +

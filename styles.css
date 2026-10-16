@@ -868,17 +868,24 @@ input[type=range]::-moz-range-thumb{
 
 /* ---------- Table / browse ------------------------------------------------ */
 .toolbar{ display:flex; gap:9px; flex-wrap:wrap; align-items:center; margin-bottom:14px; }
-.toolbar .search{ flex:1; min-width:200px; position:relative; }
-.toolbar .search svg{ position:absolute; left:12px; top:50%; transform:translateY(-50%); width:16px; height:16px; color:var(--text-faint); }
-.toolbar .search input{ padding-left:36px; }
+/* The search and its "Word itself" tick are one control, so they are one box:
+   the border and the focus ring belong to the wrapper, the input inside is
+   borderless, and the tick sits at the end behind a hairline. The wrapper's
+   border takes the place of the input's own, so the height does not change. */
+.toolbar .search{
+  flex:1; min-width:260px; position:relative; display:flex; align-items:stretch;
+  background:var(--surface-2); border:1px solid var(--border-soft); border-radius:10px; transition:.15s;
+}
+.toolbar .search:focus-within{ border-color:var(--accent); background:var(--surface); box-shadow:0 0 0 3px var(--accent-soft); }
+.toolbar .search svg{ position:absolute; left:12px; top:50%; transform:translateY(-50%); width:16px; height:16px; color:var(--text-faint); pointer-events:none; }
+.toolbar .search input[type=search]{ flex:1; min-width:0; padding-left:36px; background:none; border:0; box-shadow:none; }
+.toolbar .search input[type=search]:focus{ background:none; border:0; box-shadow:none; }
 .toolbar select{ width:auto; min-width:130px; }
-/* Built from the same padding, border and radius as the boxes beside it, so it
-   is the same height as the selects without a number saying so. */
+/* The end of the search box: as tall as the box, set off by a hairline. */
 .tickbox{
   display:inline-flex; align-items:center; gap:8px; cursor:pointer; user-select:none;
-  padding:10px 13px; border-radius:10px; font-size:.9rem; white-space:nowrap;
-  background:var(--surface-2); border:1px solid var(--border-soft);
-  color:var(--text-dim); transition:.15s;
+  flex:none; padding:0 13px; font-size:.86rem; white-space:nowrap;
+  border-left:1px solid var(--border-soft); color:var(--text-dim); transition:color .15s;
 }
 .tickbox:hover{ color:var(--text); }
 .tickbox input{

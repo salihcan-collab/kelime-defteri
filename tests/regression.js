@@ -707,11 +707,21 @@ const head = (s) => console.log('\n— ' + s + ' —');
     const itself = count();
     const rows = Array.from(document.querySelectorAll('#view-browse tbody .col-word'))
       .map(td => td.textContent.trim());
+    /* One control, one box: the tick lives inside the search box, the two
+       share a single outline, and that box is as tall as the selects. */
     const height = (el) => +el.getBoundingClientRect().height.toFixed(2);
-    const same = height(document.querySelector('.tickbox')) === height(document.getElementById('bDeck'));
+    const search = document.querySelector('#view-browse .search');
+    const tickEl = document.querySelector('#view-browse .tickbox');
+    const inside = !!(search && tickEl && search.contains(tickEl) && search.contains(document.getElementById('bQ')));
+    const outline = search && getComputedStyle(search).borderTopStyle === 'solid' &&
+      getComputedStyle(document.getElementById('bQ')).borderTopStyle === 'none';
+    /* To the pixel, not the decimal: an <input> and a <select> with the same
+       line-height and padding round their content boxes differently, and the
+       search box has always come out 0.03px shorter than a select. */
+    const same = inside && Math.abs(height(search) - height(document.getElementById('bDeck'))) < 0.5;
     browseState.q = ''; browseState.wordOnly = false; render('browse');
     await new Promise(r => setTimeout(r, 250));
-    return { everything: everything, itself: itself, rows: rows, same: same,
+    return { everything: everything, itself: itself, rows: rows, same: same, inside: inside, outline: outline,
              saved: Store.state.cards.filter(c => /object/i.test(c.term)).length,
              kept: box.checked };
   });
@@ -719,7 +729,8 @@ const head = (s) => console.log('\n— ' + s + ' —');
      `"Word itself" narrows the search (${tick.everything} rows to ${tick.itself})`);
   is(tick.itself === tick.saved && tick.rows.every(w => /object/i.test(w)),
      `and leaves exactly the ${tick.saved} cards spelled that way, no more and no fewer`);
-  is(tick.same, 'the tick is the same height as the boxes beside it');
+  is(tick.inside && tick.outline, 'the tick sits inside the search box, under one outline');
+  is(tick.same, 'and that box is the same height as the selects beside it');
 
   /* A synonym is true of a meaning, not of a spelling. The link is stored as
      text, so "a synonym of object" says which *word* and not which sense —
