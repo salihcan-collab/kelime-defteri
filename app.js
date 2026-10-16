@@ -256,6 +256,9 @@ function parseRelations(synValue, antValue, familyValue) {
    speech, which is enough whenever the senses are a noun and a verb. */
 function senseLabel(card) { return (card.sense || '').trim(); }
 
+/* "a noun", "an adverb" — for the lines that say what a word is saved as. */
+function withArticle(pos) { return (/^[aeiou]/.test(pos) ? 'an ' : 'a ') + pos; }
+
 function senseChip(card) {
   const label = senseLabel(card);
   return label ? '<span class="chip sense">' + esc(label) + '</span>' : '';
@@ -275,16 +278,24 @@ function relationChips(card) {
   const rels = Store.relationsFor(card);
   if (!rels.length) return '';
   /* A solid chip is a word you have saved; a dashed one is a word you have
-     only written down. Neither is clickable — following a link mid-session
-     would throw you out of the session you are in. */
+     only written down — or one saved only as another part of speech, which
+     the tooltip says, since "not saved" would be untrue of it. Neither is
+     clickable — following a link mid-session would throw you out of the
+     session you are in. */
+  const why = (r) => {
+    if (r.card) return ' — saved in your collection';
+    const kinds = Array.from(new Set(Store.sensesOf(r.text, card.id).map(c => c.pos).filter(Boolean)));
+    return kinds.length && card.pos
+      ? ' — saved as ' + kinds.map(withArticle).join(' and ') + ', not as ' + withArticle(card.pos)
+      : ' — not saved as a word yet';
+  };
   /* Grouped, never interleaved: words that mean the same on one side, words
      that mean the opposite on the other. Mixed in one row they had to be read
      mark by mark. No headings — the ≈ and the × and their colours say which
      side is which, and the back of the card stays quiet. */
   const chip = (r) =>
     '<span class="chip rel ' + r.kind + (r.card ? ' known' : '') + '"' +
-      ' title="' + esc(REL_LABEL[r.kind] || r.kind) +
-      (r.card ? ' — saved in your collection' : ' — not saved as a word yet') + '">' +
+      ' title="' + esc((REL_LABEL[r.kind] || r.kind) + why(r)) + '">' +
       '<i class="mark">' + (REL_MARK[r.kind] || '') + '</i>' + esc(r.text) +
     '</span>';
   const group = (kind) => {
@@ -360,6 +371,19 @@ function dueText(card) {
   if (card.srs.state === 'new') return 'not started';
   const diff = card.srs.due - Date.now();
   return diff <= 0 ? 'due now' : SRS.humanDays(diff);
+}
+/* The editor's footer. It used to print the scheduler's own state name —
+   "review", "relearning", words the app shows nowhere else — and "seen 1
+   times". The level is the one Browse shows, and the counts read right at
+   one. */
+function statusLine(card) {
+  const level = (LEVELS[SRS.bucket(card.srs)] || LEVELS.new).label;
+  const seen = (card.stats && card.stats.seen) || 0;
+  if (card.srs.state === 'new' && !seen) return 'Status: ' + level + ' \u00b7 not studied yet';
+  const due = dueText(card);
+  return 'Status: ' + level + ' \u00b7 seen ' + seen + ' time' + (seen === 1 ? '' : 's') +
+    ' \u00b7 ' + (card.stats.correct || 0) + ' right, ' + (card.stats.wrong || 0) + ' wrong \u00b7 ' +
+    (card.srs.state === 'new' ? 'not scheduled yet' : due === 'due now' ? 'due now' : 'next ' + due);
 }
 function dueCell(card) {
   return isDueNow(card)
@@ -1251,7 +1275,7 @@ function cardEditor(card, presetDeck) {
        the whole card, not to whichever field it happens to sit beside. */
     head: AI.available()
       ? '<button class="ghost-btn tiny" id="aiFill">' + ICONS.spark + 'Auto-fill the rest with AI</button>'
-      : '<p class="help">Connect an AI assistant in Settings to fill these in automatically.</p>',
+      : '<p class="help">Connect an AI assistant in Settings and it can fill in the rest from the word alone.</p>',
     body:
       '<div class="inline-fields">' +
         '<div class="field"><label>Word or phrase <em class="req" title="Required" aria-label="required">*</em></label>' +
@@ -1272,7 +1296,7 @@ function cardEditor(card, presetDeck) {
           '<textarea id="cDef" rows="1" placeholder="A clear, short definition">' + esc(card ? card.definition : '') + '</textarea>' +
           '<div class="sense-line">' +
             '<button type="button" class="sense-add" id="senseAdd"' +
-              ' title="A short label that tells this meaning from the word\u2019s others">+ Sense label</button>' +
+              ' title="A short label that tells this meaning apart from the word\u2019s other meanings">+ Sense label</button>' +
             '<input type="text" id="cSense" class="sense-input" hidden value="' +
               esc(card ? (card.sense || '') : '') + '" placeholder="e.g. to protest">' +
             /* What the box is measured against, in the box's own typeface. */
@@ -1312,7 +1336,7 @@ function cardEditor(card, presetDeck) {
           '<div class="inline-fields">' +
             '<div class="field"><label>Word family</label>' +
               '<input type="text" id="cFam" value="' + esc(card ? relText(card, 'family') : '') + '" placeholder="analysis, analytical">' +
-              '<span class="help">One member is enough — the rest find themselves.</span></div>' +
+              '<span class="help">Link one member and the rest of the family comes with it.</span></div>' +
             '<div class="field"><label>Tags</label>' +
               '<div class="tag-box" id="cTags">' +
                 '<input type="text" id="cTagInput" list="tagList" autocomplete="off"' +
@@ -1332,13 +1356,7 @@ function cardEditor(card, presetDeck) {
          none, and asking one for its schedule is how it breaks. */
       (isNew
         ? '<div class="spacer"></div>'
-        : '<div class="foot-note" title="' + esc('Status: ' + card.srs.state + ' · seen ' +
-            card.stats.seen + ' times · ' + card.stats.correct + ' correct / ' + card.stats.wrong +
-            ' wrong · next ' + dueText(card)) + '">' +
-            'Status: ' + card.srs.state + ' · seen ' + card.stats.seen + ' times · ' +
-            card.stats.correct + ' correct / ' + card.stats.wrong + ' wrong · next ' +
-            dueText(card) +
-          '</div>') +
+        : '<div class="foot-note" title="' + esc(statusLine(card)) + '">' + esc(statusLine(card)) + '</div>') +
       '<button class="ghost-btn" data-act="cancel">Cancel</button>' +
       (isNew ? '<button class="ghost-btn" data-act="save-more">Save &amp; add another</button>' : '') +
       '<button class="primary-btn" data-act="save">Save</button>',
@@ -1506,7 +1524,9 @@ function cardEditor(card, presetDeck) {
       const del = f.querySelector('[data-act="del"]');
       if (del) del.onclick = async () => {
         closeModal();
-        const ok = await confirmDialog('Delete word', 'Remove <b>' + esc(card.term) + '</b>?', 'Delete', true);
+        /* The same warning as from Browse: what goes is the schedule too. */
+        const ok = await confirmDialog('Delete word', 'Remove <b>' + esc(card.term) +
+          '</b> and its review history? This cannot be undone.', 'Delete', true);
         if (ok) { Store.deleteCard(card.id); toast('Word deleted', 'ok'); render(currentView); refreshChrome(); }
       };
       const fill = $('#aiFill');
@@ -1555,7 +1575,7 @@ function cardEditor(card, presetDeck) {
 
           toast(filled
             ? 'Filled ' + filled + ' empty field' + (filled === 1 ? '' : 's') + ' — check before saving'
-            : 'Everything was already filled in', filled ? 'ok' : 'err');
+            : 'Everything was already filled in', filled ? 'ok' : 'info');   /* nothing went wrong */
         } catch (err) { toast(err.message, 'err'); }
         fill.disabled = false; fill.innerHTML = original;
       };
@@ -1618,11 +1638,11 @@ function cardEditor(card, presetDeck) {
         const siblings = Store.sensesOf($('#cTerm').value, card && card.id);
         /* A card with no label of its own is named by its part of speech,
            which is what tells a noun from a verb on the same spelling. */
-        const names = siblings.map(d => senseLabel(d) || d.pos || 'no label');
+        const names = siblings.map(d => senseLabel(d) || (d.pos ? 'unlabelled ' + d.pos : 'no label'));
         senseHelp.textContent = !names.length ? ''
           : (isNew
               /* Nothing saved to be "other" than yet. */
-              ? names.length + ' sense' + (names.length === 1 ? '' : 's') + ' saved'
+              ? names.length + ' sense' + (names.length === 1 ? '' : 's') + ' already saved'
               : (names.length === 1 ? 'One other sense' : names.length + ' other senses'))
             + ' (' + names.join(', ') + ')';
       };
@@ -1655,10 +1675,9 @@ function cardEditor(card, presetDeck) {
         const linked = rels.filter(r => r.card);
         const many = rels.filter(r => r.many);
         const elsewhere = rels.filter(r => r.saved.length);
-        const loose = rels.length - linked.length - many.length - elsewhere.length;
-        const article = (p) => (/^[aeiou]/.test(p) ? 'an ' : 'a ') + p;
+        const loose = rels.filter(r => !r.card && !r.many && !r.saved.length);
         const kinds = (cards) => Array.from(new Set(cards.map(c => c.pos).filter(Boolean)))
-          .map(article).join(' and ');
+          .map(withArticle).join(' and ');
         /* What a link is, and what happens to the rest. The old line said "3 of
            4 linked to words you have", which named neither.
 
@@ -1670,30 +1689,41 @@ function cardEditor(card, presetDeck) {
            A verb's synonym cannot be a noun, so `instrument` saved as a noun is
            not the word a verb means — it stays plain text, and the line says
            why rather than calling it a word you have not added. */
+        /* Said in terms of what the card will show, not how the link is
+           stored: a word that links is a solid outline on the card back, one
+           that does not is a dashed one. "Plain text" was the storage talking.
+           A single word is named rather than called "this"; whatever was typed
+           is escaped, since it goes into the line as markup. */
+        const q = (t) => '“' + esc(t) + '”';
         const said = [];
         if (linked.length) said.push(
-          (rels.length > linked.length ? linked.length + ' of these ' + rels.length
-                 : (linked.length === 1 ? 'This' : 'These')) +
           (linked.length === 1
-            ? ' is a word you already have, so the two cards link to each other.'
-            : ' are words you already have, so the cards link to each other.'));
+            ? q(linked[0].text) + ' is a word you have, so the two cards link'
+            : linked.length === rels.length
+              ? 'These are all words you have, so the cards link'
+              : linked.length + ' of these ' + rels.length + ' are words you have, so those cards link') +
+          ' to each other — shown with a solid outline.');
         if (many.length) said.push(
           (many.length === 1
-            ? '\u201c' + many[0].text + '\u201d is saved under more than one meaning, so that link stays'
-            : many.length + ' of them are saved under more than one meaning, so those links stay') +
-          ' on this card.');
+            ? q(many[0].text) + ' is saved under more than one meaning, so the link stays'
+            : many.length + ' of these are saved under more than one meaning, so those links stay') +
+          ' on this card only.');
         if (elsewhere.length) said.push(
           (elsewhere.length === 1
-            ? '\u201c' + elsewhere[0].text + '\u201d is saved as ' + kinds(elsewhere[0].saved) +
-              ', not as ' + article(pos) + ', so it stays'
-            : elsewhere.length + ' of them are saved only as another part of speech, so they stay') +
-          ' as plain text.');
-        if (loose) said.push(
-          (linked.length || many.length || elsewhere.length
-            ? 'The other ' + (loose === 1 ? 'one stays' : loose + ' stay')
-            : (loose === 1 ? 'This word is not in your collection yet, so it stays'
-                           : 'These words are not in your collection yet, so they stay')) +
-          ' as plain text until you add ' + (loose === 1 ? 'it' : 'them') + '.');
+            ? q(elsewhere[0].text) + ' is saved as ' + kinds(elsewhere[0].saved) +
+              ', not as ' + withArticle(pos) + ', so it isn’t linked'
+            : elsewhere.length + ' of these are saved only as other parts of speech, so they aren’t linked') +
+          ' — shown with a dashed outline.');
+        if (loose.length) said.push(
+          linked.length || many.length || elsewhere.length
+            ? (loose.length === 1
+                ? 'The other one isn’t in your collection yet — dashed until you add it.'
+                : 'The other ' + loose.length + ' aren’t in your collection yet — dashed until you add them.')
+            : (loose.length === 1
+                ? q(loose[0].text) + ' isn’t in your collection yet, so it isn’t linked — ' +
+                  'shown with a dashed outline until you add it.'
+                : 'These words aren’t in your collection yet, so they aren’t linked — ' +
+                  'shown with a dashed outline until you add them.'));
         $('#relLinks').innerHTML = said.length
           ? '<p class="help" style="margin:-8px 0 14px">' + said.join(' ') + '</p>'
           : '';
